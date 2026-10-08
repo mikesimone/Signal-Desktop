@@ -107,20 +107,44 @@ Mitigations:
 - The server never writes before receiving a valid `hello`, and never sends
   anything but handshake results before authentication.
 - Authentication is mandatory.
-- Verify on Windows whether Node's `listen({ path, readableAll: false,
-writableAll: false })` yields a user-only DACL; if not, add a minimal native
-  hardening step (set an explicit DACL for the current user SID and reject
-  remote clients with `PIPE_REJECT_REMOTE_CLIENTS`) before Milestone B ships.
-  Status: **unverified, blocking for anything beyond Milestone A.**
+- Each client open gets its own pipe instance, so a read-only client can
+  only read its own connection, on which the server says nothing until it
+  receives a `hello` that the client cannot write.
+
+Verified on Windows 11 (10.0.26200, Node 24.19, 2026-10-08, ACLs read with
+`accesschk64 -l` against a non-elevated listener):
+
+- Default `listen` and `readableAll: false, writableAll: false` give the same
+  DACL: SYSTEM, Administrators and the user get full access; **Everyone and
+  ANONYMOUS LOGON get read** (`FILE_READ_DATA`, attributes, EA,
+  `READ_CONTROL`, `SYNCHRONIZE`). Medium integrity, no-write-up.
+- `readableAll: true, writableAll: true` adds Everyone read/write including
+  `FILE_APPEND_DATA` (= `FILE_CREATE_PIPE_INSTANCE`), which would let any
+  local user add server instances. The bridge must never set these options.
+- A same-user read/write client connects normally.
+
+Residual risk with Node's DACL: no data exposure (above), but another local
+user, or a remote user if remote clients are not rejected, can open
+read-only connections and hold the connection slots (T5) until the
+handshake timeout, repeatedly. Whether libuv rejects remote (SMB) clients is
+**unverified**.
+
+Required before the feature can be enabled by default or offered in
+Preferences: a minimal native step that creates the pipe with an explicit
+DACL for the current user SID only and `PIPE_REJECT_REMOTE_CLIENTS` (Node
+has no option for either). Until then the feature stays behind the hidden
+DB item / dev env var.
 
 **T4 [S] Endpoint squatting (A7).**
 A process creates the endpoint before Signal starts and impersonates Signal
 to clients: it can capture outgoing messages or feed fake ones.
 Mitigations:
 
-- Windows: libuv creates the first pipe instance with
-  `FILE_FLAG_FIRST_PIPE_INSTANCE` (to verify), so Signal's `listen` fails
-  rather than sharing.
+- Windows: verified 2026-10-08 that when another process already owns the
+  pipe name, Node's `listen` fails with `EADDRINUSE` rather than sharing it
+  (libuv's first instance uses `FILE_FLAG_FIRST_PIPE_INSTANCE`). Signal then
+  has no listener; it must log this and never retry under the same name
+  silently.
 - POSIX: the `0700` directory check means a squatter must already be the same
   user.
 - Server authentication: Signal signs the handshake with a server Ed25519 key
@@ -257,7 +281,8 @@ The bridge must never expose, directly or indirectly:
 
 - A5 remains able to do anything the user can do. The bridge does not change
   that and documentation must say so plainly.
-- Windows pipe DACL until T3 is closed.
+- Windows pipe DACL grants Everyone/ANONYMOUS LOGON read until the native
+  DACL step lands (T3): connection-slot exhaustion, no data exposure.
 - Users may approve malicious clients. Mitigated by clear capability text and
   a visible, revocable list; not eliminable.
 - A legitimate approved client's private key is as safe as that client's
