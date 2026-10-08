@@ -126,8 +126,16 @@ Verified on Windows 11 (10.0.26200, Node 24.19, 2026-10-08, ACLs read with
 Residual risk with Node's DACL: no data exposure (above), but another local
 user, or a remote user if remote clients are not rejected, can open
 read-only connections and hold the connection slots (T5) until the
-handshake timeout, repeatedly. Whether libuv rejects remote (SMB) clients is
-**unverified**.
+handshake timeout, repeatedly.
+
+Verified on the live bridge pipe (2026-10-08): libuv does **not** set
+`PIPE_REJECT_REMOTE_CLIENTS`. Connections through `\\localhost\pipe\…`,
+`\\127.0.0.1\pipe\…` and `\\<hostname>\pipe\…` (the SMB redirector)
+succeed. Any account that can reach the machine over SMB can therefore open
+read-only connections (slot exhaustion), and someone holding the user's own
+credentials remotely gets a full connection and can trigger the approval
+prompt (still needs a click at the desktop) or authenticate with a stolen
+client key.
 
 Required before the feature can be enabled by default or offered in
 Preferences: a minimal native step that creates the pipe with an explicit

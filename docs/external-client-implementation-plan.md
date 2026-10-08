@@ -338,10 +338,27 @@ Verified in a Linux container: 77 tests pass, including DTO redaction rules,
 expiry, mention and quote mapping, `messages.read` enforcement, param
 validation and forwarding. `oxlint` clean; no new `tsc` errors.
 
-Not verified: the renderer adapter (`ExternalClientService.preload.ts`)
-against a real database inside Electron.
+Verified inside Electron on Windows 11 (Anton, 2026-10-08, production
+servers, separate linked profile): approval dialog shown and accepted;
+`conversations.list` paged 280 conversations; `messages.list` returned
+oldest-first pages with non-overlapping cursor paging, attachments, quotes and
+`expiresAt` populated; `messages.get` and `NOT_FOUND` behaved as specified.
+Not yet run: reconnecting with the stored grant (`session.authenticate`)
+inside Electron.
 
 ## 6. Build and test notes
+
+- **Running a dev build against production (do this, not NODE_ENV).** Leave
+  `NODE_ENV` unset and put a git-ignored `config/local-development.json` next
+  to the other configs: a copy of `production.json` with
+  `"updatesEnabled": false` and `"storagePath"` set to a separate profile
+  directory (CONTRIBUTING.md, "Changing to production"). Then
+  `SIGNAL_ENABLE_EXTERNAL_CLIENTS=1 pnpm start`, and check the `userData:`
+  line before linking.
+- **Never set `NODE_ENV=production` on an unpackaged build.** Signal treats
+  it as a packaged release (`app/config.main.ts:38`), clears `NODE_CONFIG`,
+  and opens the real `%APPDATA%\Signal` profile. On 2026-10-08 only the
+  single-instance lock held by the installed Signal stopped it.
 
 - Upstream requires Node 24.21.0 and pnpm; native prebuilds are fetched from
   `build-artifacts.signal.org` during `pnpm install`.

@@ -68,6 +68,23 @@ export const ErrorCode = {
 } as const;
 export type ErrorCodeType = (typeof ErrorCode)[keyof typeof ErrorCode];
 
+// Fixed, human-readable text for errors returned by data methods. The text
+// depends only on the code, so it can never carry internal detail.
+export const ERROR_MESSAGES: Readonly<Record<ErrorCodeType, string>> = {
+  INVALID_REQUEST: 'Invalid request',
+  UNSUPPORTED_VERSION: 'Unsupported protocol version',
+  UNSUPPORTED_METHOD: 'Unsupported method',
+  UNSUPPORTED_CAPABILITY: 'Unsupported capability',
+  NOT_AUTHORIZED: 'Not authorized',
+  PERMISSION_DENIED: 'Permission denied',
+  NOT_FOUND: 'Not found',
+  INVALID_ARGUMENT: 'Invalid argument',
+  NOT_READY: 'Signal is not ready',
+  PRECONDITION_FAILED: 'Precondition failed',
+  RATE_LIMITED: 'Rate limited',
+  INTERNAL_ERROR: 'Internal error',
+};
+
 export const Method = {
   Hello: 'session.hello',
   Authenticate: 'session.authenticate',

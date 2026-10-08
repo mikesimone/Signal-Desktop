@@ -691,7 +691,7 @@ describe('externalClient/ExternalClientServer', () => {
       });
       assert.deepEqual(response.error, {
         code: ErrorCode.NotReady,
-        message: 'Request failed',
+        message: 'Signal is not ready',
       });
     });
 

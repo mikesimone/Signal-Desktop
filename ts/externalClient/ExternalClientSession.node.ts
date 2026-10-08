@@ -34,6 +34,7 @@ import type {
   ResponseType,
 } from './protocol.std.ts';
 import {
+  ERROR_MESSAGES,
   ErrorCode,
   IMPLEMENTED_CAPABILITIES,
   Method,
@@ -301,7 +302,7 @@ export class ExternalClientSession {
       this.#log.info(
         `session ${this.logId}: ${method} failed (${result.code})`
       );
-      this.#sendError(request.id, result.code, 'Request failed');
+      this.#sendError(request.id, result.code, ERROR_MESSAGES[result.code]);
     }
   }
 
