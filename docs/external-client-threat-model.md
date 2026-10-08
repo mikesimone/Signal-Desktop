@@ -148,7 +148,14 @@ AppContainer processes of the same user out.
 Test: `ts/test-node/externalClient/windowsPipe_test.node.ts` (handshake over
 the native pipe, squatting refused, `\\localhost\pipe\…` refused) in CI on
 `windows-latest`; DACL checked by hand with `accesschk64 -l`.
-Status: **built and tested in CI only; not yet verified inside Electron.**
+Verified inside Electron on Windows 11 (2026-10-08, 16:32 PT): the live
+bridge pipe's descriptor is
+`O:<user> G:<user> D:P(A;;FA;;;<user>)`, with no Everyone, ANONYMOUS LOGON,
+Administrators or SYSTEM entries and no explicit label (implicit Medium
+no-write-up). `\\localhost\…`, `\\127.0.0.1\…` and `\\<hostname>\…`
+are refused with `EPERM`; local clients connect; a stored grant and the
+server key survive an app restart. Not yet tested: a low-integrity client
+(expected to be refused by no-write-up).
 
 **T4 [S] Endpoint squatting (A7).**
 A process creates the endpoint before Signal starts and impersonates Signal
