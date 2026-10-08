@@ -385,7 +385,8 @@ Scope: live updates, so clients stop polling.
   (`maxEventBacklogBytes`), when the renderer's queue overflows (5000
   pending objects), and when the renderer reloads.
 - Sources: message added/updated/removed come from one hook each in
-  `ConversationModel.addSingleMessage`, `MessageCache.#updateRedux` and
+  `ConversationModel.#doAddSingleMessage` (received and sent),
+  `MessageCache.#updateRedux` and
   `cleanupMessageFromMemory`. Conversation changes come from diffing Redux's
   `conversationLookup` (by reference, then by DTO) at most every 250 ms.
   Events are coalesced per object and sent to main in batches of up to 200

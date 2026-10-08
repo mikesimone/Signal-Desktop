@@ -1616,7 +1616,6 @@ export class ConversationModel {
   ): Promise<void> {
     await this.#beforeAddSingleMessage();
     this.#doAddSingleMessage(message, { isJustSent });
-    notifyExternalClientsMessageAdded(message);
     this.debouncedUpdateLastMessage();
   }
 
@@ -1638,6 +1637,8 @@ export class ConversationModel {
     message: MessageAttributesType,
     { isJustSent }: { isJustSent: boolean }
   ): void {
+    notifyExternalClientsMessageAdded(message);
+
     const { messagesAdded } = window.reduxActions.conversations;
     const { conversations } = window.reduxStore.getState();
     const { messagesByConversation } = conversations;
