@@ -26,22 +26,32 @@ import type {
 } from './hostTypes.std.ts';
 import type {
   AuthorizationResultType,
+  BroadcastEventNameType,
   CapabilityType,
   ErrorCodeType,
+  EventFrameType,
+  EventsResultType,
+  EventTopicType,
   HelloResultType,
   LimitsType,
   RequestEnvelopeType,
   ResponseType,
 } from './protocol.std.ts';
 import {
+  ALL_EVENT_TOPICS,
   ERROR_MESSAGES,
   ErrorCode,
+  EVENT_TOPIC_CAPABILITIES,
+  EVENT_TOPICS,
+  EventName,
   IMPLEMENTED_CAPABILITIES,
   Method,
   PROTOCOL_NAME,
   SERVICE_METHOD_CAPABILITIES,
   SERVICE_PARAM_SCHEMAS,
   authenticateParamsSchema,
+  eventsSubscribeParamsSchema,
+  eventsUnsubscribeParamsSchema,
   helloParamsSchema,
   isServiceMethod,
   makeError,
@@ -71,6 +81,7 @@ export type ExternalClientSessionOptionsType = Readonly<{
   authority: ExternalClientAuthorityType;
   host: ExternalClientHostType;
   onClosed: (session: ExternalClientSession) => void;
+  onTopicsChanged: () => void;
 }>;
 
 const SessionState = {
@@ -94,6 +105,7 @@ export class ExternalClientSession {
   readonly #authority: ExternalClientAuthorityType;
   readonly #host: ExternalClientHostType;
   readonly #onClosed: (session: ExternalClientSession) => void;
+  readonly #onTopicsChanged: () => void;
   readonly #decoder: FrameDecoder;
   readonly #challenge = randomBytes(32);
   #handshakeTimer: NodeJS.Timeout | undefined;
@@ -102,6 +114,8 @@ export class ExternalClientSession {
   #authInFlight = false;
   #publicKey: string | undefined;
   #capabilities: ReadonlySet<CapabilityType> = new Set();
+  #topics = new Set<EventTopicType>();
+  #eventSeq = 0;
 
   constructor(options: ExternalClientSessionOptionsType) {
     this.socket = options.socket;
@@ -111,6 +125,7 @@ export class ExternalClientSession {
     this.#authority = options.authority;
     this.#host = options.host;
     this.#onClosed = options.onClosed;
+    this.#onTopicsChanged = options.onTopicsChanged;
     this.#decoder = new FrameDecoder({
       maxPayloadBytes: this.#limits.maxFrameBytes,
       allowedKinds: [FrameKind.Json],
@@ -130,6 +145,39 @@ export class ExternalClientSession {
 
   get publicKey(): string | undefined {
     return this.#publicKey;
+  }
+
+  get topics(): ReadonlySet<EventTopicType> {
+    return this.#topics;
+  }
+
+  // Sends a broadcast event if this session subscribed to its topic.
+  deliverEvent(event: BroadcastEventNameType, data: unknown): void {
+    const topic = EVENT_TOPICS[event];
+    if (this.#isClosed() || !this.#topics.has(topic)) {
+      return;
+    }
+    // Capabilities were checked on subscribe; check again so a topic can
+    // never outlive the grant that allowed it.
+    if (!this.#capabilities.has(EVENT_TOPIC_CAPABILITIES[topic])) {
+      return;
+    }
+    if (this.socket.writableLength > this.#limits.maxEventBacklogBytes) {
+      this.#log.warn(`session ${this.logId}: client behind, dropping events`);
+      this.dropEvents();
+      return;
+    }
+    this.#sendEvent(event, data);
+  }
+
+  // Unsubscribes from everything and tells the client to resynchronize.
+  dropEvents(): void {
+    if (this.#isClosed() || this.#topics.size === 0) {
+      return;
+    }
+    this.#topics = new Set();
+    this.#sendEvent(EventName.EventsDropped, {});
+    this.#onTopicsChanged();
   }
 
   close(): void {
@@ -165,6 +213,7 @@ export class ExternalClientSession {
   #handleClosed(): void {
     this.#state = SessionState.Closed;
     this.#stopHandshakeTimer();
+    this.#topics = new Set();
     this.#onClosed(this);
   }
 
@@ -262,6 +311,18 @@ export class ExternalClientSession {
         }
         this.#sendResult(request.id, { state: await this.#host.getStatus() });
         return;
+      case Method.EventsSubscribe:
+        if (!this.#requireAuthorized(request)) {
+          return;
+        }
+        this.#onSubscribe(request);
+        return;
+      case Method.EventsUnsubscribe:
+        if (!this.#requireAuthorized(request)) {
+          return;
+        }
+        this.#onUnsubscribe(request);
+        return;
       default:
         break;
     }
@@ -304,6 +365,63 @@ export class ExternalClientSession {
       );
       this.#sendError(request.id, result.code, ERROR_MESSAGES[result.code]);
     }
+  }
+
+  #onSubscribe(request: RequestEnvelopeType): void {
+    const parsed = safeParseUnknown(
+      eventsSubscribeParamsSchema,
+      request.params
+    );
+    if (!parsed.success) {
+      this.#sendError(request.id, ErrorCode.InvalidArgument, 'Invalid params');
+      return;
+    }
+    const { topics } = parsed.data;
+    // All or nothing: one topic the client may not see refuses the request.
+    if (
+      !topics.every(topic =>
+        this.#capabilities.has(EVENT_TOPIC_CAPABILITIES[topic])
+      )
+    ) {
+      this.#log.warn(`session ${this.logId}: permission denied for events`);
+      this.#sendError(
+        request.id,
+        ErrorCode.PermissionDenied,
+        'Client is not authorized for this topic'
+      );
+      return;
+    }
+    const before = this.#topics.size;
+    this.#topics = new Set([...this.#topics, ...topics]);
+    // Respond before any event can follow, so the client knows the
+    // subscription is live when the first event arrives.
+    this.#sendResult(request.id, this.#topicsResult());
+    if (this.#topics.size !== before) {
+      this.#log.info(
+        `session ${this.logId}: subscribed to ${[...this.#topics].join(',')}`
+      );
+      this.#onTopicsChanged();
+    }
+  }
+
+  #onUnsubscribe(request: RequestEnvelopeType): void {
+    const rawParams: unknown = request.params ?? {};
+    const parsed = safeParseUnknown(eventsUnsubscribeParamsSchema, rawParams);
+    if (!parsed.success) {
+      this.#sendError(request.id, ErrorCode.InvalidArgument, 'Invalid params');
+      return;
+    }
+    const remove = new Set(parsed.data.topics ?? ALL_EVENT_TOPICS);
+    const before = this.#topics.size;
+    this.#topics = new Set([...this.#topics].filter(t => !remove.has(t)));
+    this.#sendResult(request.id, this.#topicsResult());
+    if (this.#topics.size !== before) {
+      this.#onTopicsChanged();
+    }
+  }
+
+  #topicsResult(): EventsResultType {
+    return { topics: ALL_EVENT_TOPICS.filter(t => this.#topics.has(t)) };
   }
 
   async #onHello(request: RequestEnvelopeType): Promise<void> {
@@ -513,7 +631,12 @@ export class ExternalClientSession {
     this.#send({ id, result });
   }
 
-  #send(response: ResponseType): void {
+  #sendEvent(event: EventFrameType['event'], data: unknown): void {
+    this.#eventSeq += 1;
+    this.#send({ event, seq: this.#eventSeq, data });
+  }
+
+  #send(response: ResponseType | EventFrameType): void {
     if (this.socket.destroyed || !this.socket.writable) {
       return;
     }

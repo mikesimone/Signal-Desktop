@@ -177,3 +177,25 @@ non-chat rows are omitted.
 WHY: clients can show "This message was deleted" or "View-once media" the
 way Signal does without ever holding the content; expired messages are about
 to be removed by Signal anyway.
+
+## D18. Events: coalesced in the renderer, conversations by Redux diff
+
+DECISION: message events come from three one-line hooks in Signal's message
+code; conversation events come from diffing Redux's `conversationLookup`.
+The renderer keeps one pending event per object and builds DTOs only when
+it sends.
+
+WHY: the message hooks are the existing choke points (architecture §2.9).
+Conversations change through many paths, all of which end in Redux, so a
+diff catches every one without touching them. Coalescing keeps a burst
+(receipts, reactions, downloads) to one event per object.
+
+## D19. Drop and resynchronize instead of buffering
+
+DECISION: when a client falls behind, the renderer queue overflows, or the
+renderer reloads, subscribers get `events.dropped`, lose their topics, and
+must resubscribe and resnapshot. No replay buffer.
+
+WHY: follows D8. Signal has no change log to replay from; a bounded drop
+with an explicit signal is simpler to reason about than an unbounded or
+lossy buffer, and the client already knows how to snapshot.

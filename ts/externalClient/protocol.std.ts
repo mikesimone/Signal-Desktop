@@ -24,6 +24,9 @@ export const LIMITS = {
   defaultConversationPage: 100,
   maxMessagePage: 100,
   defaultMessagePage: 50,
+  // Events stop (with `events.dropped`) once this many bytes are waiting to
+  // be written to a client.
+  maxEventBacklogBytes: 1024 * 1024,
 } as const;
 export type LimitsType = { readonly [K in keyof typeof LIMITS]: number };
 
@@ -95,6 +98,8 @@ export const Method = {
   ConversationsGet: 'conversations.get',
   MessagesList: 'messages.list',
   MessagesGet: 'messages.get',
+  EventsSubscribe: 'events.subscribe',
+  EventsUnsubscribe: 'events.unsubscribe',
 } as const;
 export type MethodType = (typeof Method)[keyof typeof Method];
 
@@ -110,6 +115,59 @@ export type ServiceMethodType = keyof typeof SERVICE_METHOD_CAPABILITIES;
 export function isServiceMethod(method: string): method is ServiceMethodType {
   return Object.hasOwn(SERVICE_METHOD_CAPABILITIES, method);
 }
+
+// Live updates. A client subscribes to topics, then takes a snapshot with the
+// list methods, then applies events as idempotent upserts and removals.
+export const EventTopic = {
+  Conversations: 'conversations',
+  Messages: 'messages',
+} as const;
+export type EventTopicType = (typeof EventTopic)[keyof typeof EventTopic];
+export const ALL_EVENT_TOPICS: ReadonlyArray<EventTopicType> =
+  Object.values(EventTopic);
+
+export const EVENT_TOPIC_CAPABILITIES = {
+  [EventTopic.Conversations]: Capability.ConversationsRead,
+  [EventTopic.Messages]: Capability.MessagesRead,
+} as const satisfies Record<EventTopicType, CapabilityType>;
+
+export const EventName = {
+  // data: ConversationDTO. Also sent when a conversation becomes listed.
+  ConversationUpdated: 'conversation.updated',
+  // data: { conversationId }. Also sent when a conversation stops being
+  // listed (deleted, blocked into a request, and so on).
+  ConversationRemoved: 'conversation.removed',
+  // data: MessageDTO
+  MessageAdded: 'message.added',
+  // data: MessageDTO
+  MessageUpdated: 'message.updated',
+  // data: { messageId, conversationId }
+  MessageRemoved: 'message.removed',
+  // data: {}. Signal stopped delivering events to this session, which is
+  // now unsubscribed from every topic. Subscribe again and take a new
+  // snapshot.
+  EventsDropped: 'events.dropped',
+} as const;
+export type EventNameType = (typeof EventName)[keyof typeof EventName];
+
+// Events Signal broadcasts, and the topic each one belongs to.
+export const EVENT_TOPICS = {
+  [EventName.ConversationUpdated]: EventTopic.Conversations,
+  [EventName.ConversationRemoved]: EventTopic.Conversations,
+  [EventName.MessageAdded]: EventTopic.Messages,
+  [EventName.MessageUpdated]: EventTopic.Messages,
+  [EventName.MessageRemoved]: EventTopic.Messages,
+} as const satisfies Partial<Record<EventNameType, EventTopicType>>;
+export type BroadcastEventNameType = keyof typeof EVENT_TOPICS;
+
+// Pushed to the client without being asked for. `seq` starts at 1 and grows
+// by one for every event on this session, so a client can tell events from
+// responses (which always carry `id`) and spot gaps.
+export type EventFrameType = Readonly<{
+  event: EventNameType;
+  seq: number;
+  data: unknown;
+}>;
 
 export const SessionStatus = {
   Ready: 'ready',
@@ -256,6 +314,32 @@ export const messagesGetParamsSchema = z
     messageId: messageIdSchema,
   })
   .strict();
+
+const eventTopicSchema = z.enum(
+  ALL_EVENT_TOPICS as [EventTopicType, ...Array<EventTopicType>]
+);
+
+export const eventsSubscribeParamsSchema = z
+  .object({
+    topics: z.array(eventTopicSchema).min(1).max(ALL_EVENT_TOPICS.length),
+  })
+  .strict();
+
+export const eventsUnsubscribeParamsSchema = z
+  .object({
+    // Omit to unsubscribe from everything.
+    topics: z
+      .array(eventTopicSchema)
+      .min(1)
+      .max(ALL_EVENT_TOPICS.length)
+      .optional(),
+  })
+  .strict();
+
+export type EventsResultType = Readonly<{
+  // Every topic this session is now subscribed to.
+  topics: ReadonlyArray<EventTopicType>;
+}>;
 
 export const SERVICE_PARAM_SCHEMAS = {
   [Method.ConversationsList]: conversationsListParamsSchema,

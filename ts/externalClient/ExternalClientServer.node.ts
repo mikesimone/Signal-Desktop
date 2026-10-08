@@ -17,8 +17,12 @@ import type {
   ExternalClientHostType,
 } from './hostTypes.std.ts';
 import { ExternalClientSession } from './ExternalClientSession.node.ts';
-import type { LimitsType } from './protocol.std.ts';
-import { LIMITS } from './protocol.std.ts';
+import type {
+  BroadcastEventNameType,
+  EventTopicType,
+  LimitsType,
+} from './protocol.std.ts';
+import { ALL_EVENT_TOPICS, LIMITS } from './protocol.std.ts';
 
 // Transport for local external clients: a Unix domain socket or a Windows
 // named pipe, never a network listener. On Windows the pipe comes from
@@ -34,6 +38,9 @@ export type ExternalClientServerOptionsType = Readonly<{
   authority: ExternalClientAuthorityType;
   host: ExternalClientHostType;
   limits?: Partial<LimitsType>;
+  // Called with the union of all sessions' topics whenever it changes, so
+  // the event source can do no work while nobody is listening.
+  onTopicsChanged?: (topics: ReadonlyArray<EventTopicType>) => void;
 }>;
 
 export class ExternalClientServer {
@@ -44,6 +51,10 @@ export class ExternalClientServer {
   readonly #host: ExternalClientHostType;
   readonly #limits: LimitsType;
   readonly #sessions = new Set<ExternalClientSession>();
+  readonly #onTopicsChanged:
+    | ((topics: ReadonlyArray<EventTopicType>) => void)
+    | undefined;
+  #topics: ReadonlyArray<EventTopicType> = [];
   #listener: Readonly<{ close: () => Promise<void> }> | undefined;
 
   constructor(options: ExternalClientServerOptionsType) {
@@ -53,6 +64,7 @@ export class ExternalClientServer {
     this.#authority = options.authority;
     this.#host = options.host;
     this.#limits = { ...LIMITS, ...options.limits };
+    this.#onTopicsChanged = options.onTopicsChanged;
   }
 
   get isListening(): boolean {
@@ -61,6 +73,38 @@ export class ExternalClientServer {
 
   get sessionCount(): number {
     return this.#sessions.size;
+  }
+
+  get topics(): ReadonlyArray<EventTopicType> {
+    return this.#topics;
+  }
+
+  broadcast(event: BroadcastEventNameType, data: unknown): void {
+    for (const session of this.#sessions) {
+      session.deliverEvent(event, data);
+    }
+  }
+
+  // The event source lost events; every subscriber must resynchronize.
+  dropEvents(): void {
+    for (const session of this.#sessions) {
+      session.dropEvents();
+    }
+  }
+
+  #updateTopics(): void {
+    const subscribed = new Set<EventTopicType>();
+    for (const session of this.#sessions) {
+      for (const topic of session.topics) {
+        subscribed.add(topic);
+      }
+    }
+    const topics = ALL_EVENT_TOPICS.filter(topic => subscribed.has(topic));
+    if (topics.join() === this.#topics.join()) {
+      return;
+    }
+    this.#topics = topics;
+    this.#onTopicsChanged?.(topics);
   }
 
   async start(): Promise<void> {
@@ -88,6 +132,7 @@ export class ExternalClientServer {
       session.socket.destroy();
     }
     this.#sessions.clear();
+    this.#updateTopics();
 
     await listener.close();
     await cleanupEndpoint(this.#endpoint);
@@ -153,7 +198,9 @@ export class ExternalClientServer {
       host: this.#host,
       onClosed: closed => {
         this.#sessions.delete(closed);
+        this.#updateTopics();
       },
+      onTopicsChanged: () => this.#updateTopics(),
     });
     this.#sessions.add(session);
     this.#log.info(`session ${session.logId}: client requested connection`);

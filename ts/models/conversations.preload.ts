@@ -293,6 +293,7 @@ import { keyTransparency } from '../services/keyTransparency.preload.ts';
 import type { PollSource } from '../messageModifiers/Polls.preload.ts';
 import { isSignalServiceId } from '../types/SignalConversation.std.ts';
 import { QualifiedAddress } from '../types/QualifiedAddress.std.ts';
+import { notifyExternalClientsMessageAdded } from '../externalClient/hooks.std.ts';
 
 const { compact, isNumber, throttle, debounce } = lodash;
 
@@ -1615,6 +1616,7 @@ export class ConversationModel {
   ): Promise<void> {
     await this.#beforeAddSingleMessage();
     this.#doAddSingleMessage(message, { isJustSent });
+    notifyExternalClientsMessageAdded(message);
     this.debouncedUpdateLastMessage();
   }
 

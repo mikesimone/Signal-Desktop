@@ -218,6 +218,13 @@ platform, userDataPath, runtimeDir, username })`, `prepareEndpoint()` with
   renderer adapter answering `conversations.*` and `messages.*`.
 - `ts/externalClient/messageDto.std.ts` (M-C): field-by-field message DTO
   mapper with the redaction rules.
+- `ts/externalClient/hooks.std.ts` (M-D): import-free hook functions that
+  Signal's message code calls; no-ops until a client subscribes.
+- `ts/externalClient/eventQueue.std.ts` (M-D): per-object coalescing queue.
+- `ts/externalClient/conversationDiff.std.ts` (M-D): turns successive
+  conversation lookups into public update/remove events.
+- `ts/externalClient/service/ExternalClientEvents.preload.ts` (M-D):
+  renderer event source; queues, converts and batches events to main.
 - `ts/test-helpers/externalClientFakeClient.node.ts`: fake client for tests.
 - `packages/windows-local-pipe/` (Windows hardening): N-API named pipe
   server with a user-only DACL, `PIPE_REJECT_REMOTE_CLIENTS` and
@@ -241,8 +248,11 @@ platform, userDataPath, runtimeDir, username })`, `prepareEndpoint()` with
 - `ts/windows/main/phase1-ipc.preload.ts` (M-B): installs the renderer
   service.
 - `ts/ConversationController.preload.ts` (M-B): `isInitialFetchComplete()`.
-- `_locales/en/messages.json` (M-B): approval prompt strings.
-- Later: `MessageCache`, `CompositionArea.dom.tsx`, Preferences files.
+- `_locales/en/messages.json` (M-B, D): approval prompt strings.
+- `ts/models/conversations.preload.ts`, `ts/services/MessageCache.preload.ts`,
+  `ts/util/cleanup.preload.ts` (M-D): one hook call each (message added,
+  updated, removed).
+- Later: `CompositionArea.dom.tsx`, Preferences files.
 
 ## 5. Milestone A scope
 
@@ -352,6 +362,49 @@ oldest-first pages with non-overlapping cursor paging, attachments, quotes and
 `expiresAt` populated; `messages.get` and `NOT_FOUND` behaved as specified.
 Not yet run: reconnecting with the stored grant (`session.authenticate`)
 inside Electron.
+
+## 5d. Milestone D scope and status (2026-10-08)
+
+Scope: live updates, so clients stop polling.
+
+- `events.subscribe { topics }` with topics `conversations` (needs
+  `conversations.read`) and `messages` (needs `messages.read`); all or
+  nothing, `PERMISSION_DENIED` if any topic is not granted. Returns every
+  topic the session now holds. `events.unsubscribe { topics? }` removes some
+  or all.
+- Events are frames with no `id`: `{ event, seq, data }`. `seq` starts at 1
+  per session and grows by one per event. Events:
+  `conversation.updated` (ConversationDTO, also when a conversation becomes
+  listed), `conversation.removed { conversationId }` (deleted or no longer
+  listed), `message.added` / `message.updated` (MessageDTO),
+  `message.removed { messageId, conversationId }`, and `events.dropped {}`.
+- Client contract: subscribe, then snapshot with the list methods, then apply
+  events as idempotent upserts and removals. After `events.dropped` the
+  session holds no topics: subscribe again and resnapshot.
+- `events.dropped` is sent when a client has more than 1 MiB unread
+  (`maxEventBacklogBytes`), when the renderer's queue overflows (5000
+  pending objects), and when the renderer reloads.
+- Sources: message added/updated/removed come from one hook each in
+  `ConversationModel.addSingleMessage`, `MessageCache.#updateRedux` and
+  `cleanupMessageFromMemory`. Conversation changes come from diffing Redux's
+  `conversationLookup` (by reference, then by DTO) at most every 250 ms.
+  Events are coalesced per object and sent to main in batches of up to 200
+  every 100 ms; DTOs are built at send time and only for listed
+  conversations.
+- With no subscriber main tells the renderer no topics, the hooks are
+  no-ops and Redux is not observed.
+- Known limits: updates to messages not held in `MessageCache` are not seen
+  (architecture §2.9); a mute that expires on its own produces no event
+  until something else changes the conversation; group story replies and
+  stories are not sent, matching `messages.list`.
+- The approval dialog now labels `messages.read` ("Read your messages,
+  including new ones as they arrive").
+
+Verified in a Linux container: 97 tests pass, including subscribe
+authorization and capability checks, per-session topic routing, `seq`
+order, unsubscribe, topic union tracking, drop-and-resubscribe, a stalled
+reader being dropped, queue coalescing and the conversation diff. The probe's
+`--watch` mode was run against a test server. Not yet run inside Electron.
 
 ## 6. Build and test notes
 

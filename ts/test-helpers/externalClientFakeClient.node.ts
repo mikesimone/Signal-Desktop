@@ -24,6 +24,12 @@ export type FakeResponseType = {
   error?: { code: string; message: string };
 };
 
+export type FakeEventType = {
+  event: string;
+  seq: number;
+  data: Record<string, unknown>;
+};
+
 export type FakeKeyType = Readonly<{
   privateKey: KeyObject;
   publicKey: string;
@@ -45,6 +51,7 @@ export class FakeClient {
     allowedKinds: [FrameKind.Json],
   });
   readonly #messages = new Array<FakeResponseType>();
+  readonly #events = new Array<FakeEventType>();
   readonly #waiters = new Array<() => void>();
   readonly socket: Socket;
   readonly clientNonce = encodeBase64Url(randomBytes(32));
@@ -55,9 +62,12 @@ export class FakeClient {
     this.socket = socket;
     socket.on('data', chunk => {
       for (const frame of this.#decoder.push(chunk)) {
-        this.#messages.push(
-          JSON.parse(new TextDecoder().decode(frame.payload))
-        );
+        const message = JSON.parse(new TextDecoder().decode(frame.payload));
+        if ('event' in message) {
+          this.#events.push(message);
+        } else {
+          this.#messages.push(message);
+        }
       }
       this.#wake();
     });
@@ -88,6 +98,19 @@ export class FakeClient {
       throw new Error('FakeClient: no message');
     }
     return message;
+  }
+
+  async nextEvent(timeoutMs = 2000): Promise<FakeEventType> {
+    await this.#waitFor(() => this.#events.length > 0, timeoutMs);
+    const event = this.#events.shift();
+    if (!event) {
+      throw new Error('FakeClient: no event');
+    }
+    return event;
+  }
+
+  get pendingEvents(): number {
+    return this.#events.length;
   }
 
   async request(method: string, params?: unknown): Promise<FakeResponseType> {

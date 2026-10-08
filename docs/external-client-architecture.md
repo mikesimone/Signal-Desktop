@@ -463,12 +463,20 @@ Signal has no change-sequence abstraction (Redux and models are snapshot
 state; `MessageCache` updates are throttled and memory-only). V1 therefore
 uses **snapshot + event stream + resnapshot on reconnect**:
 
-1. Client calls `subscribe` first; events are buffered server-side (bounded).
+1. Client calls `events.subscribe` first; from the response on, events for
+   its topics arrive interleaved with responses.
 2. Client takes snapshots (`conversations.list`, `messages.list`).
-3. Server flushes buffered events; each carries a per-session monotonically
-   increasing `seq`.
-4. On any gap (disconnect, `eventsDropped` because the queue overflowed),
-   the client discards caches and resnapshots.
+3. Client applies events as idempotent upserts and removals; events that
+   overlap the snapshot are harmless. Each carries a per-session
+   monotonically increasing `seq`.
+4. On any gap (disconnect, `events.dropped`), the client resubscribes,
+   discards caches and resnapshots.
+
+Implementation (Milestone D): the renderer coalesces changes per object and
+sends batches over `external-client:events`; main only forwards them to
+sessions subscribed to the topic. Main tells the renderer the union of
+subscribed topics over `external-client:topics`, so with no subscriber the
+renderer does nothing. See plan §5d.
 
 Message updates for messages not resident in `MessageCache` are not observed
 (§2.9); clients must treat message DTOs as refreshable and re-fetch visible
@@ -476,18 +484,18 @@ pages after reconnect. This limitation is documented, not papered over.
 
 ### 4.9 Failure behavior
 
-| Condition                          | Behavior                                                                                                 |
-| ---------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| Feature disabled                   | No listener, no discovery file, socket removed.                                                          |
-| Endpoint already exists / squatted | Log, do not listen, do not retry in a loop.                                                              |
-| DB not ready / key error           | Listener not started until `sqlInitPromise` resolves OK.                                                 |
-| Not linked                         | `hello` succeeds; data methods return `NOT_READY` (`unlinked`).                                          |
-| Renderer reloading                 | Calls return `NOT_READY`; sessions stay open; events resume after `external-client:ready`.               |
-| Unlink                             | All grants deleted, all sessions closed.                                                                 |
-| Revocation                         | Grant deleted, matching sessions closed immediately.                                                     |
-| Quit                               | Listener closed in `before-quit`; socket file removed.                                                   |
-| Malformed frame / oversize         | `INVALID_REQUEST` and close.                                                                             |
-| Client too slow (event queue full) | Drop queued events, send one `eventsDropped`, client must resnapshot. Repeat offenders are disconnected. |
+| Condition                          | Behavior                                                                                                  |
+| ---------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| Feature disabled                   | No listener, no discovery file, socket removed.                                                           |
+| Endpoint already exists / squatted | Log, do not listen, do not retry in a loop.                                                               |
+| DB not ready / key error           | Listener not started until `sqlInitPromise` resolves OK.                                                  |
+| Not linked                         | `hello` succeeds; data methods return `NOT_READY` (`unlinked`).                                           |
+| Renderer reloading                 | Calls return `NOT_READY`; sessions stay open; subscribers get `events.dropped` when the renderer is back. |
+| Unlink                             | All grants deleted, all sessions closed.                                                                  |
+| Revocation                         | Grant deleted, matching sessions closed immediately.                                                      |
+| Quit                               | Listener closed in `before-quit`; socket file removed.                                                    |
+| Malformed frame / oversize         | `INVALID_REQUEST` and close.                                                                              |
+| Client too slow (event backlog)    | Over 1 MiB unread: send `events.dropped`, unsubscribe; client must resnapshot. 2 MiB: disconnect.         |
 
 ### 4.10 Sequence diagrams
 

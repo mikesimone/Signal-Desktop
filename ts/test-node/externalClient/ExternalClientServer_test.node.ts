@@ -81,6 +81,7 @@ describe('externalClient/ExternalClientServer', () => {
   let serviceCalls: Array<{ method: string; params: unknown }>;
   let serviceAnswer: () => Promise<ServiceResultType>;
   let status: (typeof SessionStatus)[keyof typeof SessionStatus];
+  let topicChanges: Array<ReadonlyArray<string>>;
   const clients = new Array<FakeClient>();
 
   const host: ExternalClientHostType = {
@@ -99,6 +100,7 @@ describe('externalClient/ExternalClientServer', () => {
       authority,
       host,
       limits,
+      onTopicsChanged: topics => topicChanges.push(topics),
     });
   }
 
@@ -149,6 +151,7 @@ describe('externalClient/ExternalClientServer', () => {
     serviceCalls = [];
     serviceAnswer = async () => ({ ok: true, value: { conversations: [] } });
     status = SessionStatus.Ready;
+    topicChanges = [];
   });
 
   afterEach(async () => {
@@ -713,6 +716,174 @@ describe('externalClient/ExternalClientServer', () => {
       const response = await client.next();
       assert.strictEqual(response.id, 'q2');
       assert.strictEqual(response.error?.code, ErrorCode.RateLimited);
+    });
+  });
+
+  describe('events', () => {
+    const message = { id: 'm-1', conversationId: 'c-1', body: 'hi' };
+    const conversation = { id: 'c-1', title: 'Chat' };
+
+    async function waitForTopics(expected: ReadonlyArray<string>) {
+      for (let i = 0; i < 50; i += 1) {
+        if (topicChanges.at(-1)?.join() === expected.join()) {
+          return;
+        }
+        // oxlint-disable-next-line no-await-in-loop
+        await sleep(10);
+      }
+      assert.deepEqual(topicChanges.at(-1), expected);
+    }
+
+    it('requires authorization to subscribe', async () => {
+      await startServer();
+      const client = await connectClient();
+      await client.hello();
+      const response = await client.request('events.subscribe', {
+        topics: ['messages'],
+      });
+      assert.strictEqual(response.error?.code, ErrorCode.NotAuthorized);
+    });
+
+    it('refuses topics the client has no capability for', async () => {
+      await startServer();
+      const { client } = await approvedClient();
+      const response = await client.request('events.subscribe', {
+        topics: ['conversations', 'messages'],
+      });
+      assert.strictEqual(response.error?.code, ErrorCode.PermissionDenied);
+      assert.deepEqual(server.topics, []);
+    });
+
+    it('rejects unknown topics', async () => {
+      await startServer();
+      const { client } = await approvedClient();
+      const response = await client.request('events.subscribe', {
+        topics: ['typing'],
+      });
+      assert.strictEqual(response.error?.code, ErrorCode.InvalidArgument);
+    });
+
+    it('delivers events only for subscribed topics, in order', async () => {
+      await startServer();
+      const { client } = await approvedClient(undefined, [
+        'conversations.read',
+        'messages.read',
+      ]);
+      const subscribed = await client.request('events.subscribe', {
+        topics: ['messages'],
+      });
+      assert.deepEqual(subscribed.result, { topics: ['messages'] });
+      await waitForTopics(['messages']);
+
+      server.broadcast('conversation.updated', conversation);
+      server.broadcast('message.added', message);
+      server.broadcast('message.removed', {
+        messageId: 'm-1',
+        conversationId: 'c-1',
+      });
+
+      assert.deepEqual(await client.nextEvent(), {
+        event: 'message.added',
+        seq: 1,
+        data: message,
+      });
+      const removed = await client.nextEvent();
+      assert.strictEqual(removed.event, 'message.removed');
+      assert.strictEqual(removed.seq, 2);
+      await sleep(20);
+      assert.strictEqual(client.pendingEvents, 0);
+    });
+
+    it('routes events to each session by its own topics', async () => {
+      await startServer();
+      const both = ['conversations.read', 'messages.read'];
+      const { client: first } = await approvedClient(undefined, both);
+      const { client: second } = await approvedClient(undefined, both);
+      await first.request('events.subscribe', { topics: ['conversations'] });
+      await second.request('events.subscribe', { topics: ['messages'] });
+      await waitForTopics(['conversations', 'messages']);
+
+      server.broadcast('message.updated', message);
+      server.broadcast('conversation.updated', conversation);
+
+      assert.strictEqual(
+        (await first.nextEvent()).event,
+        'conversation.updated'
+      );
+      assert.strictEqual((await second.nextEvent()).event, 'message.updated');
+      await sleep(20);
+      assert.strictEqual(first.pendingEvents, 0);
+      assert.strictEqual(second.pendingEvents, 0);
+    });
+
+    it('stops delivering after unsubscribe', async () => {
+      await startServer();
+      const { client } = await approvedClient();
+      await client.request('events.subscribe', { topics: ['conversations'] });
+      await waitForTopics(['conversations']);
+      const response = await client.request('events.unsubscribe');
+      assert.deepEqual(response.result, { topics: [] });
+      await waitForTopics([]);
+
+      server.broadcast('conversation.updated', conversation);
+      await sleep(20);
+      assert.strictEqual(client.pendingEvents, 0);
+    });
+
+    it('clears topics when the client disconnects', async () => {
+      await startServer();
+      const { client } = await approvedClient();
+      await client.request('events.subscribe', { topics: ['conversations'] });
+      await waitForTopics(['conversations']);
+      client.close();
+      await waitForTopics([]);
+      assert.deepEqual(server.topics, []);
+    });
+
+    it('tells subscribers to resynchronize when events are dropped', async () => {
+      await startServer();
+      const { client } = await approvedClient();
+      await client.request('events.subscribe', { topics: ['conversations'] });
+      server.broadcast('conversation.updated', conversation);
+      server.dropEvents();
+      server.broadcast('conversation.updated', conversation);
+
+      assert.strictEqual((await client.nextEvent()).seq, 1);
+      assert.deepEqual(await client.nextEvent(), {
+        event: 'events.dropped',
+        seq: 2,
+        data: {},
+      });
+      await sleep(20);
+      assert.strictEqual(client.pendingEvents, 0);
+      await waitForTopics([]);
+
+      // Resubscribing works and continues the sequence.
+      await client.request('events.subscribe', { topics: ['conversations'] });
+      server.broadcast('conversation.updated', conversation);
+      assert.strictEqual((await client.nextEvent()).seq, 3);
+    });
+
+    it('drops events for a client that is not reading', async () => {
+      await startServer({ maxEventBacklogBytes: 64 * 1024 });
+      const { client } = await approvedClient();
+      await client.request('events.subscribe', { topics: ['conversations'] });
+      await waitForTopics(['conversations']);
+      client.socket.pause();
+
+      const big = { id: 'c-1', title: 'x'.repeat(16 * 1024) };
+      for (let i = 0; i < 200 && server.topics.length > 0; i += 1) {
+        server.broadcast('conversation.updated', big);
+      }
+      assert.deepEqual(server.topics, []);
+
+      client.socket.resume();
+      let last;
+      do {
+        // oxlint-disable-next-line no-await-in-loop
+        last = await client.nextEvent();
+      } while (last.event === 'conversation.updated');
+      assert.strictEqual(last.event, 'events.dropped');
     });
   });
 });

@@ -4546,6 +4546,10 @@
     "messageformat": "See your chat list, including chat names and unread counts",
     "description": "Permission shown in the local app access dialog"
   },
+  "icu:ExternalClientCapability__messages-read": {
+    "messageformat": "Read your messages, including new ones as they arrive",
+    "description": "Permission shown in the local app access dialog"
+  },
   "icu:Reactions--remove": {
     "messageformat": "Remove reaction",
     "description": "Shown when you want to remove a reaction you've made"

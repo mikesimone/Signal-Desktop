@@ -79,7 +79,7 @@ function listConversations({
 // `get` also resolves phone numbers and service ids; only accept our own
 // conversation ids so this cannot be used as a lookup oracle. Conversations
 // the left pane would not show are treated as missing.
-function getListedConversation(
+export function getListedConversation(
   conversationId: string
 ): ConversationModel | undefined {
   const model = window.ConversationController.get(conversationId);
@@ -105,7 +105,7 @@ function getConversation({
   };
 }
 
-function getDtoContext(): MessageDtoContextType {
+export function getDtoContext(): MessageDtoContextType {
   const controller = window.ConversationController;
   return {
     resolveConversationId: serviceId => controller.get(serviceId)?.id ?? null,

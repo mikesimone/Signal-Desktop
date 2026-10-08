@@ -288,10 +288,21 @@ should not raise their own notifications by default.
 ### Resource exhaustion by an approved client (A6)
 
 **T20 [D] Memory exhaustion via slow reader or huge pages.**
-Mitigation: bounded per-session event queue with drop-and-signal
-(`eventsDropped`); page size cap (100); concurrent request cap (16);
-attachment streaming with backpressure (`socket.write` return value /
-`drain`); send rate limit (e.g. 1/s burst 5).
+Mitigation: bounded per-session event backlog with drop-and-signal
+(`events.dropped` once 1 MiB is unread, then no events until the client
+resubscribes; disconnect at 2 MiB); bounded renderer queue (5000 objects,
+coalesced, overflow drops everyone's events rather than growing); page size
+cap (100); concurrent request cap (16); attachment streaming with
+backpressure (`socket.write` return value / `drain`); send rate limit (e.g.
+1/s burst 5). Implemented for events in Milestone D.
+
+**T20b [I] Events leaking what snapshots would hide.**
+Mitigation: events use the same DTO mappers and the same "listed
+conversation" rule as the list methods, applied when the event is sent; a
+topic needs the same capability as the matching methods, checked on
+subscribe and again on every delivery. Renderer event payloads are
+re-validated in main (closed event list, batch cap) and accepted only from
+the main window.
 
 ## 6. Explicitly inaccessible
 

@@ -21,6 +21,7 @@ import type {
 } from '../externalClient/hostTypes.std.ts';
 import type {
   CapabilityType,
+  EventTopicType,
   ServiceMethodType,
   SessionStatusType,
 } from '../externalClient/protocol.std.ts';
@@ -29,9 +30,14 @@ import {
   ErrorCode,
   SessionStatus,
 } from '../externalClient/protocol.std.ts';
+import type { RendererTopicsType } from '../externalClient/rendererChannel.std.ts';
 import {
   CALL_CHANNEL,
+  EVENTS_CHANNEL,
+  EVENTS_READY_CHANNEL,
   RESULT_CHANNEL,
+  TOPICS_CHANNEL,
+  rendererEventsSchema,
   rendererResultSchema,
 } from '../externalClient/rendererChannel.std.ts';
 
@@ -89,6 +95,18 @@ export class ExternalClientMain {
     ipcMain.on(RESULT_CHANNEL, (event, message) =>
       this.#onRendererResult(event, message)
     );
+    ipcMain.on(EVENTS_CHANNEL, (event, message) =>
+      this.#onRendererEvents(event, message)
+    );
+    // The renderer (re)loaded. Anything it had queued is gone, so current
+    // subscribers must resynchronize; that also resets its topics.
+    ipcMain.on(EVENTS_READY_CHANNEL, event => {
+      if (!this.#isMainRenderer(event)) {
+        return;
+      }
+      this.#server?.dropEvents();
+      this.#sendTopics();
+    });
   }
 
   // Must be called only after SQL initialized successfully. The enabled flag
@@ -121,6 +139,7 @@ export class ExternalClientMain {
     } catch (error) {
       log.error('stop: failed', Errors.toLogFormat(error));
     }
+    this.#sendTopics();
   }
 
   // Deletes the grant and drops any live session using it.
@@ -159,6 +178,7 @@ export class ExternalClientMain {
       log,
       authority: this.#authority,
       host: this.#host,
+      onTopicsChanged: () => this.#sendTopics(),
     });
 
     try {
@@ -216,10 +236,48 @@ export class ExternalClientMain {
     });
   }
 
+  #isMainRenderer(event: IpcMainEvent): boolean {
+    const mainWebContents = this.#options.getMainWindow()?.webContents;
+    return mainWebContents !== undefined && event.sender === mainWebContents;
+  }
+
+  // Tells the renderer which event topics any client wants right now.
+  #sendTopics(): void {
+    const webContents = this.#options.getMainWindow()?.webContents;
+    if (!webContents || webContents.isDestroyed()) {
+      return;
+    }
+    const topics: ReadonlyArray<EventTopicType> = this.#server?.topics ?? [];
+    webContents.send(TOPICS_CHANNEL, {
+      topics: [...topics],
+    } satisfies RendererTopicsType);
+  }
+
+  #onRendererEvents(event: IpcMainEvent, message: unknown): void {
+    if (!this.#isMainRenderer(event)) {
+      log.warn('ignoring events from unexpected sender');
+      return;
+    }
+    const server = this.#server;
+    if (!server) {
+      return;
+    }
+    const parsed = safeParseUnknown(rendererEventsSchema, message);
+    if (!parsed.success) {
+      log.warn('ignoring malformed renderer events');
+      return;
+    }
+    if (parsed.data.overflow) {
+      server.dropEvents();
+    }
+    for (const { event: name, data } of parsed.data.events) {
+      server.broadcast(name, data);
+    }
+  }
+
   #onRendererResult(event: IpcMainEvent, message: unknown): void {
     // Only the main window's renderer may answer.
-    const mainWebContents = this.#options.getMainWindow()?.webContents;
-    if (!mainWebContents || event.sender !== mainWebContents) {
+    if (!this.#isMainRenderer(event)) {
       log.warn('ignoring result from unexpected sender');
       return;
     }
@@ -284,6 +342,8 @@ function getCapabilityLabel(
   switch (capability) {
     case Capability.ConversationsRead:
       return i18n('icu:ExternalClientCapability__conversations-read');
+    case Capability.MessagesRead:
+      return i18n('icu:ExternalClientCapability__messages-read');
     default:
       // Only implemented capabilities can be requested; see protocol.std.ts.
       return capability;
