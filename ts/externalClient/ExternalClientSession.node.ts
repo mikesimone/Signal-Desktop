@@ -5,10 +5,28 @@ import { randomBytes } from 'node:crypto';
 import type { Socket } from 'node:net';
 
 import type { LoggerType } from '../types/Logging.std.ts';
+import * as Errors from '../types/errors.std.ts';
+import { drop } from '../util/drop.std.ts';
 import { safeParseUnknown } from '../util/schemas.std.ts';
+import {
+  clientTranscript,
+  decodeBase64Url,
+  encodeBase64Url,
+  getKeyFingerprint,
+  serverTranscript,
+  signWithServerKey,
+  verifySignature,
+} from './auth.node.ts';
 import { FrameError } from './errors.std.ts';
 import { FrameDecoder, FrameKind, encodeJsonFrame } from './framing.std.ts';
 import type {
+  ExternalClientAuthorityType,
+  ExternalClientHostType,
+  GrantType,
+} from './hostTypes.std.ts';
+import type {
+  AuthorizationResultType,
+  CapabilityType,
   ErrorCodeType,
   HelloResultType,
   LimitsType,
@@ -16,19 +34,28 @@ import type {
   ResponseType,
 } from './protocol.std.ts';
 import {
-  ALL_CAPABILITIES,
   ErrorCode,
+  IMPLEMENTED_CAPABILITIES,
   Method,
   PROTOCOL_NAME,
+  SERVICE_METHOD_CAPABILITIES,
+  SERVICE_PARAM_SCHEMAS,
+  authenticateParamsSchema,
   helloParamsSchema,
+  isServiceMethod,
   makeError,
   negotiateVersion,
+  requestAuthorizationParamsSchema,
   requestEnvelopeSchema,
 } from './protocol.std.ts';
 
-// One connected external client. Owns the per-connection state machine:
-// awaiting hello, greeted, closed. Authentication and capability checks will
-// be added here (see docs/external-client-implementation-plan.md).
+// One connected external client and its state machine:
+//
+//   AwaitingHello -> Greeted -> Authorized -> Closed
+//
+// Nothing beyond the handshake is served until the client proves possession
+// of a key that the user approved in Signal, and every service method is
+// checked against the capabilities granted to that key.
 
 export type ExternalClientLoggerType = Pick<
   LoggerType,
@@ -40,12 +67,15 @@ export type ExternalClientSessionOptionsType = Readonly<{
   limits: LimitsType;
   log: ExternalClientLoggerType;
   getSignalVersion: () => string;
+  authority: ExternalClientAuthorityType;
+  host: ExternalClientHostType;
   onClosed: (session: ExternalClientSession) => void;
 }>;
 
 const SessionState = {
   AwaitingHello: 'AwaitingHello',
   Greeted: 'Greeted',
+  Authorized: 'Authorized',
   Closed: 'Closed',
 } as const;
 type SessionStateType = (typeof SessionState)[keyof typeof SessionState];
@@ -60,25 +90,31 @@ export class ExternalClientSession {
   readonly #limits: LimitsType;
   readonly #log: ExternalClientLoggerType;
   readonly #getSignalVersion: () => string;
+  readonly #authority: ExternalClientAuthorityType;
+  readonly #host: ExternalClientHostType;
   readonly #onClosed: (session: ExternalClientSession) => void;
   readonly #decoder: FrameDecoder;
-  readonly #handshakeTimer: NodeJS.Timeout;
+  readonly #challenge = randomBytes(32);
+  #handshakeTimer: NodeJS.Timeout | undefined;
   #state: SessionStateType = SessionState.AwaitingHello;
+  #outstanding = 0;
+  #authInFlight = false;
+  #publicKey: string | undefined;
+  #capabilities: ReadonlySet<CapabilityType> = new Set();
 
   constructor(options: ExternalClientSessionOptionsType) {
     this.socket = options.socket;
     this.#limits = options.limits;
     this.#log = options.log;
     this.#getSignalVersion = options.getSignalVersion;
+    this.#authority = options.authority;
+    this.#host = options.host;
     this.#onClosed = options.onClosed;
     this.#decoder = new FrameDecoder({
       maxPayloadBytes: this.#limits.maxFrameBytes,
       allowedKinds: [FrameKind.Json],
     });
-    this.#handshakeTimer = setTimeout(() => {
-      this.#log.warn(`session ${this.logId}: handshake timed out`);
-      this.close();
-    }, this.#limits.handshakeTimeoutMs);
+    this.#startHandshakeTimer();
 
     this.socket.on('data', chunk => this.#onData(chunk));
     this.socket.on('error', (error: NodeJS.ErrnoException) => {
@@ -91,15 +127,34 @@ export class ExternalClientSession {
     return this.id.slice(0, 8);
   }
 
+  get publicKey(): string | undefined {
+    return this.#publicKey;
+  }
+
   close(): void {
     if (this.#state === SessionState.Closed) {
       return;
     }
     this.#state = SessionState.Closed;
-    clearTimeout(this.#handshakeTimer);
+    this.#stopHandshakeTimer();
     this.socket.end();
     // Do not wait long on a client that is not reading.
     setTimeout(() => this.socket.destroy(), CLOSE_GRACE_MS).unref();
+  }
+
+  // Covers both the hello and the authentication step, except while the
+  // user is looking at an approval prompt.
+  #startHandshakeTimer(): void {
+    this.#stopHandshakeTimer();
+    this.#handshakeTimer = setTimeout(() => {
+      this.#log.warn(`session ${this.logId}: handshake timed out`);
+      this.close();
+    }, this.#limits.handshakeTimeoutMs);
+  }
+
+  #stopHandshakeTimer(): void {
+    clearTimeout(this.#handshakeTimer);
+    this.#handshakeTimer = undefined;
   }
 
   #isClosed(): boolean {
@@ -108,12 +163,12 @@ export class ExternalClientSession {
 
   #handleClosed(): void {
     this.#state = SessionState.Closed;
-    clearTimeout(this.#handshakeTimer);
+    this.#stopHandshakeTimer();
     this.#onClosed(this);
   }
 
   #onData(chunk: Uint8Array<ArrayBuffer>): void {
-    if (this.#state === SessionState.Closed) {
+    if (this.#isClosed()) {
       return;
     }
 
@@ -151,16 +206,37 @@ export class ExternalClientSession {
       return;
     }
 
-    this.#onRequest(parsed.data);
+    const request = parsed.data;
+    if (this.#outstanding >= this.#limits.maxOutstandingRequests) {
+      this.#sendError(request.id, ErrorCode.RateLimited, 'Too many requests');
+      return;
+    }
+
+    this.#outstanding += 1;
+    drop(this.#handleRequest(request));
   }
 
-  #onRequest(request: RequestEnvelopeType): void {
+  async #handleRequest(request: RequestEnvelopeType): Promise<void> {
+    try {
+      await this.#onRequest(request);
+    } catch (error) {
+      this.#log.error(
+        `session ${this.logId}: request failed`,
+        Errors.toLogFormat(error)
+      );
+      this.#sendError(request.id, ErrorCode.InternalError, 'Internal error');
+    } finally {
+      this.#outstanding -= 1;
+    }
+  }
+
+  async #onRequest(request: RequestEnvelopeType): Promise<void> {
     if (this.#state === SessionState.AwaitingHello) {
       if (request.method !== Method.Hello) {
         this.#reject(request.id, ErrorCode.InvalidRequest, 'Expected hello');
         return;
       }
-      this.#onHello(request);
+      await this.#onHello(request);
       return;
     }
 
@@ -169,22 +245,67 @@ export class ExternalClientSession {
         this.#reject(request.id, ErrorCode.InvalidRequest, 'Already greeted');
         return;
       case Method.Disconnect:
-        this.#send({ id: request.id, result: {} });
+        this.#sendResult(request.id, {});
         this.#log.info(`session ${this.logId}: client disconnected`);
         this.close();
         return;
+      case Method.Authenticate:
+        await this.#onAuthenticate(request);
+        return;
+      case Method.RequestAuthorization:
+        await this.#onRequestAuthorization(request);
+        return;
+      case Method.GetStatus:
+        if (!this.#requireAuthorized(request)) {
+          return;
+        }
+        this.#sendResult(request.id, { state: await this.#host.getStatus() });
+        return;
       default:
-        this.#send(
-          makeError(
-            request.id,
-            ErrorCode.UnsupportedMethod,
-            'Unsupported method'
-          )
-        );
+        break;
+    }
+
+    const { method } = request;
+    if (!isServiceMethod(method)) {
+      this.#sendError(
+        request.id,
+        ErrorCode.UnsupportedMethod,
+        'Unsupported method'
+      );
+      return;
+    }
+    if (!this.#requireAuthorized(request)) {
+      return;
+    }
+    if (!this.#capabilities.has(SERVICE_METHOD_CAPABILITIES[method])) {
+      this.#log.warn(`session ${this.logId}: permission denied for ${method}`);
+      this.#sendError(
+        request.id,
+        ErrorCode.PermissionDenied,
+        'Client is not authorized for this method'
+      );
+      return;
+    }
+
+    const rawParams: unknown = request.params ?? {};
+    const params = safeParseUnknown(SERVICE_PARAM_SCHEMAS[method], rawParams);
+    if (!params.success) {
+      this.#sendError(request.id, ErrorCode.InvalidArgument, 'Invalid params');
+      return;
+    }
+
+    const result = await this.#host.callService(method, params.data);
+    if (result.ok) {
+      this.#sendResult(request.id, result.value);
+    } else {
+      this.#log.info(
+        `session ${this.logId}: ${method} failed (${result.code})`
+      );
+      this.#sendError(request.id, result.code, 'Request failed');
     }
   }
 
-  #onHello(request: RequestEnvelopeType): void {
+  async #onHello(request: RequestEnvelopeType): Promise<void> {
     const parsed = safeParseUnknown(helloParamsSchema, request.params);
     if (!parsed.success) {
       this.#reject(request.id, ErrorCode.InvalidRequest, 'Invalid hello');
@@ -202,8 +323,8 @@ export class ExternalClientSession {
       return;
     }
 
-    clearTimeout(this.#handshakeTimer);
     this.#state = SessionState.Greeted;
+    const serverKey = await this.#authority.getServerKey();
     this.#log.info(
       `session ${this.logId}: hello accepted, protocol v${version}`
     );
@@ -213,13 +334,165 @@ export class ExternalClientSession {
       protocolVersion: version,
       signalVersion: this.#getSignalVersion(),
       sessionId: this.id,
-      capabilities: ALL_CAPABILITIES,
+      capabilities: IMPLEMENTED_CAPABILITIES,
       features: {
         'authentication.required': true,
         'calling.available': false,
       },
+      challenge: encodeBase64Url(this.#challenge),
+      server: {
+        publicKey: serverKey.publicKey,
+        signature: signWithServerKey(
+          serverKey,
+          serverTranscript(
+            this.id,
+            this.#challenge,
+            decodeBase64Url(parsed.data.clientNonce)
+          )
+        ),
+      },
     };
-    this.#send({ id: request.id, result });
+    this.#sendResult(request.id, result);
+  }
+
+  #verifyProof(publicKey: string, signature: string): boolean {
+    return verifySignature(
+      publicKey,
+      clientTranscript(this.id, this.#challenge),
+      signature
+    );
+  }
+
+  async #onAuthenticate(request: RequestEnvelopeType): Promise<void> {
+    if (this.#state !== SessionState.Greeted || this.#authInFlight) {
+      this.#reject(request.id, ErrorCode.InvalidRequest, 'Unexpected request');
+      return;
+    }
+    const parsed = safeParseUnknown(authenticateParamsSchema, request.params);
+    if (!parsed.success) {
+      this.#reject(request.id, ErrorCode.InvalidRequest, 'Invalid params');
+      return;
+    }
+    const { publicKey, signature } = parsed.data;
+
+    this.#authInFlight = true;
+    try {
+      const grant = this.#verifyProof(publicKey, signature)
+        ? await this.#authority.findGrant(publicKey)
+        : undefined;
+      if (!grant) {
+        this.#log.warn(`session ${this.logId}: authentication failed`);
+        this.#reject(request.id, ErrorCode.NotAuthorized, 'Not authorized');
+        return;
+      }
+      await this.#becomeAuthorized(grant);
+      this.#sendResult(request.id, {
+        capabilities: grant.capabilities,
+      } satisfies AuthorizationResultType);
+    } finally {
+      this.#authInFlight = false;
+    }
+  }
+
+  async #onRequestAuthorization(request: RequestEnvelopeType): Promise<void> {
+    if (this.#state !== SessionState.Greeted || this.#authInFlight) {
+      this.#reject(request.id, ErrorCode.InvalidRequest, 'Unexpected request');
+      return;
+    }
+    const parsed = safeParseUnknown(
+      requestAuthorizationParamsSchema,
+      request.params
+    );
+    if (!parsed.success) {
+      this.#reject(request.id, ErrorCode.InvalidRequest, 'Invalid params');
+      return;
+    }
+    const { publicKey, signature, displayName } = parsed.data;
+    const capabilities = [...new Set(parsed.data.capabilities)];
+
+    if (!this.#verifyProof(publicKey, signature)) {
+      this.#log.warn(`session ${this.logId}: bad proof of possession`);
+      this.#reject(request.id, ErrorCode.NotAuthorized, 'Not authorized');
+      return;
+    }
+    if (!capabilities.every(cap => IMPLEMENTED_CAPABILITIES.includes(cap))) {
+      this.#sendError(
+        request.id,
+        ErrorCode.UnsupportedCapability,
+        'Requested capability is not available'
+      );
+      return;
+    }
+
+    this.#authInFlight = true;
+    try {
+      const existing = await this.#authority.findGrant(publicKey);
+      if (
+        existing &&
+        capabilities.every(cap => existing.capabilities.includes(cap))
+      ) {
+        await this.#becomeAuthorized(existing);
+        this.#sendResult(request.id, {
+          capabilities: existing.capabilities,
+        } satisfies AuthorizationResultType);
+        return;
+      }
+
+      const fingerprint = getKeyFingerprint(publicKey);
+      this.#log.info(
+        `session ${this.logId}: client ${fingerprint} requested approval`
+      );
+      // The user may take a while to answer; don't time the client out.
+      this.#stopHandshakeTimer();
+      const result = await this.#authority.requestApproval({
+        publicKey,
+        fingerprint,
+        displayName,
+        capabilities,
+      });
+      if (this.#isClosed()) {
+        return;
+      }
+      if (!result.approved) {
+        this.#log.info(
+          `session ${this.logId}: client ${fingerprint} not approved ` +
+            `(${result.reason})`
+        );
+        this.#reject(
+          request.id,
+          result.reason === 'denied'
+            ? ErrorCode.PermissionDenied
+            : ErrorCode.RateLimited,
+          result.reason === 'denied' ? 'Denied by user' : 'Try again later'
+        );
+        return;
+      }
+      await this.#becomeAuthorized(result.grant);
+      this.#sendResult(request.id, {
+        capabilities: result.grant.capabilities,
+      } satisfies AuthorizationResultType);
+    } finally {
+      this.#authInFlight = false;
+    }
+  }
+
+  async #becomeAuthorized(grant: GrantType): Promise<void> {
+    this.#stopHandshakeTimer();
+    this.#state = SessionState.Authorized;
+    this.#publicKey = grant.publicKey;
+    this.#capabilities = new Set(grant.capabilities);
+    this.#log.info(
+      `session ${this.logId}: client ${grant.fingerprint} authorized`
+    );
+    await this.#authority.markSeen(grant.publicKey);
+  }
+
+  #requireAuthorized(request: RequestEnvelopeType): boolean {
+    if (this.#state === SessionState.Authorized) {
+      return true;
+    }
+    this.#sendError(request.id, ErrorCode.NotAuthorized, 'Not authorized');
+    return false;
   }
 
   // Protocol violations are answered once and then the connection is closed.
@@ -229,6 +502,14 @@ export class ExternalClientSession {
     this.#log.warn(`session ${this.logId}: rejected (${code})`);
     this.#send(makeError(id, code, message));
     this.close();
+  }
+
+  #sendError(id: string, code: ErrorCodeType, message: string): void {
+    this.#send(makeError(id, code, message));
+  }
+
+  #sendResult(id: string, result: unknown): void {
+    this.#send({ id, result });
   }
 
   #send(response: ResponseType): void {

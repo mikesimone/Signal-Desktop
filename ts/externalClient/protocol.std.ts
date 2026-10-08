@@ -20,11 +20,13 @@ export const LIMITS = {
   maxOfferedVersions: 8,
   maxOutstandingRequests: 16,
   handshakeTimeoutMs: 10_000,
+  maxConversationPage: 500,
+  defaultConversationPage: 100,
 } as const;
 export type LimitsType = { readonly [K in keyof typeof LIMITS]: number };
 
-// The capability vocabulary this server understands. A client must still be
-// granted a capability before any method requiring it will run.
+// The capability vocabulary. A client must be granted a capability before
+// any method requiring it will run.
 export const Capability = {
   ConversationsRead: 'conversations.read',
   MessagesRead: 'messages.read',
@@ -40,6 +42,12 @@ export const Capability = {
 export type CapabilityType = (typeof Capability)[keyof typeof Capability];
 export const ALL_CAPABILITIES: ReadonlyArray<CapabilityType> =
   Object.values(Capability);
+
+// Capabilities this build can actually serve. `hello` advertises these, and
+// clients may only request these.
+export const IMPLEMENTED_CAPABILITIES: ReadonlyArray<CapabilityType> = [
+  Capability.ConversationsRead,
+];
 
 export const ErrorCode = {
   InvalidRequest: 'INVALID_REQUEST',
@@ -59,15 +67,51 @@ export type ErrorCodeType = (typeof ErrorCode)[keyof typeof ErrorCode];
 
 export const Method = {
   Hello: 'session.hello',
+  Authenticate: 'session.authenticate',
+  RequestAuthorization: 'authorization.request',
+  GetStatus: 'session.getStatus',
   Disconnect: 'session.disconnect',
+  ConversationsList: 'conversations.list',
+  ConversationsGet: 'conversations.get',
 } as const;
 export type MethodType = (typeof Method)[keyof typeof Method];
+
+// Methods served by the renderer, and the capability each one requires.
+export const SERVICE_METHOD_CAPABILITIES = {
+  [Method.ConversationsList]: Capability.ConversationsRead,
+  [Method.ConversationsGet]: Capability.ConversationsRead,
+} as const satisfies Partial<Record<MethodType, CapabilityType>>;
+export type ServiceMethodType = keyof typeof SERVICE_METHOD_CAPABILITIES;
+
+export function isServiceMethod(method: string): method is ServiceMethodType {
+  return Object.hasOwn(SERVICE_METHOD_CAPABILITIES, method);
+}
+
+export const SessionStatus = {
+  Ready: 'ready',
+  Starting: 'starting',
+  Unlinked: 'unlinked',
+  Unavailable: 'unavailable',
+} as const;
+export type SessionStatusType =
+  (typeof SessionStatus)[keyof typeof SessionStatus];
 
 const requestIdSchema = z
   .string()
   .min(1)
   .max(LIMITS.maxRequestIdLength)
   .regex(/^[A-Za-z0-9._:-]+$/);
+
+// Unpadded base64url. 32 bytes encode to 43 characters, a 64-byte Ed25519
+// signature to 86.
+const base64UrlSchema = (bytes: number) =>
+  z
+    .string()
+    .length(Math.ceil((bytes * 4) / 3))
+    .regex(/^[A-Za-z0-9_-]+$/);
+export const keySchema = base64UrlSchema(32);
+export const nonceSchema = base64UrlSchema(32);
+export const signatureSchema = base64UrlSchema(64);
 
 // Every inbound message is a request. Params are validated per method after
 // the envelope is accepted.
@@ -93,6 +137,9 @@ export const helloParamsSchema = z
         version: z.string().min(1).max(LIMITS.maxClientVersionLength),
       })
       .strict(),
+    // Random bytes chosen by the client. Signal signs them, so a process
+    // squatting on the endpoint cannot replay an old handshake.
+    clientNonce: nonceSchema,
   })
   .strict();
 export type HelloParamsType = z.infer<typeof helloParamsSchema>;
@@ -107,6 +154,100 @@ export type HelloResultType = Readonly<{
     'authentication.required': boolean;
     'calling.available': boolean;
   }>;
+  // Sign this to authenticate (see auth.node.ts for the exact transcript).
+  challenge: string;
+  server: Readonly<{
+    publicKey: string;
+    signature: string;
+  }>;
+}>;
+
+export const authenticateParamsSchema = z
+  .object({
+    publicKey: keySchema,
+    signature: signatureSchema,
+  })
+  .strict();
+
+const capabilitySchema = z.enum(
+  ALL_CAPABILITIES as [CapabilityType, ...Array<CapabilityType>]
+);
+
+export const requestAuthorizationParamsSchema = z
+  .object({
+    publicKey: keySchema,
+    signature: signatureSchema,
+    // Shown to the user, so no control, format or bidi-override characters.
+    displayName: z
+      .string()
+      .min(1)
+      .max(LIMITS.maxClientNameLength)
+      .regex(/^[^\p{C}]+$/u),
+    capabilities: z.array(capabilitySchema).min(1).max(ALL_CAPABILITIES.length),
+  })
+  .strict();
+
+export type AuthorizationResultType = Readonly<{
+  capabilities: ReadonlyArray<CapabilityType>;
+}>;
+
+const conversationIdSchema = z
+  .string()
+  .min(1)
+  .max(64)
+  .regex(/^[A-Za-z0-9-]+$/);
+
+export const conversationsListParamsSchema = z
+  .object({
+    limit: z.number().int().min(1).max(LIMITS.maxConversationPage).optional(),
+    cursor: z
+      .string()
+      .max(16)
+      .regex(/^[0-9]+$/)
+      .optional(),
+  })
+  .strict();
+
+export const conversationsGetParamsSchema = z
+  .object({
+    conversationId: conversationIdSchema,
+  })
+  .strict();
+
+export const SERVICE_PARAM_SCHEMAS = {
+  [Method.ConversationsList]: conversationsListParamsSchema,
+  [Method.ConversationsGet]: conversationsGetParamsSchema,
+} as const satisfies Record<ServiceMethodType, z.ZodType>;
+
+export type ConversationsListParamsType = z.infer<
+  typeof conversationsListParamsSchema
+>;
+export type ConversationsGetParamsType = z.infer<
+  typeof conversationsGetParamsSchema
+>;
+
+// Public conversation DTO. Never add internal identifiers (service ids, group
+// ids, profile keys, e164s) or storage paths here.
+export type ConversationDTO = Readonly<{
+  id: string;
+  type: 'direct' | 'group';
+  title: string;
+  unreadCount: number;
+  unreadMentionsCount: number;
+  markedUnread: boolean;
+  lastActivityAt: number | null;
+  muted: boolean;
+  archived: boolean;
+  pinned: boolean;
+  blocked: boolean;
+  noteToSelf: boolean;
+  messageRequestPending: boolean;
+  memberCount: number | null;
+}>;
+
+export type ConversationsListResultType = Readonly<{
+  conversations: ReadonlyArray<ConversationDTO>;
+  nextCursor: string | null;
 }>;
 
 export type ErrorType = Readonly<{

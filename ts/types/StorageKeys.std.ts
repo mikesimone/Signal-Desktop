@@ -100,6 +100,15 @@ export type StorageAccessType = {
   blocked: ReadonlyArray<BlockedNumber>;
   defaultConversationColor: DefaultConversationColorType;
   externalClientsEnabled: boolean;
+  externalClientGrants: ReadonlyArray<{
+    publicKey: string;
+    fingerprint: string;
+    displayName: string;
+    capabilities: ReadonlyArray<string>;
+    approvedAt: number;
+    lastSeenAt: number | null;
+  }>;
+  externalClientServerKey: { privateKey: string; publicKey: string };
 
   customColors: CustomColorsItemType;
   device_name: string;
@@ -499,6 +508,8 @@ export const STORAGE_KEYS_TO_PRESERVE_WHEN_PRIMARY = [
 
 const STORAGE_KEYS_TO_REMOVE_AFTER_UNLINK = [
   'externalClientsEnabled',
+  'externalClientGrants',
+  'externalClientServerKey',
   'unreadRemindersEnabledAt',
   'lastCallQualitySurveyTime',
   'lastCallQualityFailureSurveyTime',

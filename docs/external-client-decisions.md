@@ -133,3 +133,28 @@ or the dev env var. No renderer changes.
 
 WHY: proves transport, framing, versioning and lifecycle in isolation, and is
 the cheapest piece to review.
+
+## D13. Native dialog for the Milestone B approval prompt
+
+DECISION: approval uses `dialog.showMessageBox` modal to the main window, Deny
+as default and cancel, all-or-nothing on the requested capabilities.
+
+WHY: no new window, preload or React surface to review; the dialog cannot be
+scripted by the requesting client. A per-capability window can replace it
+without protocol changes.
+
+## D14. Mutual handshake signatures, client nonce required
+
+DECISION: `hello` requires `clientNonce`; the server signs it with its
+persistent Ed25519 key. Client and server transcripts use distinct labels.
+
+WHY: lets a client that pinned the server key reject a squatter on first
+response, before sending anything sensitive.
+
+## D15. Offset cursor for conversation lists
+
+DECISION: `conversations.list` uses an opaque decimal offset cursor over the
+left-pane ordering, max 500 per page.
+
+WHY: the list is small and already sorted in memory; a stable keyset cursor
+adds complexity without benefit until change events exist (D8).

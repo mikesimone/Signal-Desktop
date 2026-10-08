@@ -2477,7 +2477,13 @@ app.on('ready', async () => {
     );
   }
 
-  externalClientMain = new ExternalClientMain({ sql, userDataPath });
+  externalClientMain = new ExternalClientMain({
+    sql,
+    userDataPath,
+    getMainWindow,
+    getIsLinked,
+    getI18n: () => getResolvedMessagesLocale().i18n,
+  });
   drop(externalClientMain.refresh());
 
   ready = true;

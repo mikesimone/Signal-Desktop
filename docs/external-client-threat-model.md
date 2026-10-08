@@ -152,12 +152,15 @@ via `Map` over a closed method list).
 **T8 [S] Client impersonation.**
 Mitigation: Ed25519 challenge-response over a server-chosen 32-byte nonce,
 bound to the session id and protocol label, verified with `node:crypto`.
-`displayName` is presentation only and is never used for decisions.
+`displayName` is presentation only and is never used for decisions; it is
+limited to 64 characters and may not contain control, format (including
+bidi overrides), surrogate or unassigned code points, so it cannot spoof the
+prompt text.
 Test: wrong key, replayed signature from a previous session, signature over a
 different session id.
 
 **T9 [E] Self-approval.**
-Mitigation: grants are created only by the main-process approval window in
+Mitigation: grants are created only by the main-process approval dialog in
 response to a user click; the requesting connection has no method that
 creates or edits a grant. The prompt is rate-limited (one outstanding prompt
 per client key; repeated denials suppress further prompts for that key for a

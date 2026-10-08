@@ -204,9 +204,21 @@ platform, userDataPath, runtimeDir, username })`, `prepareEndpoint()` with
 - `ts/main/externalClientMain.main.ts`: reads enablement from SQL after
   `sqlInitPromise`, starts/stops the server, supplies hello info, stops on
   quit.
-- Later: `grants.node.ts`, `dto.std.ts`, `service/*.preload.ts`, approval
-  window files, `docs/external-client-protocol.md`,
-  `docs/external-client-rambox.md`.
+- `ts/externalClient/auth.node.ts` (M-B): Ed25519 transcripts, verify, server
+  key generation and signing, key fingerprint. `node:crypto` only.
+- `ts/externalClient/ExternalClientAuthority.node.ts` (M-B): grant store over
+  injected storage, approval serialization, denial cool-down, revocation.
+- `ts/externalClient/hostTypes.std.ts` (M-B): interfaces the session uses to
+  reach the authority and the renderer host.
+- `ts/externalClient/conversationDto.std.ts` (M-B): field-by-field mapping
+  from `ConversationType` to the public DTO.
+- `ts/externalClient/rendererChannel.std.ts` (M-B): the single main↔renderer
+  IPC pair and its zod schemas.
+- `ts/externalClient/service/ExternalClientService.preload.ts` (M-B): renderer
+  adapter answering `conversations.list` / `conversations.get`.
+- `ts/test-helpers/externalClientFakeClient.node.ts`: fake client for tests.
+- Later: `MessageCache` adapter, Preferences UI,
+  `docs/external-client-protocol.md`, `docs/external-client-rambox.md`.
 - Tests under `ts/test-node/externalClient/` (named `*_test.std.ts` /
   `*_test.node.ts` per Signal's suffix rules).
 
@@ -217,8 +229,11 @@ platform, userDataPath, runtimeDir, username })`, `prepareEndpoint()` with
 - `ts/types/StorageKeys.std.ts`: add `externalClientsEnabled: boolean` (and
   later `externalClientGrants`) to `StorageAccessType` and to
   `STORAGE_KEYS_TO_REMOVE_AFTER_UNLINK`.
-- Later: `ts/windows/main/phase1-ipc.preload.ts`, `ConversationController`,
-  `MessageCache`, `CompositionArea.dom.tsx`, Preferences files, locales.
+- `ts/windows/main/phase1-ipc.preload.ts` (M-B): installs the renderer
+  service.
+- `ts/ConversationController.preload.ts` (M-B): `isInitialFetchComplete()`.
+- `_locales/en/messages.json` (M-B): approval prompt strings.
+- Later: `MessageCache`, `CompositionArea.dom.tsx`, Preferences files.
 
 ## 5. Milestone A scope
 
@@ -234,7 +249,7 @@ platform, userDataPath, runtimeDir, username })`, `prepareEndpoint()` with
 
 ### Milestone A status (2026-10-08)
 
-Implemented on the local `external-client` branch as commit 2 of the series
+Implemented (fork `main`, commit `417a28f`) as commit 2 of the series
 (protocol, framing, endpoint, server, session, main wiring, storage key,
 tests). The commit table above lists them as separate commits for
 upstreaming; they are squashed into one Milestone A commit for now.
@@ -256,6 +271,39 @@ Verified in a Linux container with Node 24.21.0:
 Not verified: running inside Electron (`pnpm start`), and anything on Windows
 (named pipe DACL, `FILE_FLAG_FIRST_PIPE_INSTANCE`). Signal's native prebuilds
 could not be downloaded in the build container.
+
+## 5b. Milestone B scope and status (2026-10-08)
+
+Scope: client approval and conversation metadata reads.
+
+- `session.hello` requires a 32-byte `clientNonce` and returns a `challenge`
+  plus `server { publicKey, signature }`, the server's Ed25519 signature over
+  the session id, challenge and client nonce. Capabilities in hello are the
+  ones the server implements (`conversations.read` only for now).
+- `session.authenticate { publicKey, signature }` succeeds only for a key with
+  a stored grant. Unknown key: `NOT_AUTHORIZED` and close.
+- `authorization.request { publicKey, signature, displayName, capabilities }`
+  shows a native modal dialog (`dialog.showMessageBox`, Deny is default and
+  cancel) on the main window with the client name, key fingerprint and
+  capabilities. Approve stores or merges a grant and authorizes the session.
+  One prompt at a time (`busy`), 60 s cool-down per key after a deny.
+- `conversations.list { limit?, cursor? }` (default 100, max 500, offset
+  cursor) and `conversations.get { conversationId }`, both behind
+  `conversations.read`, answered by the renderer through one IPC pair. Only
+  the main window's `webContents` may answer. `NOT_READY` until the initial
+  conversation fetch completes, while unlinked, or on a 15 s renderer timeout.
+- Grants, the server key and enablement live in SQLCipher `items` and are
+  removed on unlink. Revocation closes live sessions for the key (no UI yet).
+
+Verified in a Linux container: 66 tests pass (handshake incl. server
+signature, authenticate with and without grant, wrong-key and replayed
+signatures, approval allow/deny/narrowing/busy/cool-down, permission checks per
+method, param validation, renderer error mapping, DTO mapping, authority
+storage). `oxlint` clean; no new `tsc` errors against the baseline.
+
+Not verified: Electron runtime (`pnpm start`; native prebuilds blocked), the
+dialog's appearance, and the renderer adapter against a real account. Windows
+pipe checks are tracked under T3/T4 in the threat model.
 
 ## 6. Build and test notes
 

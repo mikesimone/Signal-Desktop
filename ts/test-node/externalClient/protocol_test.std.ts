@@ -23,6 +23,7 @@ const validHello: unknown = {
   protocol: PROTOCOL_NAME,
   versions: [1],
   client: { name: 'test', version: '1.0' },
+  clientNonce: 'A'.repeat(43),
 };
 
 function hello(overrides: Record<string, unknown>): unknown {
@@ -86,6 +87,15 @@ describe('externalClient/protocol', () => {
   describe('helloParamsSchema', () => {
     it('accepts a valid hello', () => {
       assert.isTrue(accepts(helloParamsSchema, validHello));
+    });
+
+    it('requires a well-formed client nonce', () => {
+      assert.isFalse(
+        accepts(helloParamsSchema, hello({ clientNonce: 'short' }))
+      );
+      assert.isFalse(
+        accepts(helloParamsSchema, hello({ clientNonce: '+'.repeat(43) }))
+      );
     });
 
     it('rejects a different protocol name', () => {

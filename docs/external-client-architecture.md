@@ -315,7 +315,7 @@ of scope; the bridge advertises no calling capability.
 | Listener, framing, validation              | yes                                                                                               | no                |
 | Handshake, protocol/app version            | yes                                                                                               | no                |
 | Client auth, capability checks             | yes                                                                                               | no                |
-| Approval prompt                            | yes (child window)                                                                                | no                |
+| Approval prompt                            | yes (native dialog)                                                                               | no                |
 | Persist/read grants                        | yes (`sql.sqlRead/sqlWrite` on `items`)                                                           | no                |
 | Linked / DB-ready status                   | yes (`sqlInitPromise`, `getIsLinked`)                                                             | no                |
 | List conversations with live unread/typing | no (models are renderer-only)                                                                     | yes               |
@@ -427,19 +427,21 @@ schema lives in `ts/externalClient/protocol.std.ts`).
 
 - Client generates an Ed25519 keypair on install and keeps the private key in
   its own storage.
-- First connection: `hello` → `authorization.request { publicKey,
-displayName, requestedCapabilities }` → Signal shows a modal approval window
-  (permissions-popup pattern) naming the client, showing a short fingerprint
-  of its key and the requested capabilities; the user may untick
-  capabilities. Approve persists a grant; deny persists nothing.
-- Subsequent connections: server sends a 32-byte random challenge bound to
-  the session id; client signs `"signal-external-client/v1/auth" ‖ sessionId ‖
-challenge`; server verifies against stored grants with `node:crypto`. No
-  shared secret is stored by Signal.
-- Server authentication: Signal also holds an Ed25519 server key; its public
-  key is returned on approval and the client pins it, then verifies a server
-  signature on every later handshake. This defeats a process that squats the
-  endpoint while Signal is not running.
+- `hello` carries a 32-byte random `clientNonce`. The response carries a
+  32-byte `challenge` and the server's Ed25519 signature over
+  `SERVER_LABEL ‖ 0 ‖ sessionId ‖ 0 ‖ challenge ‖ 0 ‖ clientNonce`, so a
+  client that has pinned the server key detects an endpoint squatter.
+- First connection: `authorization.request { publicKey, signature,
+displayName, capabilities }`, where `signature` covers
+  `CLIENT_LABEL ‖ 0 ‖ sessionId ‖ 0 ‖ challenge`. Signal shows a native modal
+  dialog on the main window naming the client, a short fingerprint of its key
+  and the requested capabilities, with Deny as the default. Approve persists a
+  grant; deny persists nothing. (A richer window that lets the user untick
+  individual capabilities can replace the dialog later; the authority already
+  accepts a narrowed set.)
+- Subsequent connections: `session.authenticate { publicKey, signature }`
+  over the same client transcript, verified against stored grants with
+  `node:crypto`. No shared secret is stored by Signal.
 - Grants are stored in SQLCipher (`items`, key `externalClientGrants`),
   written only by main. They are removed on unlink.
 - Every capability is checked in main per method, per call.
