@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { randomBytes } from 'node:crypto';
-import type { Socket } from 'node:net';
+import type { Duplex } from 'node:stream';
 
 import type { LoggerType } from '../types/Logging.std.ts';
 import * as Errors from '../types/errors.std.ts';
@@ -64,7 +64,7 @@ export type ExternalClientLoggerType = Pick<
 >;
 
 export type ExternalClientSessionOptionsType = Readonly<{
-  socket: Socket;
+  socket: Duplex;
   limits: LimitsType;
   log: ExternalClientLoggerType;
   getSignalVersion: () => string;
@@ -87,7 +87,7 @@ const utf8 = new TextDecoder('utf-8', { fatal: true });
 
 export class ExternalClientSession {
   readonly id = randomBytes(16).toString('hex');
-  readonly socket: Socket;
+  readonly socket: Duplex;
   readonly #limits: LimitsType;
   readonly #log: ExternalClientLoggerType;
   readonly #getSignalVersion: () => string;

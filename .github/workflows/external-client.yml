@@ -41,6 +41,16 @@ jobs:
         working-directory: packages/types
         shell: bash
 
+      - name: Build protobuf
+        run: pnpm run build:protobuf
+        shell: bash
+
+      - name: Build native pipe module (Windows)
+        if: ${{ runner.os == 'Windows' }}
+        run: npx --yes node-gyp@12.4.0 rebuild
+        working-directory: packages/windows-local-pipe
+        shell: bash
+
       - name: Run external client tests
         run: >-
           node_modules/.bin/mocha --node-option import=tsx --extension ts

@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { createServer } from 'node:net';
-import type { Server, Socket } from 'node:net';
+import type { Duplex } from 'node:stream';
+import { LocalPipeServer } from '@signalapp/windows-local-pipe';
 
 import type { EndpointType } from './endpoint.node.ts';
 import {
@@ -20,7 +21,9 @@ import type { LimitsType } from './protocol.std.ts';
 import { LIMITS } from './protocol.std.ts';
 
 // Transport for local external clients: a Unix domain socket or a Windows
-// named pipe, never a network listener. This file knows nothing about
+// named pipe, never a network listener. On Windows the pipe comes from
+// @signalapp/windows-local-pipe rather than net.Server, because libuv's pipes
+// grant Everyone read access and accept remote (SMB) clients. This file knows nothing about
 // Electron or Signal internals; everything Signal-specific is injected so it
 // can be tested under plain Node.
 
@@ -41,7 +44,7 @@ export class ExternalClientServer {
   readonly #host: ExternalClientHostType;
   readonly #limits: LimitsType;
   readonly #sessions = new Set<ExternalClientSession>();
-  #server: Server | undefined;
+  #listener: Readonly<{ close: () => Promise<void> }> | undefined;
 
   constructor(options: ExternalClientServerOptionsType) {
     this.#endpoint = options.endpoint;
@@ -53,7 +56,7 @@ export class ExternalClientServer {
   }
 
   get isListening(): boolean {
-    return this.#server?.listening ?? false;
+    return this.#listener !== undefined;
   }
 
   get sessionCount(): number {
@@ -61,54 +64,65 @@ export class ExternalClientServer {
   }
 
   async start(): Promise<void> {
-    if (this.#server) {
+    if (this.#listener) {
       return;
     }
 
     await prepareEndpoint(this.#endpoint);
-
-    const server = createServer(socket => this.#onConnection(socket));
-
-    await new Promise<void>((resolve, reject) => {
-      server.once('error', reject);
-      server.listen(
-        {
-          path: this.#endpoint.path,
-          readableAll: false,
-          writableAll: false,
-        },
-        () => {
-          server.off('error', reject);
-          resolve();
-        }
-      );
-    });
-    server.on('error', (error: NodeJS.ErrnoException) => {
-      this.#log.error('server error', error.code);
-    });
-
-    this.#server = server;
+    this.#listener =
+      this.#endpoint.kind === 'pipe'
+        ? await this.#listenOnPipe(this.#endpoint.path)
+        : await this.#listenOnSocket(this.#endpoint.path);
     await secureBoundEndpoint(this.#endpoint);
     this.#log.info('external client bridge listening');
   }
 
   async stop(): Promise<void> {
-    const server = this.#server;
-    if (!server) {
+    const listener = this.#listener;
+    if (!listener) {
       return;
     }
-    this.#server = undefined;
+    this.#listener = undefined;
 
     for (const session of this.#sessions) {
       session.socket.destroy();
     }
     this.#sessions.clear();
 
-    await new Promise<void>(resolve => {
-      server.close(() => resolve());
-    });
+    await listener.close();
     await cleanupEndpoint(this.#endpoint);
     this.#log.info('external client bridge stopped');
+  }
+
+  async #listenOnSocket(
+    path: string
+  ): Promise<Readonly<{ close: () => Promise<void> }>> {
+    const server = createServer(socket => this.#onConnection(socket));
+    await new Promise<void>((resolve, reject) => {
+      server.once('error', reject);
+      server.listen({ path, readableAll: false, writableAll: false }, () => {
+        server.off('error', reject);
+        resolve();
+      });
+    });
+    server.on('error', (error: NodeJS.ErrnoException) => {
+      this.#log.error('server error', error.code);
+    });
+    return {
+      close: () => new Promise<void>(resolve => server.close(() => resolve())),
+    };
+  }
+
+  async #listenOnPipe(
+    path: string
+  ): Promise<Readonly<{ close: () => Promise<void> }>> {
+    const server = new LocalPipeServer();
+    server.on('connection', socket => this.#onConnection(socket));
+    server.on('error', (error: Error) => {
+      this.#log.error('pipe server error', error.message);
+    });
+    await server.listen(path);
+    return { close: () => server.close() };
   }
 
   // Closes every live session authenticated with this key. Called after the
@@ -124,7 +138,7 @@ export class ExternalClientServer {
     return closed;
   }
 
-  #onConnection(socket: Socket): void {
+  #onConnection(socket: Duplex): void {
     if (this.#sessions.size >= this.#limits.maxConnections) {
       this.#log.warn('connection refused: too many connections');
       socket.destroy();

@@ -137,11 +137,18 @@ credentials remotely gets a full connection and can trigger the approval
 prompt (still needs a click at the desktop) or authenticate with a stolen
 client key.
 
-Required before the feature can be enabled by default or offered in
-Preferences: a minimal native step that creates the pipe with an explicit
-DACL for the current user SID only and `PIPE_REJECT_REMOTE_CLIENTS` (Node
-has no option for either). Until then the feature stays behind the hidden
-DB item / dev env var.
+Mitigation (implemented 2026-10-08): on Windows the bridge no longer uses
+`net.Server`. `packages/windows-local-pipe` (a small N-API module, the same
+pattern as `packages/windows-ucv`) creates every pipe instance with a
+protected DACL granting `GENERIC_ALL` to the current user's SID only,
+`PIPE_REJECT_REMOTE_CLIENTS`, and `FILE_FLAG_FIRST_PIPE_INSTANCE`. No
+Everyone or ANONYMOUS LOGON entries, no SMB clients. The implicit
+medium-integrity no-write-up label still keeps low-integrity and
+AppContainer processes of the same user out.
+Test: `ts/test-node/externalClient/windowsPipe_test.node.ts` (handshake over
+the native pipe, squatting refused, `\\localhost\pipe\…` refused) in CI on
+`windows-latest`; DACL checked by hand with `accesschk64 -l`.
+Status: **built and tested in CI only; not yet verified inside Electron.**
 
 **T4 [S] Endpoint squatting (A7).**
 A process creates the endpoint before Signal starts and impersonates Signal

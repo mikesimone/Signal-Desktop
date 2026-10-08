@@ -219,6 +219,13 @@ platform, userDataPath, runtimeDir, username })`, `prepareEndpoint()` with
 - `ts/externalClient/messageDto.std.ts` (M-C): field-by-field message DTO
   mapper with the redaction rules.
 - `ts/test-helpers/externalClientFakeClient.node.ts`: fake client for tests.
+- `packages/windows-local-pipe/` (Windows hardening): N-API named pipe
+  server with a user-only DACL, `PIPE_REJECT_REMOTE_CLIENTS` and
+  first-instance ownership; connections are `Duplex` streams. Registered like
+  `windows-ucv` (root `package.json`, `pnpm-workspace.yaml` `allowBuilds`,
+  `rolldown.config.ts` externals, oxlint/knip/prettier config).
+- `.github/workflows/external-client.yml`: the external-client tests on
+  Linux, macOS and Windows (free hosted runners on the public fork).
 - Later: Preferences UI,
   `docs/external-client-protocol.md`, `docs/external-client-rambox.md`.
 - Tests under `ts/test-node/externalClient/` (named `*_test.std.ts` /
