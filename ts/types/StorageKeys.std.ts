@@ -99,6 +99,7 @@ export type StorageAccessType = {
   attachmentMigration_lastProcessedIndex: number;
   blocked: ReadonlyArray<BlockedNumber>;
   defaultConversationColor: DefaultConversationColorType;
+  externalClientsEnabled: boolean;
 
   customColors: CustomColorsItemType;
   device_name: string;
@@ -497,6 +498,7 @@ export const STORAGE_KEYS_TO_PRESERVE_WHEN_PRIMARY = [
 ] as const satisfies ReadonlyArray<keyof StorageAccessType>;
 
 const STORAGE_KEYS_TO_REMOVE_AFTER_UNLINK = [
+  'externalClientsEnabled',
   'unreadRemindersEnabledAt',
   'lastCallQualitySurveyTime',
   'lastCallQualityFailureSurveyTime',
