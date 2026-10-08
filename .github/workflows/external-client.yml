@@ -45,10 +45,11 @@ jobs:
         run: pnpm run build:protobuf
         shell: bash
 
-      - name: Build native pipe module (Windows)
+      - name: Check native pipe module (Windows)
+        # Built by electron-builder install-app-deps during setup. N-API, so
+        # the same binary loads in plain Node for these tests.
         if: ${{ runner.os == 'Windows' }}
-        run: npx --yes node-gyp@12.4.0 rebuild
-        working-directory: packages/windows-local-pipe
+        run: ls -l packages/windows-local-pipe/build/Release/windows-local-pipe.node
         shell: bash
 
       - name: Run external client tests
