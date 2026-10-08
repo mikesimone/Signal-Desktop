@@ -22,6 +22,8 @@ export const LIMITS = {
   handshakeTimeoutMs: 10_000,
   maxConversationPage: 500,
   defaultConversationPage: 100,
+  maxMessagePage: 100,
+  defaultMessagePage: 50,
 } as const;
 export type LimitsType = { readonly [K in keyof typeof LIMITS]: number };
 
@@ -47,6 +49,7 @@ export const ALL_CAPABILITIES: ReadonlyArray<CapabilityType> =
 // clients may only request these.
 export const IMPLEMENTED_CAPABILITIES: ReadonlyArray<CapabilityType> = [
   Capability.ConversationsRead,
+  Capability.MessagesRead,
 ];
 
 export const ErrorCode = {
@@ -73,6 +76,8 @@ export const Method = {
   Disconnect: 'session.disconnect',
   ConversationsList: 'conversations.list',
   ConversationsGet: 'conversations.get',
+  MessagesList: 'messages.list',
+  MessagesGet: 'messages.get',
 } as const;
 export type MethodType = (typeof Method)[keyof typeof Method];
 
@@ -80,6 +85,8 @@ export type MethodType = (typeof Method)[keyof typeof Method];
 export const SERVICE_METHOD_CAPABILITIES = {
   [Method.ConversationsList]: Capability.ConversationsRead,
   [Method.ConversationsGet]: Capability.ConversationsRead,
+  [Method.MessagesList]: Capability.MessagesRead,
+  [Method.MessagesGet]: Capability.MessagesRead,
 } as const satisfies Partial<Record<MethodType, CapabilityType>>;
 export type ServiceMethodType = keyof typeof SERVICE_METHOD_CAPABILITIES;
 
@@ -214,9 +221,30 @@ export const conversationsGetParamsSchema = z
   })
   .strict();
 
+// Signal message ids are UUIDs; accept the same conservative shape as
+// conversation ids.
+const messageIdSchema = conversationIdSchema;
+
+export const messagesListParamsSchema = z
+  .object({
+    conversationId: conversationIdSchema,
+    limit: z.number().int().min(1).max(LIMITS.maxMessagePage).optional(),
+    // Opaque to clients: pass back `nextCursor` to page further back.
+    cursor: messageIdSchema.optional(),
+  })
+  .strict();
+
+export const messagesGetParamsSchema = z
+  .object({
+    messageId: messageIdSchema,
+  })
+  .strict();
+
 export const SERVICE_PARAM_SCHEMAS = {
   [Method.ConversationsList]: conversationsListParamsSchema,
   [Method.ConversationsGet]: conversationsGetParamsSchema,
+  [Method.MessagesList]: messagesListParamsSchema,
+  [Method.MessagesGet]: messagesGetParamsSchema,
 } as const satisfies Record<ServiceMethodType, z.ZodType>;
 
 export type ConversationsListParamsType = z.infer<
@@ -247,6 +275,73 @@ export type ConversationDTO = Readonly<{
 
 export type ConversationsListResultType = Readonly<{
   conversations: ReadonlyArray<ConversationDTO>;
+  nextCursor: string | null;
+}>;
+
+export type MessagesListParamsType = z.infer<typeof messagesListParamsSchema>;
+export type MessagesGetParamsType = z.infer<typeof messagesGetParamsSchema>;
+
+// What a message shows. `text` covers any message with a body and/or
+// attachments; everything Signal can render but this API does not yet
+// describe is `unsupported`.
+export const MessageKind = {
+  Text: 'text',
+  Sticker: 'sticker',
+  ViewOnce: 'viewOnce',
+  Deleted: 'deleted',
+  Unsupported: 'unsupported',
+} as const;
+export type MessageKindType = (typeof MessageKind)[keyof typeof MessageKind];
+
+export type MentionDTO = Readonly<{
+  start: number;
+  length: number;
+  // Null when the mentioned person has no conversation on this device.
+  conversationId: string | null;
+}>;
+
+// Metadata only. Attachment content and storage paths never cross the bridge
+// through this type.
+export type AttachmentMetadataDTO = Readonly<{
+  contentType: string;
+  size: number;
+  fileName: string | null;
+  width: number | null;
+  height: number | null;
+}>;
+
+export type QuoteDTO = Readonly<{
+  authorConversationId: string | null;
+  sentAt: number | null;
+  text: string | null;
+}>;
+
+// Public message DTO. Never add service ids, e164s, keys, attachment paths,
+// or raw protobufs here.
+export type MessageDTO = Readonly<{
+  id: string;
+  conversationId: string;
+  direction: 'incoming' | 'outgoing';
+  kind: MessageKindType;
+  authorConversationId: string | null;
+  sentAt: number;
+  receivedAt: number | null;
+  body: string | null;
+  // True when `body` is the first part of a long message.
+  bodyTruncated: boolean;
+  mentions: ReadonlyArray<MentionDTO>;
+  attachments: ReadonlyArray<AttachmentMetadataDTO>;
+  quote: QuoteDTO | null;
+  edited: boolean;
+  // Disappearing messages: clients must discard the message by this time.
+  expiresAt: number | null;
+  // Incoming only; null for outgoing.
+  read: boolean | null;
+}>;
+
+export type MessagesListResultType = Readonly<{
+  // Oldest first.
+  messages: ReadonlyArray<MessageDTO>;
   nextCursor: string | null;
 }>;
 

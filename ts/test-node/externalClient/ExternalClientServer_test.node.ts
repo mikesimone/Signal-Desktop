@@ -114,16 +114,17 @@ describe('externalClient/ExternalClientServer', () => {
   }
 
   async function approvedClient(
-    key: FakeKeyType = generateFakeClientKey()
+    key: FakeKeyType = generateFakeClientKey(),
+    capabilities: ReadonlyArray<string> = ['conversations.read']
   ): Promise<{ client: FakeClient; key: FakeKeyType }> {
     const client = await connectClient();
     const hello = await client.hello();
-    const response = await client.requestAuthorization(key, hello, [
-      'conversations.read',
-    ]);
-    assert.deepEqual(response.result, {
-      capabilities: ['conversations.read'],
-    });
+    const response = await client.requestAuthorization(
+      key,
+      hello,
+      capabilities
+    );
+    assert.deepEqual(response.result, { capabilities });
     return { client, key };
   }
 
@@ -600,6 +601,21 @@ describe('externalClient/ExternalClientServer', () => {
       assert.isEmpty(serviceCalls);
     });
 
+    it('keeps message reads behind messages.read', async () => {
+      await startServer();
+      const { client } = await approvedClient();
+      for (const method of ['messages.list', 'messages.get']) {
+        // oxlint-disable-next-line no-await-in-loop
+        const response = await client.request(method, {});
+        assert.strictEqual(
+          response.error?.code,
+          ErrorCode.PermissionDenied,
+          method
+        );
+      }
+      assert.isEmpty(serviceCalls);
+    });
+
     it('revocation closes live sessions and blocks reconnects', async () => {
       await startServer();
       const key = generateFakeClientKey();
@@ -618,7 +634,11 @@ describe('externalClient/ExternalClientServer', () => {
   describe('service calls', () => {
     it('validates params before calling the service', async () => {
       await startServer();
-      const { client } = await approvedClient();
+      // Hold every implemented capability, so validation is what refuses.
+      const { client } = await approvedClient(
+        generateFakeClientKey(),
+        IMPLEMENTED_CAPABILITIES
+      );
       for (const [method, params] of [
         ['conversations.list', { limit: 0 }],
         ['conversations.list', { limit: LIMITS.maxConversationPage + 1 }],
@@ -627,6 +647,16 @@ describe('externalClient/ExternalClientServer', () => {
         ['conversations.get', {}],
         ['conversations.get', { conversationId: '../../etc/passwd' }],
         ['conversations.get', { conversationId: '+15555550100 ' }],
+        ['messages.list', {}],
+        ['messages.list', { conversationId: 'abc', limit: 0 }],
+        [
+          'messages.list',
+          { conversationId: 'abc', limit: LIMITS.maxMessagePage + 1 },
+        ],
+        ['messages.list', { conversationId: 'abc', cursor: '../x' }],
+        ['messages.list', { conversationId: 'abc', before: 1 }],
+        ['messages.get', {}],
+        ['messages.get', { messageId: 'a b' }],
       ] as const) {
         // oxlint-disable-next-line no-await-in-loop
         const response = await client.request(method, params);
@@ -637,6 +667,19 @@ describe('externalClient/ExternalClientServer', () => {
         );
       }
       assert.isEmpty(serviceCalls);
+    });
+
+    it('forwards message reads to the service', async () => {
+      await startServer();
+      const page = { messages: [], nextCursor: null };
+      serviceAnswer = async () => ({ ok: true, value: page });
+      const { client } = await approvedClient(generateFakeClientKey(), [
+        'messages.read',
+      ]);
+      const params = { conversationId: 'abc-123', limit: 20, cursor: 'm-1' };
+      const response = await client.request('messages.list', params);
+      assert.deepEqual(response.result, page);
+      assert.deepEqual(serviceCalls, [{ method: 'messages.list', params }]);
     });
 
     it('passes service errors through as codes only', async () => {

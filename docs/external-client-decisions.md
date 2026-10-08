@@ -158,3 +158,22 @@ left-pane ordering, max 500 per page.
 
 WHY: the list is small and already sorted in memory; a stable keyset cursor
 adds complexity without benefit until change events exist (D8).
+
+## D16. Message cursor is a message id
+
+DECISION: `messages.list` pages backwards with the id of the oldest row read
+as the cursor; Signal looks up its `(received_at, sent_at)` like the
+timeline does.
+
+WHY: reuses Signal's own paging query unchanged; the id reveals nothing a
+`MessageDTO` does not already carry.
+
+## D17. Redact rather than omit hidden messages
+
+DECISION: deleted, erased and view-once messages are returned with their
+kind and timestamps but no content; expired disappearing messages and
+non-chat rows are omitted.
+
+WHY: clients can show "This message was deleted" or "View-once media" the
+way Signal does without ever holding the content; expired messages are about
+to be removed by Signal anyway.

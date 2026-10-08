@@ -216,6 +216,16 @@ Mitigation: explicit DTO mappers with allow-listed fields; no
 `model.attributes` or `format()` objects cross the boundary; tests assert DTO
 key sets.
 
+**T13b [I] Clients keep messages Signal would have erased.**
+Disappearing, deleted-for-everyone and view-once messages are erased by
+Signal; a client that cached them would defeat that.
+Mitigation: content of deleted, erased and view-once messages never crosses
+the bridge; expired messages are not returned; every message carries
+`expiresAt`, and the protocol requires clients to discard by then. Residual:
+a client can ignore `expiresAt` for content it received while the message
+was live; this is the same trust Signal places in a linked device's user.
+Test: DTO tests for each case (`messageDto_test.std.ts`).
+
 **T14 [I/E] Arbitrary file read via attachments.**
 Mitigation: no path parameter exists. Attachments are addressed by an opaque
 id that the server maps to a `message_attachments` primary key it has

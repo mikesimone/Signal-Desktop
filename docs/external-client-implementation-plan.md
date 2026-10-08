@@ -214,10 +214,12 @@ platform, userDataPath, runtimeDir, username })`, `prepareEndpoint()` with
   from `ConversationType` to the public DTO.
 - `ts/externalClient/rendererChannel.std.ts` (M-B): the single main↔renderer
   IPC pair and its zod schemas.
-- `ts/externalClient/service/ExternalClientService.preload.ts` (M-B): renderer
-  adapter answering `conversations.list` / `conversations.get`.
+- `ts/externalClient/service/ExternalClientService.preload.ts` (M-B, C):
+  renderer adapter answering `conversations.*` and `messages.*`.
+- `ts/externalClient/messageDto.std.ts` (M-C): field-by-field message DTO
+  mapper with the redaction rules.
 - `ts/test-helpers/externalClientFakeClient.node.ts`: fake client for tests.
-- Later: `MessageCache` adapter, Preferences UI,
+- Later: Preferences UI,
   `docs/external-client-protocol.md`, `docs/external-client-rambox.md`.
 - Tests under `ts/test-node/externalClient/` (named `*_test.std.ts` /
   `*_test.node.ts` per Signal's suffix rules).
@@ -304,6 +306,40 @@ storage). `oxlint` clean; no new `tsc` errors against the baseline.
 Not verified: Electron runtime (`pnpm start`; native prebuilds blocked), the
 dialog's appearance, and the renderer adapter against a real account. Windows
 pipe checks are tracked under T3/T4 in the threat model.
+
+## 5c. Milestone C scope and status (2026-10-08)
+
+Scope: read message history, behind `messages.read`.
+
+- `messages.list { conversationId, limit?, cursor? }`: newest page first
+  (default 50, max 100), each page oldest-first. `nextCursor` is the id of the
+  oldest row read; pass it back as `cursor` to page further back. Uses the
+  same `DataReader.getOlderMessagesByConversation` call as the timeline;
+  messages held in `MessageCache` win over database rows. A cursor from
+  another conversation is `INVALID_ARGUMENT`.
+- `messages.get { messageId }`: one message, `NOT_FOUND` unless its
+  conversation is one `conversations.list` would show.
+- `MessageDTO` (`ts/externalClient/messageDto.std.ts`): id, conversation,
+  direction, kind (`text`, `sticker`, `viewOnce`, `deleted`, `unsupported`),
+  author conversation id, sent/received times, body (+ `bodyTruncated` for
+  long messages), mentions as conversation ids, attachment metadata (no ids,
+  paths or keys), quote (author, timestamp, text), edited flag, `expiresAt`,
+  read flag for incoming.
+- Only incoming/outgoing rows are returned; notifications, group updates
+  and call history are skipped. Expired disappearing messages are skipped.
+  Deleted, erased and view-once messages return no body, mentions,
+  attachments or quote; a quote of a view-once message has no text.
+- Reads never mark anything read and never write to the database (unlike
+  the timeline's `cleanAttributes`, which can migrate rows).
+- Not in C: reactions, formatting ranges, link previews, poll/payment/contact
+  details, attachment download (needs `attachments.read`, T14), events (D).
+
+Verified in a Linux container: 77 tests pass, including DTO redaction rules,
+expiry, mention and quote mapping, `messages.read` enforcement, param
+validation and forwarding. `oxlint` clean; no new `tsc` errors.
+
+Not verified: the renderer adapter (`ExternalClientService.preload.ts`)
+against a real database inside Electron.
 
 ## 6. Build and test notes
 
