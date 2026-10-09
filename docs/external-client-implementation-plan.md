@@ -409,6 +409,11 @@ Scope: live updates, so clients stop polling.
   changed nothing in the DTO).
 - With no subscriber main tells the renderer no topics, the hooks are
   no-ops and Redux is not observed.
+- The skip only applies to messages already sent to clients in this
+  session, so opening a chat in Signal can produce a burst of
+  `message.updated` for older messages being loaded (seen live: 24 in one
+  second). Harmless for upserting clients; not suppressed because the
+  renderer cannot tell which messages a client already snapshotted.
 - Known limits: updates to messages not held in `MessageCache` are not seen
   (architecture §2.9); a mute that expires on its own produces no event
   until something else changes the conversation; group story replies and
