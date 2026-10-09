@@ -209,10 +209,11 @@ let lastSeq = 0;
 function onEvent({ event, seq, data }) {
   const gap = seq !== lastSeq + 1 ? `  (GAP: expected ${lastSeq + 1})` : '';
   lastSeq = seq;
-  const when = new Date().toISOString().slice(11, 23);
+  const when = new Date().toLocaleTimeString();
   let what;
   if (event.startsWith('message.') && data.body !== undefined) {
-    what = `${data.direction === 'outgoing' ? '>' : '<'} ${data.body ?? `[${data.kind}]`}`;
+    const status = data.sendStatus ? ` (${data.sendStatus})` : '';
+    what = `${data.direction === 'outgoing' ? '>' : '<'} ${data.body ?? `[${data.kind}]`}${status}`;
   } else if (event === 'conversation.updated') {
     what = `${data.title} unread ${data.unreadCount}`;
   } else {
