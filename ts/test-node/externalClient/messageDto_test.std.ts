@@ -22,6 +22,7 @@ const context: MessageDtoContextType = {
     ({ [ALICE_ACI]: 'conv-alice', [BOB_ACI]: 'conv-bob' })[serviceId] ?? null,
   ourConversationId: 'conv-me',
   now: 1_000_000,
+  getSendStatus: () => 'delivered',
 };
 
 const incoming: MessageSourceType = {
@@ -59,6 +60,7 @@ describe('externalClient/messageDto', () => {
       edited: false,
       expiresAt: null,
       read: false,
+      sendStatus: null,
     });
   });
 
@@ -69,6 +71,7 @@ describe('externalClient/messageDto', () => {
     );
     assert.strictEqual(dto?.authorConversationId, 'conv-me');
     assert.isNull(dto?.read);
+    assert.strictEqual(dto?.sendStatus, 'delivered');
   });
 
   it('treats read and viewed messages as read', () => {

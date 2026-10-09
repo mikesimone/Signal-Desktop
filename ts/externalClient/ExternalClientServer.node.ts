@@ -41,6 +41,8 @@ export type ExternalClientServerOptionsType = Readonly<{
   // Called with the union of all sessions' topics whenever it changes, so
   // the event source can do no work while nobody is listening.
   onTopicsChanged?: (topics: ReadonlyArray<EventTopicType>) => void;
+  // Called when "some connected app shows message notifications" flips.
+  onNotificationsHandledChanged?: (handled: boolean) => void;
 }>;
 
 export class ExternalClientServer {
@@ -55,6 +57,10 @@ export class ExternalClientServer {
     | ((topics: ReadonlyArray<EventTopicType>) => void)
     | undefined;
   #topics: ReadonlyArray<EventTopicType> = [];
+  readonly #onNotificationsHandledChanged:
+    | ((handled: boolean) => void)
+    | undefined;
+  #notificationsHandled = false;
   #listener: Readonly<{ close: () => Promise<void> }> | undefined;
 
   constructor(options: ExternalClientServerOptionsType) {
@@ -65,6 +71,7 @@ export class ExternalClientServer {
     this.#host = options.host;
     this.#limits = { ...LIMITS, ...options.limits };
     this.#onTopicsChanged = options.onTopicsChanged;
+    this.#onNotificationsHandledChanged = options.onNotificationsHandledChanged;
   }
 
   get isListening(): boolean {
@@ -77,6 +84,25 @@ export class ExternalClientServer {
 
   get topics(): ReadonlyArray<EventTopicType> {
     return this.#topics;
+  }
+
+  get notificationsHandled(): boolean {
+    return this.#notificationsHandled;
+  }
+
+  #updateNotificationsHandled(): void {
+    let handled = false;
+    for (const session of this.#sessions) {
+      if (session.handlesNotifications) {
+        handled = true;
+        break;
+      }
+    }
+    if (handled === this.#notificationsHandled) {
+      return;
+    }
+    this.#notificationsHandled = handled;
+    this.#onNotificationsHandledChanged?.(handled);
   }
 
   broadcast(event: BroadcastEventNameType, data: unknown): void {
@@ -133,6 +159,7 @@ export class ExternalClientServer {
     }
     this.#sessions.clear();
     this.#updateTopics();
+    this.#updateNotificationsHandled();
 
     await listener.close();
     await cleanupEndpoint(this.#endpoint);
@@ -199,8 +226,11 @@ export class ExternalClientServer {
       onClosed: closed => {
         this.#sessions.delete(closed);
         this.#updateTopics();
+        // An app that quits or crashes hands notifications back to Signal.
+        this.#updateNotificationsHandled();
       },
       onTopicsChanged: () => this.#updateTopics(),
+      onNotificationsHandledChanged: () => this.#updateNotificationsHandled(),
     });
     this.#sessions.add(session);
     this.#log.info(`session ${session.logId}: client requested connection`);

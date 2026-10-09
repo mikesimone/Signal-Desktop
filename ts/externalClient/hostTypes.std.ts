@@ -5,6 +5,7 @@ import type { ServerKeyType } from './auth.node.ts';
 import type {
   CapabilityType,
   ErrorCodeType,
+  SendBlockReasonType,
   ServiceMethodType,
   SessionStatusType,
 } from './protocol.std.ts';
@@ -45,7 +46,7 @@ export type ExternalClientAuthorityType = Readonly<{
 
 export type ServiceResultType =
   | Readonly<{ ok: true; value: unknown }>
-  | Readonly<{ ok: false; code: ErrorCodeType }>;
+  | Readonly<{ ok: false; code: ErrorCodeType; reason?: SendBlockReasonType }>;
 
 export type ExternalClientHostType = Readonly<{
   getStatus: () => Promise<SessionStatusType>;

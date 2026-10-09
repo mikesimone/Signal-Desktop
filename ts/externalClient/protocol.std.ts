@@ -43,6 +43,8 @@ export const Capability = {
   TypingSend: 'typing.send',
   ContactsRead: 'contacts.read',
   ProfileRead: 'profile.read',
+  // Let the app show Signal's message notifications instead of Signal.
+  NotificationsManage: 'notifications.manage',
 } as const;
 export type CapabilityType = (typeof Capability)[keyof typeof Capability];
 export const ALL_CAPABILITIES: ReadonlyArray<CapabilityType> =
@@ -53,6 +55,9 @@ export const ALL_CAPABILITIES: ReadonlyArray<CapabilityType> =
 export const IMPLEMENTED_CAPABILITIES: ReadonlyArray<CapabilityType> = [
   Capability.ConversationsRead,
   Capability.MessagesRead,
+  Capability.MessagesSend,
+  Capability.MessagesMarkRead,
+  Capability.NotificationsManage,
 ];
 
 export const ErrorCode = {
@@ -100,6 +105,9 @@ export const Method = {
   MessagesGet: 'messages.get',
   EventsSubscribe: 'events.subscribe',
   EventsUnsubscribe: 'events.unsubscribe',
+  MessagesSendText: 'messages.sendText',
+  MessagesMarkRead: 'messages.markRead',
+  NotificationsSetHandled: 'notifications.setHandled',
 } as const;
 export type MethodType = (typeof Method)[keyof typeof Method];
 
@@ -109,6 +117,8 @@ export const SERVICE_METHOD_CAPABILITIES = {
   [Method.ConversationsGet]: Capability.ConversationsRead,
   [Method.MessagesList]: Capability.MessagesRead,
   [Method.MessagesGet]: Capability.MessagesRead,
+  [Method.MessagesSendText]: Capability.MessagesSend,
+  [Method.MessagesMarkRead]: Capability.MessagesMarkRead,
 } as const satisfies Partial<Record<MethodType, CapabilityType>>;
 export type ServiceMethodType = keyof typeof SERVICE_METHOD_CAPABILITIES;
 
@@ -341,11 +351,69 @@ export type EventsResultType = Readonly<{
   topics: ReadonlyArray<EventTopicType>;
 }>;
 
+// Signal's own composer limit (shouldShowInvalidMessageToast).
+export const MAX_SEND_BODY_LENGTH = 64 * 1024;
+
+export const messagesSendTextParamsSchema = z
+  .object({
+    conversationId: conversationIdSchema,
+    body: z.string().min(1).max(MAX_SEND_BODY_LENGTH),
+  })
+  .strict();
+export type MessagesSendTextParamsType = z.infer<
+  typeof messagesSendTextParamsSchema
+>;
+
+export type MessagesSendTextResultType = Readonly<{
+  // The new message; it also arrives as `message.added`.
+  message: MessageDTO;
+}>;
+
+export const messagesMarkReadParamsSchema = z
+  .object({
+    conversationId: conversationIdSchema,
+    // Everything up to and including this message is marked read, exactly as
+    // if the user had scrolled to it in Signal.
+    upToMessageId: messageIdSchema,
+  })
+  .strict();
+export type MessagesMarkReadParamsType = z.infer<
+  typeof messagesMarkReadParamsSchema
+>;
+
+export const notificationsSetHandledParamsSchema = z
+  .object({
+    handled: z.boolean(),
+  })
+  .strict();
+
+// Why Signal refused to send. Signal never asks the user on the app's behalf
+// (no safety-number prompt, no implicit message-request acceptance); the user
+// resolves these in Signal itself.
+export const SendBlockReason = {
+  Expired: 'expired',
+  InvalidConversation: 'invalidConversation',
+  Blocked: 'blocked',
+  LeftGroup: 'leftGroup',
+  MessageRequest: 'messageRequest',
+  Unregistered: 'unregistered',
+  ProfileSharingRequired: 'profileSharingRequired',
+  PendingApproval: 'pendingApproval',
+  AnnouncementOnly: 'announcementOnly',
+  Terminated: 'terminated',
+  UntrustedIdentity: 'untrustedIdentity',
+  TooLong: 'tooLong',
+} as const;
+export type SendBlockReasonType =
+  (typeof SendBlockReason)[keyof typeof SendBlockReason];
+
 export const SERVICE_PARAM_SCHEMAS = {
   [Method.ConversationsList]: conversationsListParamsSchema,
   [Method.ConversationsGet]: conversationsGetParamsSchema,
   [Method.MessagesList]: messagesListParamsSchema,
   [Method.MessagesGet]: messagesGetParamsSchema,
+  [Method.MessagesSendText]: messagesSendTextParamsSchema,
+  [Method.MessagesMarkRead]: messagesMarkReadParamsSchema,
 } as const satisfies Record<ServiceMethodType, z.ZodType>;
 
 export type ConversationsListParamsType = z.infer<
@@ -417,6 +485,22 @@ export type QuoteDTO = Readonly<{
   text: string | null;
 }>;
 
+// Outgoing messages only. `paused` means Signal needs the user to complete a
+// challenge in Signal before it can send; `partiallySent` means some
+// recipients failed.
+export const MessageSendStatus = {
+  Sending: 'sending',
+  Paused: 'paused',
+  Failed: 'failed',
+  PartiallySent: 'partiallySent',
+  Sent: 'sent',
+  Delivered: 'delivered',
+  Read: 'read',
+  Viewed: 'viewed',
+} as const;
+export type MessageSendStatusType =
+  (typeof MessageSendStatus)[keyof typeof MessageSendStatus];
+
 // Public message DTO. Never add service ids, e164s, keys, attachment paths,
 // or raw protobufs here.
 export type MessageDTO = Readonly<{
@@ -438,6 +522,8 @@ export type MessageDTO = Readonly<{
   expiresAt: number | null;
   // Incoming only; null for outgoing.
   read: boolean | null;
+  // Outgoing only; null for incoming.
+  sendStatus: MessageSendStatusType | null;
 }>;
 
 export type MessagesListResultType = Readonly<{
@@ -449,6 +535,8 @@ export type MessagesListResultType = Readonly<{
 export type ErrorType = Readonly<{
   code: ErrorCodeType;
   message: string;
+  // Only on PRECONDITION_FAILED from messages.sendText.
+  reason?: SendBlockReasonType;
 }>;
 
 export type ResponseType =
@@ -473,7 +561,11 @@ export function negotiateVersion(
 export function makeError(
   id: string | null,
   code: ErrorCodeType,
-  message: string
+  message: string,
+  reason?: SendBlockReasonType
 ): ResponseType {
-  return { id, error: { code, message } };
+  return {
+    id,
+    error: reason === undefined ? { code, message } : { code, message, reason },
+  };
 }

@@ -450,6 +450,7 @@ displayName, capabilities }`, where `signature` covers
 
 ```text
 conversations.read  messages.read  messages.send  messages.markRead
+notifications.manage
 attachments.read    typing.read    typing.send    contacts.read
 profile.read        calls.control (reserved, never granted in v1)
 ```
@@ -561,11 +562,10 @@ See the threat model for detail. Highlights:
    `getComposerBlockReason(conversation)` so UI and bridge use one function.
 3. **Message-update coverage**: updates to non-resident messages are invisible.
    Acceptable for v1; a future `MessageCache` hook could close it.
-4. **Notifications**: Signal has no per-conversation visibility signal. A
-   `presence.set({ active, visibleConversationId })` method would feed
-   `activeWindowService` and `maybeNotify`. Deferred until semantics are
-   agreed upstream; v1 clients should not raise their own notifications for
-   Signal by default.
+4. **Notifications**: resolved for v1 by the hand-off in decision D22
+   (`notifications.setHandled`). A per-conversation
+   `presence.set({ active, visibleConversationId })` remains a possible
+   later refinement.
 5. **Read semantics**: marking read on behalf of an external UI bypasses the
    "window active" gate by design; that must be explicit in review.
 6. **UI reuse**: Signal's React components depend on Redux selectors and

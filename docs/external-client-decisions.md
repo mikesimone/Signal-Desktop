@@ -108,13 +108,13 @@ WHY: the external client is the surface the user is looking at.
 TRADEOFF: Signal trusts the client's claim that the user saw the messages.
 Must be visible in review.
 
-## D10. No notification changes in v1
+## D10. No notification changes in v1 (superseded by D22)
 
-DECISION: v1 leaves Signal's notification logic alone and documents that
-clients should not raise their own Signal notifications by default.
-
-WHY: Signal has no per-conversation visibility signal; a `presence.set` design
-needs upstream agreement.
+Superseded on 2026-10-09 by D22. Original text, kept for the record:
+v1 leaves Signal's notification logic alone and documents that clients should
+not raise their own Signal notifications by default, because Signal has no
+per-conversation visibility signal and a `presence.set` design needs upstream
+agreement.
 
 ## D11. Send refuses instead of prompting
 
@@ -208,3 +208,45 @@ DECISION: the bridge runs only when both Signal's remote-config flag
 WHY: Signal can roll it out gradually and switch it off centrally without a
 release, the way other Desktop features ship. It is an extra gate, never a
 substitute for the user's consent.
+
+## D21. Sending ships in the first upstream PR
+
+DECISION: the first PR includes `messages.sendText`, `messages.markRead` and
+the notification hand-off. There is no read-only first PR.
+
+WHY: the point of the bridge is that the user can keep Signal minimized in
+the tray and work entirely in the client. A read-only bridge still needs
+Signal's window open to reply, so it does not deliver that. Decided by the
+project owner on 2026-10-09.
+
+TRADEOFF: a bigger first review. Sends go through Signal's own send path and
+refuse instead of prompting (D11), which keeps the new surface small.
+
+## D22. Notification hand-off, opt-in per client
+
+DECISION: a client holding `notifications.manage` can call
+`notifications.setHandled { handled: true }`. While any connected client has
+it set, Signal does not show message, reaction or unread-reminder
+notifications. Call notifications are unaffected. The hand-off ends when the
+client sets it back, disconnects, the bridge stops or the grant is revoked.
+
+WHY: with the client as the user's surface, Signal minimized to the tray
+would otherwise notify for every message the client already shows, so the
+user gets two notifications for one message. This is the narrow piece of the
+`presence.set` idea that clients need; it does not claim which conversation
+is visible.
+
+TRADEOFF: a client that sets the flag and then shows nothing hides
+notifications. It needs a capability the user approved by name, and the
+effect ends with the connection, so a crashed client cannot leave Signal
+silent.
+
+## D23. Settings: one toggle and an approved-apps list in Privacy
+
+DECISION: Settings, Privacy gets an "Apps on this computer" section, shown
+only when the remote-config flag (D20) is on: a switch for
+`externalClientsEnabled` and the approved apps, each with Remove and a
+confirmation. Remove revokes the grant and disconnects the app.
+
+WHY: the user must be able to turn the bridge on without developer flags,
+see what they approved and take it back.

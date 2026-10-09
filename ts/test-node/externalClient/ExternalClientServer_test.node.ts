@@ -82,6 +82,7 @@ describe('externalClient/ExternalClientServer', () => {
   let serviceAnswer: () => Promise<ServiceResultType>;
   let status: (typeof SessionStatus)[keyof typeof SessionStatus];
   let topicChanges: Array<ReadonlyArray<string>>;
+  let notificationChanges: Array<boolean>;
   const clients = new Array<FakeClient>();
 
   const host: ExternalClientHostType = {
@@ -101,6 +102,8 @@ describe('externalClient/ExternalClientServer', () => {
       host,
       limits,
       onTopicsChanged: topics => topicChanges.push(topics),
+      onNotificationsHandledChanged: handled =>
+        notificationChanges.push(handled),
     });
   }
 
@@ -152,6 +155,7 @@ describe('externalClient/ExternalClientServer', () => {
     serviceAnswer = async () => ({ ok: true, value: { conversations: [] } });
     status = SessionStatus.Ready;
     topicChanges = [];
+    notificationChanges = [];
   });
 
   afterEach(async () => {
@@ -406,7 +410,7 @@ describe('externalClient/ExternalClientServer', () => {
       await startServer();
       const { client } = await approvedClient();
       for (const method of [
-        'messages.sendText',
+        'messages.sendAttachment',
         'sql-channel:read',
         'external-client:call',
         'executeSQL',
@@ -544,7 +548,7 @@ describe('externalClient/ExternalClientServer', () => {
       const response = await client.requestAuthorization(
         generateFakeClientKey(),
         await client.hello(),
-        ['messages.send']
+        ['typing.send']
       );
       assert.strictEqual(response.error?.code, ErrorCode.UnsupportedCapability);
       assert.isEmpty(prompts);
@@ -884,6 +888,108 @@ describe('externalClient/ExternalClientServer', () => {
         last = await client.nextEvent();
       } while (last.event === 'conversation.updated');
       assert.strictEqual(last.event, 'events.dropped');
+    });
+  });
+
+  describe('sending and notifications', () => {
+    it('requires messages.send to send', async () => {
+      await startServer();
+      const { client } = await approvedClient(undefined, ['messages.read']);
+      const response = await client.request('messages.sendText', {
+        conversationId: 'abc-123',
+        body: 'hi',
+      });
+      assert.strictEqual(response.error?.code, ErrorCode.PermissionDenied);
+      assert.deepEqual(serviceCalls, []);
+    });
+
+    it('forwards a valid send', async () => {
+      await startServer();
+      const { client } = await approvedClient(undefined, ['messages.send']);
+      serviceAnswer = async () => ({ ok: true, value: { message: {} } });
+      const params = { conversationId: 'abc-123', body: 'hi' };
+      const response = await client.request('messages.sendText', params);
+      assert.deepEqual(response.result, { message: {} });
+      assert.deepEqual(serviceCalls, [{ method: 'messages.sendText', params }]);
+    });
+
+    it('rejects empty and oversized bodies before Signal sees them', async () => {
+      await startServer();
+      const { client } = await approvedClient(undefined, ['messages.send']);
+      for (const body of ['', 'x'.repeat(64 * 1024 + 1)]) {
+        // oxlint-disable-next-line no-await-in-loop
+        const response = await client.request('messages.sendText', {
+          conversationId: 'abc-123',
+          body,
+        });
+        assert.strictEqual(response.error?.code, ErrorCode.InvalidArgument);
+      }
+      assert.deepEqual(serviceCalls, []);
+    });
+
+    it('passes the reason a send was refused', async () => {
+      await startServer();
+      const { client } = await approvedClient(undefined, ['messages.send']);
+      serviceAnswer = async () => ({
+        ok: false,
+        code: ErrorCode.PreconditionFailed,
+        reason: 'untrustedIdentity',
+      });
+      const response = await client.request('messages.sendText', {
+        conversationId: 'abc-123',
+        body: 'hi',
+      });
+      assert.deepEqual(response.error, {
+        code: ErrorCode.PreconditionFailed,
+        message: 'Precondition failed',
+        reason: 'untrustedIdentity',
+      });
+    });
+
+    it('requires messages.markRead to mark read', async () => {
+      await startServer();
+      const { client } = await approvedClient(undefined, ['messages.read']);
+      const response = await client.request('messages.markRead', {
+        conversationId: 'abc-123',
+        upToMessageId: 'm-1',
+      });
+      assert.strictEqual(response.error?.code, ErrorCode.PermissionDenied);
+    });
+
+    it('requires notifications.manage to take over notifications', async () => {
+      await startServer();
+      const { client } = await approvedClient(undefined, ['messages.read']);
+      const response = await client.request('notifications.setHandled', {
+        handled: true,
+      });
+      assert.strictEqual(response.error?.code, ErrorCode.PermissionDenied);
+      assert.isFalse(server.notificationsHandled);
+    });
+
+    it('hands notifications back when the app releases or disconnects', async () => {
+      await startServer();
+      const caps = ['notifications.manage'];
+      const { client: first } = await approvedClient(undefined, caps);
+      const { client: second } = await approvedClient(undefined, caps);
+
+      const on = await first.request('notifications.setHandled', {
+        handled: true,
+      });
+      assert.deepEqual(on.result, { handled: true });
+      await second.request('notifications.setHandled', { handled: true });
+      assert.isTrue(server.notificationsHandled);
+      assert.deepEqual(notificationChanges, [true]);
+
+      await first.request('notifications.setHandled', { handled: false });
+      assert.isTrue(server.notificationsHandled, 'second app still handles');
+
+      second.close();
+      for (let i = 0; i < 50 && server.notificationsHandled; i += 1) {
+        // oxlint-disable-next-line no-await-in-loop
+        await sleep(10);
+      }
+      assert.isFalse(server.notificationsHandled);
+      assert.deepEqual(notificationChanges, [true, false]);
     });
   });
 });

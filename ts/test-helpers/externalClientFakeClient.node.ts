@@ -21,7 +21,7 @@ import { LIMITS, PROTOCOL_NAME } from '../externalClient/protocol.std.ts';
 export type FakeResponseType = {
   id: string | null;
   result?: Record<string, unknown>;
-  error?: { code: string; message: string };
+  error?: { code: string; message: string; reason?: string };
 };
 
 export type FakeEventType = {

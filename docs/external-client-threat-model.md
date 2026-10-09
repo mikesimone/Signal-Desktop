@@ -276,14 +276,25 @@ pending message requests, blocked conversations, announcement-only groups
 where we are not admin, terminated groups, and over-length bodies, instead of
 silently calling `enqueueMessageForSend` (which would also implicitly accept a
 message request via `enableProfileSharing`).
+Implemented in `ExternalClientSend.preload.ts` (`getSendBlockReason`), which
+mirrors `CompositionArea` gating and Signal's invalid-message toasts, and
+runs the same untrusted-identity check as the composer
+(`getUntrustedRecipients`). Refusals carry a machine-readable `reason`. The
+send leaves the user's draft in Signal untouched.
 
 **T18 [I] Read receipts sent without the user seeing messages.**
-Mitigation: `messages.markRead` is a distinct capability; the user setting
-`read-receipt-setting` is still enforced by existing code.
+Mitigation: `messages.markRead` is a distinct capability, labeled "Mark your
+messages as read, which may send read receipts" in the approval dialog; the
+user setting `read-receipt-setting` is still enforced by existing code. The
+message must belong to the named conversation.
 
-**T19 [I] Duplicate or leaking notifications.**
-Mitigation: v1 does not change notification behavior. Documented that clients
-should not raise their own notifications by default.
+**T19 [I/D] Duplicate, leaking or suppressed notifications.**
+Mitigation (D22): Signal keeps notifying unless a client holding the
+separately approved `notifications.manage` capability takes over. The
+hand-off covers message, reaction and unread-reminder notifications only;
+calls still notify. It ends automatically on disconnect, bridge stop or
+revoke, so a crashed or removed client cannot leave Signal silent.
+Residual: an approved client can take over notifications and then show none.
 
 ### Resource exhaustion by an approved client (A6)
 

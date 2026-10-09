@@ -4,7 +4,6 @@
 import { ipcRenderer as ipc } from 'electron';
 
 import { createLogger } from '../../logging/log.std.ts';
-import type { ConversationModel } from '../../models/conversations.preload.ts';
 import type { MessageAttributesType } from '../../model-types.d.ts';
 import { DataReader } from '../../sql/Client.preload.ts';
 import * as RemoteConfig from '../../RemoteConfig.dom.ts';
@@ -17,8 +16,14 @@ import {
   isListedConversation,
   toConversationDTO,
 } from '../conversationDto.std.ts';
+import { markRead, sendText } from './ExternalClientSend.preload.ts';
+import {
+  getDtoContext,
+  getListedConversation,
+  loadMessage,
+  preferCached,
+} from './serviceHelpers.preload.ts';
 import type { ServiceResultType } from '../hostTypes.std.ts';
-import type { MessageDtoContextType } from '../messageDto.std.ts';
 import { toMessageDTO } from '../messageDto.std.ts';
 import type {
   ConversationsGetParamsType,
@@ -78,19 +83,6 @@ function listConversations({
   return { ok: true, value };
 }
 
-// `get` also resolves phone numbers and service ids; only accept our own
-// conversation ids so this cannot be used as a lookup oracle. Conversations
-// the left pane would not show are treated as missing.
-export function getListedConversation(
-  conversationId: string
-): ConversationModel | undefined {
-  const model = window.ConversationController.get(conversationId);
-  if (!model || model.id !== conversationId) {
-    return undefined;
-  }
-  return isListedConversation(model.format()) ? model : undefined;
-}
-
 function getConversation({
   conversationId,
 }: ConversationsGetParamsType): ServiceResultType {
@@ -105,30 +97,6 @@ function getConversation({
     ok: true,
     value: { conversation: toConversationDTO(model.format()) },
   };
-}
-
-export function getDtoContext(): MessageDtoContextType {
-  const controller = window.ConversationController;
-  return {
-    resolveConversationId: serviceId => controller.get(serviceId)?.id ?? null,
-    ourConversationId: controller.getOurConversationId() ?? null,
-    now: Date.now(),
-  };
-}
-
-// In-memory state wins over the database, as it does for the timeline.
-function preferCached(message: MessageAttributesType): MessageAttributesType {
-  return window.MessageCache.getById(message.id)?.attributes ?? message;
-}
-
-async function loadMessage(
-  messageId: string
-): Promise<MessageAttributesType | undefined> {
-  const cached = window.MessageCache.getById(messageId);
-  if (cached) {
-    return cached.attributes;
-  }
-  return DataReader.getMessageById(messageId);
 }
 
 async function listMessages({
@@ -225,6 +193,20 @@ async function dispatch(
     case Method.MessagesGet: {
       const params = safeParseUnknown(SERVICE_PARAM_SCHEMAS[method], rawParams);
       return params.success ? getMessage(params.data) : invalid;
+    }
+    case Method.MessagesSendText: {
+      if (!window.ConversationController.isInitialFetchComplete()) {
+        return notReady;
+      }
+      const params = safeParseUnknown(SERVICE_PARAM_SCHEMAS[method], rawParams);
+      return params.success ? sendText(params.data) : invalid;
+    }
+    case Method.MessagesMarkRead: {
+      if (!window.ConversationController.isInitialFetchComplete()) {
+        return notReady;
+      }
+      const params = safeParseUnknown(SERVICE_PARAM_SCHEMAS[method], rawParams);
+      return params.success ? markRead(params.data) : invalid;
     }
     default:
       throw new Error(`Unhandled external client method ${method}`);

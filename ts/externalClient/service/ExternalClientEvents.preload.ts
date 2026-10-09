@@ -9,7 +9,10 @@ import * as Errors from '../../types/errors.std.ts';
 import { safeParseUnknown } from '../../util/schemas.std.ts';
 import { ConversationDiffer } from '../conversationDiff.std.ts';
 import { EventQueue } from '../eventQueue.std.ts';
-import { setExternalClientMessageListener } from '../hooks.std.ts';
+import {
+  setExternalClientMessageListener,
+  setMessageNotificationsHandledExternally,
+} from '../hooks.std.ts';
 import { SentPayloadCache } from '../sentPayloadCache.std.ts';
 import { toMessageDTO } from '../messageDto.std.ts';
 import type {
@@ -28,7 +31,7 @@ import {
 import {
   getDtoContext,
   getListedConversation,
-} from './ExternalClientService.preload.ts';
+} from './serviceHelpers.preload.ts';
 
 // Renderer source of live events. Main says which topics any client wants;
 // with none, nothing here runs. Changes are queued, coalesced per object,
@@ -262,6 +265,7 @@ export function installExternalClientEvents(): void {
       return;
     }
     setTopics(new Set(parsed.data.topics));
+    setMessageNotificationsHandledExternally(parsed.data.notificationsHandled);
   });
   ipc.send(EVENTS_READY_CHANNEL);
 }

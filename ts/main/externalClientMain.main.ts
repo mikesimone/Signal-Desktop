@@ -33,12 +33,18 @@ import {
   ErrorCode,
   SessionStatus,
 } from '../externalClient/protocol.std.ts';
-import type { RendererTopicsType } from '../externalClient/rendererChannel.std.ts';
+import type {
+  ExternalClientAppType,
+  RendererTopicsType,
+} from '../externalClient/rendererChannel.std.ts';
 import {
   CALL_CHANNEL,
   EVENTS_CHANNEL,
   EVENTS_READY_CHANNEL,
+  LIST_APPS_CHANNEL,
   REFRESH_CHANNEL,
+  REMOVE_APP_CHANNEL,
+  removeAppSchema,
   RESULT_CHANNEL,
   TOPICS_CHANNEL,
   rendererEventsSchema,
@@ -102,6 +108,32 @@ export class ExternalClientMain {
     ipcMain.on(EVENTS_CHANNEL, (event, message) =>
       this.#onRendererEvents(event, message)
     );
+    ipcMain.handle(LIST_APPS_CHANNEL, async event => {
+      if (!this.#isMainRenderer(event)) {
+        return [];
+      }
+      const grants = await this.#authority.listGrants();
+      return grants.map(
+        (grant): ExternalClientAppType => ({
+          id: grant.fingerprint,
+          displayName: grant.displayName,
+          capabilities: grant.capabilities,
+          approvedAt: grant.approvedAt,
+          lastSeenAt: grant.lastSeenAt,
+        })
+      );
+    });
+    ipcMain.handle(REMOVE_APP_CHANNEL, async (event, id: unknown) => {
+      const parsed = safeParseUnknown(removeAppSchema, id);
+      if (!this.#isMainRenderer(event) || !parsed.success) {
+        return;
+      }
+      const grants = await this.#authority.listGrants();
+      const grant = grants.find(item => item.fingerprint === parsed.data);
+      if (grant) {
+        await this.revoke(grant.publicKey);
+      }
+    });
     ipcMain.on(REFRESH_CHANNEL, event => {
       if (this.#isMainRenderer(event)) {
         drop(this.refresh());
@@ -203,6 +235,7 @@ export class ExternalClientMain {
       authority: this.#authority,
       host: this.#host,
       onTopicsChanged: () => this.#sendTopics(),
+      onNotificationsHandledChanged: () => this.#sendTopics(),
     });
 
     try {
@@ -260,7 +293,7 @@ export class ExternalClientMain {
     });
   }
 
-  #isMainRenderer(event: IpcMainEvent): boolean {
+  #isMainRenderer(event: Pick<IpcMainEvent, 'sender'>): boolean {
     const mainWebContents = this.#options.getMainWindow()?.webContents;
     return mainWebContents !== undefined && event.sender === mainWebContents;
   }
@@ -274,6 +307,7 @@ export class ExternalClientMain {
     const topics: ReadonlyArray<EventTopicType> = this.#server?.topics ?? [];
     webContents.send(TOPICS_CHANNEL, {
       topics: [...topics],
+      notificationsHandled: this.#server?.notificationsHandled ?? false,
     } satisfies RendererTopicsType);
   }
 
@@ -368,6 +402,12 @@ function getCapabilityLabel(
       return i18n('icu:ExternalClientCapability__conversations-read');
     case Capability.MessagesRead:
       return i18n('icu:ExternalClientCapability__messages-read');
+    case Capability.MessagesSend:
+      return i18n('icu:ExternalClientCapability__messages-send');
+    case Capability.MessagesMarkRead:
+      return i18n('icu:ExternalClientCapability__messages-mark-read');
+    case Capability.NotificationsManage:
+      return i18n('icu:ExternalClientCapability__notifications-manage');
     default:
       // Only implemented capabilities can be requested; see protocol.std.ts.
       return capability;

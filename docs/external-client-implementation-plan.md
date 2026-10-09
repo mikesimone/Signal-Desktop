@@ -405,7 +405,8 @@ Scope: live updates, so clients stop polling.
   Events are coalesced per object and sent to main in batches of up to 200
   every 100 ms; DTOs are built at send time and only for listed
   conversations. A `message.updated` whose DTO equals the last one sent for
-  that message is skipped (receipts change nothing in the DTO today).
+  that message is skipped (until Milestone E added `sendStatus`, receipts
+  changed nothing in the DTO).
 - With no subscriber main tells the renderer no topics, the hooks are
   no-ops and Redux is not observed.
 - Known limits: updates to messages not held in `MessageCache` are not seen
@@ -427,6 +428,44 @@ topics, messages sent from another linked device arrived as `message.added`
 plus `message.updated` (receipts), conversations as `conversation.updated`,
 `seq` 1 to 15 with no gaps. Not yet seen live: a new incoming message from
 someone else, deletes, `events.dropped`.
+
+## 5e. Milestone E scope and status (2026-10-09)
+
+Scope: reply from the client, so Signal can stay minimized (D21).
+
+- `messages.sendText { conversationId, body }` (needs `messages.send`), body
+  1 to 65536 characters. Returns `{ message: MessageDTO }` for the queued
+  outgoing message; delivery updates follow as `message.updated`. Uses
+  `ConversationModel.enqueueMessageForSend` with `dontClearDraft`.
+- Refusals are `PRECONDITION_FAILED` with `reason`: `expired`,
+  `invalidConversation`, `blocked`, `leftGroup`, `messageRequest`,
+  `unregistered`, `profileSharingRequired`, `pendingApproval`,
+  `announcementOnly`, `terminated`, `untrustedIdentity`, `tooLong` (D11).
+  `getSendBlockReason` mirrors `CompositionArea`; the untrusted-identity
+  check was extracted from `blockSendUntilConversationsAreVerified` as
+  `getUntrustedRecipients` so both use one function. (Plan item 14, a shared
+  `getComposerBlockReason`, was not done; the bridge mirrors the composer's
+  order instead, which keeps `CompositionArea` untouched.)
+- `messages.markRead { conversationId, upToMessageId }` (needs
+  `messages.markRead`) calls `ConversationModel.markRead` with read receipts
+  per the user's setting (D9). Returns `{}`.
+- `notifications.setHandled { handled }` (needs `notifications.manage`)
+  returns `{ handled }`. Main tracks whether any session holds it and tells
+  the renderer with the topics message; `NotificationService` then drops
+  message, reaction and unread-reminder notifications (D22).
+- Settings, Privacy: "Apps on this computer" with the enable switch and the
+  approved apps with Remove (D23). Shown only when the remote-config flag is
+  on. The switch writes the item, then asks main to refresh; Remove revokes
+  through main.
+- Both send methods wait until the initial conversation fetch is complete.
+- `MessageDTO.sendStatus` (outgoing only): `sending`, `paused`, `failed`,
+  `partiallySent`, `sent`, `delivered`, `read`, `viewed`, from Signal's own
+  `getMessagePropStatus`, so a client can show delivery and failures the way
+  the timeline does. Status changes arrive as `message.updated`.
+
+Verified in a Linux container: 106 tests pass, including capability checks
+for all three methods, refusal reasons passed through, the notification flag
+following connect, release and disconnect. Not yet verified inside Electron.
 
 ## 6. Build and test notes
 

@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 // Development tool: a reference client for the external-client bridge.
-/* oxlint-disable no-console, no-plusplus, no-undef -- standalone Node script */
+/* oxlint-disable no-console, no-plusplus, no-undef, no-await-in-loop -- standalone Node script */
 
-// Minimal external client for Milestones A to D. No dependencies.
+// Minimal external client for Milestones A to E. No dependencies.
 // Works on Windows (named pipe), Linux and macOS (Unix socket).
 //
 //   node docs/external-client-probe.node.mjs --request      first run: asks Signal for approval
@@ -18,6 +18,15 @@
 //   --messages <n>        also print the last n messages of the first
 //                         conversation listed (needs messages.read)
 //   --watch               stay connected and print live events until Ctrl+C
+//   --capabilities <list> with --request: comma-separated capabilities to ask
+//                         for (default conversations.read,messages.read)
+//   --to <title>          conversation for --send/--mark-read, by exact title
+//                         (default: Note to Self)
+//   --send <text>         send a text message (needs messages.send)
+//   --mark-read           mark the target conversation read up to its newest
+//                         message (needs messages.markRead)
+//   --notifications       with --watch: take over message notifications
+//                         while connected (needs notifications.manage)
 //
 // The key file holds this probe's Ed25519 private key and the Signal server
 // key it pinned on approval. Delete it to start over.
@@ -45,7 +54,15 @@ const CLIENT_LABEL = 'signal-external-client/v1/client-auth';
 const SERVER_LABEL = 'signal-external-client/v1/server-auth';
 
 function parseArgs(argv) {
-  const out = { request: false, limit: 10, messages: 0, watch: false };
+  const out = {
+    request: false,
+    limit: 10,
+    messages: 0,
+    watch: false,
+    capabilities: ['conversations.read', 'messages.read'],
+    markRead: false,
+    notifications: false,
+  };
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
     if (arg === '--request') out.request = true;
@@ -55,6 +72,12 @@ function parseArgs(argv) {
     else if (arg === '--limit') out.limit = Number(argv[++i]);
     else if (arg === '--messages') out.messages = Number(argv[++i]);
     else if (arg === '--watch') out.watch = true;
+    else if (arg === '--capabilities')
+      out.capabilities = argv[++i].split(',').filter(Boolean);
+    else if (arg === '--to') out.to = argv[++i];
+    else if (arg === '--send') out.send = argv[++i];
+    else if (arg === '--mark-read') out.markRead = true;
+    else if (arg === '--notifications') out.notifications = true;
     else throw new Error(`unknown argument: ${arg}`);
   }
   return out;
@@ -229,7 +252,7 @@ const hello = must(
   await conn.call('session.hello', {
     protocol: 'signal-external-client',
     versions: [1],
-    client: { name: 'probe', version: '0.4' },
+    client: { name: 'probe', version: '0.5' },
     clientNonce: clientNonce.toString('base64url'),
   }),
   'hello'
@@ -277,7 +300,7 @@ if (args.request) {
       publicKey: key.publicKey,
       signature,
       displayName: 'Signal probe client',
-      capabilities: ['conversations.read', 'messages.read'],
+      capabilities: args.capabilities,
     }),
     'authorization.request'
   );
@@ -345,7 +368,71 @@ if (args.messages > 0 && first) {
   }
 }
 
+// Finds the --send/--mark-read target by paging through the whole list.
+async function findTarget() {
+  let cursor;
+  do {
+    const page = must(
+      await conn.call('conversations.list', { limit: 100, cursor }),
+      'conversations.list'
+    );
+    const match = page.conversations.find(c =>
+      args.to === undefined ? c.noteToSelf : c.title === args.to
+    );
+    if (match) {
+      return match;
+    }
+    cursor = page.nextCursor ?? undefined;
+  } while (cursor);
+  console.error(`no conversation titled ${args.to ?? '(Note to Self)'}`);
+  process.exit(1);
+}
+
+if (args.send !== undefined || args.markRead) {
+  const target = await findTarget();
+  if (args.send !== undefined) {
+    const sent = await conn.call('messages.sendText', {
+      conversationId: target.id,
+      body: args.send,
+    });
+    if (sent.error) {
+      const reason = sent.error.reason ? ` (${sent.error.reason})` : '';
+      console.log(`messages.sendText: ${sent.error.code}${reason}`);
+    } else {
+      const m = sent.result.message;
+      console.log(`sent to "${target.title}": ${m.id} status ${m.sendStatus}`);
+    }
+  }
+  if (args.markRead) {
+    const page = must(
+      await conn.call('messages.list', { conversationId: target.id, limit: 1 }),
+      'messages.list'
+    );
+    const newest = page.messages.at(-1);
+    if (!newest) {
+      console.log(`"${target.title}" has no messages to mark read`);
+    } else {
+      const marked = await conn.call('messages.markRead', {
+        conversationId: target.id,
+        upToMessageId: newest.id,
+      });
+      console.log(
+        marked.error
+          ? `messages.markRead: ${marked.error.code}`
+          : `marked "${target.title}" read up to ${newest.id}`
+      );
+    }
+  }
+}
+
 if (args.watch) {
+  if (args.notifications) {
+    const handled = must(
+      await conn.call('notifications.setHandled', { handled: true }),
+      'notifications.setHandled'
+    );
+    console.log(`notifications handled by this client: ${handled.handled}`);
+  }
   const sub = must(
     await conn.call('events.subscribe', {
       topics: ['conversations', 'messages'],

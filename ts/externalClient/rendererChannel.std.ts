@@ -7,12 +7,14 @@ import type {
   BroadcastEventNameType,
   ErrorCodeType,
   EventTopicType,
+  SendBlockReasonType,
   ServiceMethodType,
 } from './protocol.std.ts';
 import {
   ALL_EVENT_TOPICS,
   ErrorCode,
   EVENT_TOPICS,
+  SendBlockReason,
   SERVICE_METHOD_CAPABILITIES,
 } from './protocol.std.ts';
 
@@ -32,8 +34,24 @@ export const EVENTS_READY_CHANNEL = 'external-client:events-ready';
 export const TOPICS_CHANNEL = 'external-client:topics';
 // renderer -> main: RendererEventsType
 export const EVENTS_CHANNEL = 'external-client:events';
-// renderer -> main, no payload: the bridge's remote-config flag changed.
+// renderer -> main, no payload: the bridge's remote-config flag or the
+// user's setting changed.
 export const REFRESH_CHANNEL = 'external-client:refresh';
+// Settings page (renderer invoke -> main): approved apps, and removing one.
+export const LIST_APPS_CHANNEL = 'external-client:list-apps';
+export const REMOVE_APP_CHANNEL = 'external-client:remove-app';
+
+// What the settings page shows for an approved app. The key itself stays in
+// main; `id` is its fingerprint.
+export type ExternalClientAppType = Readonly<{
+  id: string;
+  displayName: string;
+  capabilities: ReadonlyArray<string>;
+  approvedAt: number;
+  lastSeenAt: number | null;
+}>;
+
+export const removeAppSchema = z.string().min(1).max(64);
 
 export const MAX_EVENTS_PER_BATCH = 200;
 
@@ -44,6 +62,9 @@ const eventTopicEnum = z.enum(
 export const rendererTopicsSchema = z
   .object({
     topics: z.array(eventTopicEnum).max(ALL_EVENT_TOPICS.length),
+    // A connected app with notifications.manage shows message
+    // notifications, so Signal should not.
+    notificationsHandled: z.boolean(),
   })
   .strict();
 export type RendererTopicsType = z.infer<typeof rendererTopicsSchema>;
@@ -91,6 +112,11 @@ const errorCodes = Object.values(ErrorCode) as [
   ...Array<ErrorCodeType>,
 ];
 
+const sendBlockReasons = Object.values(SendBlockReason) as [
+  SendBlockReasonType,
+  ...Array<SendBlockReasonType>,
+];
+
 export const rendererResultSchema = z.discriminatedUnion('ok', [
   z
     .object({
@@ -104,6 +130,7 @@ export const rendererResultSchema = z.discriminatedUnion('ok', [
       seq: z.number().int().nonnegative(),
       ok: z.literal(false),
       code: z.enum(errorCodes),
+      reason: z.enum(sendBlockReasons).optional(),
     })
     .strict(),
 ]);

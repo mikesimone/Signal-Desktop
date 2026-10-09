@@ -39,6 +39,7 @@ import type {
 } from './protocol.std.ts';
 import {
   ALL_EVENT_TOPICS,
+  Capability,
   ERROR_MESSAGES,
   ErrorCode,
   EVENT_TOPIC_CAPABILITIES,
@@ -54,6 +55,7 @@ import {
   eventsUnsubscribeParamsSchema,
   helloParamsSchema,
   isServiceMethod,
+  notificationsSetHandledParamsSchema,
   makeError,
   negotiateVersion,
   requestAuthorizationParamsSchema,
@@ -82,6 +84,7 @@ export type ExternalClientSessionOptionsType = Readonly<{
   host: ExternalClientHostType;
   onClosed: (session: ExternalClientSession) => void;
   onTopicsChanged: () => void;
+  onNotificationsHandledChanged: () => void;
 }>;
 
 const SessionState = {
@@ -106,6 +109,7 @@ export class ExternalClientSession {
   readonly #host: ExternalClientHostType;
   readonly #onClosed: (session: ExternalClientSession) => void;
   readonly #onTopicsChanged: () => void;
+  readonly #onNotificationsHandledChanged: () => void;
   readonly #decoder: FrameDecoder;
   readonly #challenge = randomBytes(32);
   #handshakeTimer: NodeJS.Timeout | undefined;
@@ -116,6 +120,7 @@ export class ExternalClientSession {
   #capabilities: ReadonlySet<CapabilityType> = new Set();
   #topics = new Set<EventTopicType>();
   #eventSeq = 0;
+  #handlesNotifications = false;
 
   constructor(options: ExternalClientSessionOptionsType) {
     this.socket = options.socket;
@@ -126,6 +131,7 @@ export class ExternalClientSession {
     this.#host = options.host;
     this.#onClosed = options.onClosed;
     this.#onTopicsChanged = options.onTopicsChanged;
+    this.#onNotificationsHandledChanged = options.onNotificationsHandledChanged;
     this.#decoder = new FrameDecoder({
       maxPayloadBytes: this.#limits.maxFrameBytes,
       allowedKinds: [FrameKind.Json],
@@ -149,6 +155,10 @@ export class ExternalClientSession {
 
   get topics(): ReadonlySet<EventTopicType> {
     return this.#topics;
+  }
+
+  get handlesNotifications(): boolean {
+    return this.#handlesNotifications && !this.#isClosed();
   }
 
   // Sends a broadcast event if this session subscribed to its topic.
@@ -214,6 +224,7 @@ export class ExternalClientSession {
     this.#state = SessionState.Closed;
     this.#stopHandshakeTimer();
     this.#topics = new Set();
+    this.#handlesNotifications = false;
     this.#onClosed(this);
   }
 
@@ -323,6 +334,12 @@ export class ExternalClientSession {
         }
         this.#onUnsubscribe(request);
         return;
+      case Method.NotificationsSetHandled:
+        if (!this.#requireAuthorized(request)) {
+          return;
+        }
+        this.#onSetNotificationsHandled(request);
+        return;
       default:
         break;
     }
@@ -363,7 +380,14 @@ export class ExternalClientSession {
       this.#log.info(
         `session ${this.logId}: ${method} failed (${result.code})`
       );
-      this.#sendError(request.id, result.code, ERROR_MESSAGES[result.code]);
+      this.#send(
+        makeError(
+          request.id,
+          result.code,
+          ERROR_MESSAGES[result.code],
+          result.reason
+        )
+      );
     }
   }
 
@@ -417,6 +441,35 @@ export class ExternalClientSession {
     this.#sendResult(request.id, this.#topicsResult());
     if (this.#topics.size !== before) {
       this.#onTopicsChanged();
+    }
+  }
+
+  #onSetNotificationsHandled(request: RequestEnvelopeType): void {
+    if (!this.#capabilities.has(Capability.NotificationsManage)) {
+      this.#sendError(
+        request.id,
+        ErrorCode.PermissionDenied,
+        'Client is not authorized for this method'
+      );
+      return;
+    }
+    const parsed = safeParseUnknown(
+      notificationsSetHandledParamsSchema,
+      request.params
+    );
+    if (!parsed.success) {
+      this.#sendError(request.id, ErrorCode.InvalidArgument, 'Invalid params');
+      return;
+    }
+    const { handled } = parsed.data;
+    const changed = handled !== this.#handlesNotifications;
+    this.#handlesNotifications = handled;
+    this.#sendResult(request.id, { handled });
+    if (changed) {
+      this.#log.info(
+        `session ${this.logId}: ${handled ? 'handles' : 'released'} notifications`
+      );
+      this.#onNotificationsHandledChanged();
     }
   }
 

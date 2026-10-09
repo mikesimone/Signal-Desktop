@@ -43,3 +43,15 @@ export function notifyExternalClientsMessageRemoved(
 ): void {
   listener?.removed(message);
 }
+
+let notificationsHandledExternally = false;
+
+export function setMessageNotificationsHandledExternally(value: boolean): void {
+  notificationsHandledExternally = value;
+}
+
+// True while a connected app the user allowed to (notifications.manage)
+// shows message notifications itself. Calls still notify in Signal.
+export function areMessageNotificationsHandledExternally(): boolean {
+  return notificationsHandledExternally;
+}

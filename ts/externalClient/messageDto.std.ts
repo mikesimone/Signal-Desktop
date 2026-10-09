@@ -9,6 +9,7 @@ import type {
   MentionDTO,
   MessageDTO,
   MessageKindType,
+  MessageSendStatusType,
   QuoteDTO,
 } from './protocol.std.ts';
 import { MessageKind } from './protocol.std.ts';
@@ -38,6 +39,11 @@ export type MessageSourceType = Pick<
   | 'expirationStartTimestamp'
   | 'readStatus'
   | 'sourceServiceId'
+  // Read only by `getSendStatus`.
+  | 'deletedForEveryoneFailed'
+  | 'deletedForEveryoneSendStatus'
+  | 'errors'
+  | 'sendStateByConversationId'
 >;
 
 export type MessageDtoContextType = Readonly<{
@@ -46,6 +52,8 @@ export type MessageDtoContextType = Readonly<{
   resolveConversationId: (serviceId: string) => string | null;
   ourConversationId: string | null;
   now: number;
+  // Signal's own status for an outgoing message, as the timeline shows it.
+  getSendStatus: (message: MessageSourceType) => MessageSendStatusType | null;
 }>;
 
 export function getMessageExpiresAt(
@@ -164,5 +172,6 @@ export function toMessageDTO(
     edited: (message.editHistory?.length ?? 0) > 1,
     expiresAt,
     read: type === 'incoming' ? message.readStatus !== ReadStatus.Unread : null,
+    sendStatus: type === 'outgoing' ? context.getSendStatus(message) : null,
   };
 }
