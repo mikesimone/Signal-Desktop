@@ -426,6 +426,12 @@ if (args.send !== undefined || args.markRead) {
 }
 
 if (args.watch) {
+  const sub = must(
+    await conn.call('events.subscribe', {
+      topics: ['conversations', 'messages'],
+    }),
+    'events.subscribe'
+  );
   if (args.notifications) {
     const handled = must(
       await conn.call('notifications.setHandled', { handled: true }),
@@ -433,12 +439,6 @@ if (args.watch) {
     );
     console.log(`notifications handled by this client: ${handled.handled}`);
   }
-  const sub = must(
-    await conn.call('events.subscribe', {
-      topics: ['conversations', 'messages'],
-    }),
-    'events.subscribe'
-  );
   console.log(`watching ${JSON.stringify(sub.topics)}; Ctrl+C to stop`);
   conn.socket.on('close', () => {
     console.log('connection closed');

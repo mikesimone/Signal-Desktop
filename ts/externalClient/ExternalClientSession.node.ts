@@ -45,6 +45,7 @@ import {
   EVENT_TOPIC_CAPABILITIES,
   EVENT_TOPICS,
   EventName,
+  EventTopic,
   IMPLEMENTED_CAPABILITIES,
   Method,
   PROTOCOL_NAME,
@@ -188,6 +189,20 @@ export class ExternalClientSession {
     this.#topics = new Set();
     this.#sendEvent(EventName.EventsDropped, {});
     this.#onTopicsChanged();
+    this.#releaseNotificationsIfUnsubscribed();
+  }
+
+  // A client may only hold notifications while it receives messages;
+  // otherwise new messages would arrive with nobody notifying (D22).
+  #releaseNotificationsIfUnsubscribed(): void {
+    if (!this.#handlesNotifications || this.#topics.has(EventTopic.Messages)) {
+      return;
+    }
+    this.#handlesNotifications = false;
+    this.#log.info(
+      `session ${this.logId}: released notifications (no messages subscription)`
+    );
+    this.#onNotificationsHandledChanged();
   }
 
   close(): void {
@@ -441,6 +456,7 @@ export class ExternalClientSession {
     this.#sendResult(request.id, this.#topicsResult());
     if (this.#topics.size !== before) {
       this.#onTopicsChanged();
+      this.#releaseNotificationsIfUnsubscribed();
     }
   }
 
@@ -462,6 +478,14 @@ export class ExternalClientSession {
       return;
     }
     const { handled } = parsed.data;
+    if (handled && !this.#topics.has(EventTopic.Messages)) {
+      this.#sendError(
+        request.id,
+        ErrorCode.PreconditionFailed,
+        'Subscribe to the messages topic first'
+      );
+      return;
+    }
     const changed = handled !== this.#handlesNotifications;
     this.#handlesNotifications = handled;
     this.#sendResult(request.id, { handled });

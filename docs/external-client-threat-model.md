@@ -292,8 +292,10 @@ message must belong to the named conversation.
 Mitigation (D22): Signal keeps notifying unless a client holding the
 separately approved `notifications.manage` capability takes over. The
 hand-off covers message, reaction and unread-reminder notifications only;
-calls still notify. It ends automatically on disconnect, bridge stop or
-revoke, so a crashed or removed client cannot leave Signal silent.
+calls still notify. It requires an active `messages` subscription (so the
+client also needs `messages.read`) and ends automatically on unsubscribe,
+dropped events, disconnect, bridge stop or revoke, so a crashed, lagging or
+removed client cannot leave Signal silent.
 Residual: an approved client can take over notifications and then show none.
 
 ### Resource exhaustion by an approved client (A6)

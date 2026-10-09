@@ -455,7 +455,9 @@ Scope: reply from the client, so Signal can stay minimized (D21).
   `messages.markRead`) calls `ConversationModel.markRead` with read receipts
   per the user's setting (D9). Returns `{}`.
 - `notifications.setHandled { handled }` (needs `notifications.manage`)
-  returns `{ handled }`. Main tracks whether any session holds it and tells
+  returns `{ handled }`. Taking over requires a `messages` subscription and
+  is released when that subscription ends (found live on Anton: without it a
+  client lacking `messages.read` could silence Signal). Main tracks whether any session holds it and tells
   the renderer with the topics message; `NotificationService` then drops
   message, reaction and unread-reminder notifications (D22).
 - Settings, Privacy: "Apps on this computer" with the enable switch and the
@@ -468,7 +470,7 @@ Scope: reply from the client, so Signal can stay minimized (D21).
   `getMessagePropStatus`, so a client can show delivery and failures the way
   the timeline does. Status changes arrive as `message.updated`.
 
-Verified in a Linux container: 106 tests pass, including capability checks
+Verified in a Linux container: 107 tests pass, including capability checks
 for all three methods, refusal reasons passed through, the notification flag
 following connect, release and disconnect. Not yet verified inside Electron.
 

@@ -225,10 +225,13 @@ refuse instead of prompting (D11), which keeps the new surface small.
 ## D22. Notification hand-off, opt-in per client
 
 DECISION: a client holding `notifications.manage` can call
-`notifications.setHandled { handled: true }`. While any connected client has
+`notifications.setHandled { handled: true }`, but only while it is
+subscribed to the `messages` topic (otherwise `PRECONDITION_FAILED`). While any connected client has
 it set, Signal does not show message, reaction or unread-reminder
 notifications. Call notifications are unaffected. The hand-off ends when the
-client sets it back, disconnects, the bridge stops or the grant is revoked.
+client sets it back, unsubscribes from `messages`, has its events dropped,
+disconnects, the bridge stops or the grant is revoked, so a client can never
+hold notifications without receiving the messages it would notify about.
 
 WHY: with the client as the user's surface, Signal minimized to the tray
 would otherwise notify for every message the client already shows, so the

@@ -968,9 +968,13 @@ describe('externalClient/ExternalClientServer', () => {
 
     it('hands notifications back when the app releases or disconnects', async () => {
       await startServer();
-      const caps = ['notifications.manage'];
+      const caps = ['messages.read', 'notifications.manage'];
       const { client: first } = await approvedClient(undefined, caps);
       const { client: second } = await approvedClient(undefined, caps);
+      for (const client of [first, second]) {
+        // oxlint-disable-next-line no-await-in-loop
+        await client.request('events.subscribe', { topics: ['messages'] });
+      }
 
       const on = await first.request('notifications.setHandled', {
         handled: true,
@@ -990,6 +994,33 @@ describe('externalClient/ExternalClientServer', () => {
       }
       assert.isFalse(server.notificationsHandled);
       assert.deepEqual(notificationChanges, [true, false]);
+    });
+
+    it('only hands off notifications while the app receives messages', async () => {
+      await startServer();
+      const { client } = await approvedClient(undefined, [
+        'messages.read',
+        'notifications.manage',
+      ]);
+
+      const refused = await client.request('notifications.setHandled', {
+        handled: true,
+      });
+      assert.strictEqual(refused.error?.code, ErrorCode.PreconditionFailed);
+      assert.isFalse(server.notificationsHandled);
+
+      await client.request('events.subscribe', { topics: ['messages'] });
+      await client.request('notifications.setHandled', { handled: true });
+      assert.isTrue(server.notificationsHandled);
+
+      await client.request('events.unsubscribe', { topics: ['messages'] });
+      assert.isFalse(server.notificationsHandled);
+      assert.deepEqual(notificationChanges, [true, false]);
+
+      await client.request('events.subscribe', { topics: ['messages'] });
+      await client.request('notifications.setHandled', { handled: true });
+      server.dropEvents();
+      assert.isFalse(server.notificationsHandled, 'released on drop');
     });
   });
 });
