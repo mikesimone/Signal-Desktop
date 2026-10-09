@@ -236,6 +236,9 @@ export class ExternalClientSession {
   }
 
   #handleClosed(): void {
+    if (!this.#isClosed()) {
+      this.#log.info(`session ${this.logId}: connection lost`);
+    }
     this.#state = SessionState.Closed;
     this.#stopHandshakeTimer();
     this.#topics = new Set();
