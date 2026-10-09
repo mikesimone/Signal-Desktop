@@ -381,7 +381,9 @@ Scope: live updates, so clients stop polling.
   listed), `message.added` / `message.updated` (MessageDTO),
   `message.removed { messageId, conversationId }`, and `events.dropped {}`.
 - Client contract: subscribe, then snapshot with the list methods, then apply
-  events as idempotent upserts and removals. After `events.dropped` the
+  events as idempotent upserts and removals. `message.updated` can arrive
+  before `message.added` for the same message (synced sends update the
+  cache before the timeline add), so treat both as upserts. After `events.dropped` the
   session holds no topics: subscribe again and resnapshot.
 - `events.dropped` is sent when a client has more than 1 MiB unread
   (`maxEventBacklogBytes`), when the renderer's queue overflows (5000
@@ -407,7 +409,14 @@ Verified in a Linux container: 97 tests pass, including subscribe
 authorization and capability checks, per-session topic routing, `seq`
 order, unsubscribe, topic union tracking, drop-and-resubscribe, a stalled
 reader being dropped, queue coalescing and the conversation diff. The probe's
-`--watch` mode was run against a test server. Not yet run inside Electron.
+`--watch` mode was run against a test server.
+
+Verified inside Electron on Windows 11 (Anton, 2026-10-08 18:02 PT, fork
+e21aa9a): stored grant authenticated, `events.subscribe` returned both
+topics, messages sent from another linked device arrived as `message.added`
+plus `message.updated` (receipts), conversations as `conversation.updated`,
+`seq` 1 to 15 with no gaps. Not yet seen live: a new incoming message from
+someone else, deletes, `events.dropped`.
 
 ## 6. Build and test notes
 
