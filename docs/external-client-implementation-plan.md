@@ -231,6 +231,8 @@ platform, userDataPath, runtimeDir, username })`, `prepareEndpoint()` with
   first-instance ownership; connections are `Duplex` streams. Registered like
   `windows-ucv` (root `package.json`, `pnpm-workspace.yaml` `allowBuilds`,
   `rolldown.config.ts` externals, oxlint/knip/prettier config).
+- `docs/external-client-probe.node.mjs`: dependency-free reference client
+  for manual testing (`--request`, `--messages n`, `--watch`).
 - `.github/workflows/external-client.yml`: the external-client tests on
   Linux, macOS and Windows (free hosted runners on the public fork).
 - Later: Preferences UI,
