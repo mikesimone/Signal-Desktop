@@ -11,6 +11,7 @@ import type {
   MessageKindType,
   MessageSendStatusType,
   QuoteDTO,
+  ReactionDTO,
 } from './protocol.std.ts';
 import { MessageKind } from './protocol.std.ts';
 
@@ -38,6 +39,7 @@ export type MessageSourceType = Pick<
   | 'expireTimer'
   | 'expirationStartTimestamp'
   | 'readStatus'
+  | 'reactions'
   | 'sourceServiceId'
   // Read only by `getSendStatus`.
   | 'deletedForEveryoneFailed'
@@ -91,6 +93,18 @@ function toMentions(
     length: range.length,
     conversationId: context.resolveConversationId(range.mentionAci),
   }));
+}
+
+// `fromId` is already a conversation id. Reactions being removed have no
+// emoji and are left out.
+function toReactions(message: MessageSourceType): Array<ReactionDTO> {
+  return (message.reactions ?? [])
+    .filter(reaction => reaction.emoji)
+    .toSorted((a, b) => a.timestamp - b.timestamp)
+    .map(reaction => ({
+      emoji: reaction.emoji ?? '',
+      authorConversationId: reaction.fromId,
+    }));
 }
 
 function toAttachments(
@@ -173,5 +187,6 @@ export function toMessageDTO(
     expiresAt,
     read: type === 'incoming' ? message.readStatus !== ReadStatus.Unread : null,
     sendStatus: type === 'outgoing' ? context.getSendStatus(message) : null,
+    reactions: hidden ? [] : toReactions(message),
   };
 }

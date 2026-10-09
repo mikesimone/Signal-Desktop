@@ -469,8 +469,11 @@ Scope: reply from the client, so Signal can stay minimized (D21).
   `partiallySent`, `sent`, `delivered`, `read`, `viewed`, from Signal's own
   `getMessagePropStatus`, so a client can show delivery and failures the way
   the timeline does. Status changes arrive as `message.updated`.
+- `MessageDTO.reactions`: `[{ emoji, authorConversationId }]`, one per
+  person, oldest first; empty for hidden messages. Reaction changes arrive
+  as `message.updated`. Sending reactions (`messages.react`) is not built.
 
-Verified in a Linux container: 107 tests pass, including capability checks
+Verified in a Linux container: 108 tests pass, including capability checks
 for all three methods, refusal reasons passed through, the notification flag
 following connect, release and disconnect. Not yet verified inside Electron.
 

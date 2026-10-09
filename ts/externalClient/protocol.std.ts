@@ -485,6 +485,11 @@ export type QuoteDTO = Readonly<{
   text: string | null;
 }>;
 
+export type ReactionDTO = Readonly<{
+  emoji: string;
+  authorConversationId: string;
+}>;
+
 // Outgoing messages only. `paused` means Signal needs the user to complete a
 // challenge in Signal before it can send; `partiallySent` means some
 // recipients failed.
@@ -524,6 +529,8 @@ export type MessageDTO = Readonly<{
   read: boolean | null;
   // Outgoing only; null for incoming.
   sendStatus: MessageSendStatusType | null;
+  // One entry per person who reacted, oldest first.
+  reactions: ReadonlyArray<ReactionDTO>;
 }>;
 
 export type MessagesListResultType = Readonly<{

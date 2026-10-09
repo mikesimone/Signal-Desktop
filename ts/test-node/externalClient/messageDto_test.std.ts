@@ -13,6 +13,7 @@ import { MessageKind } from '../../externalClient/protocol.std.ts';
 import { DurationInSeconds } from '../../util/durations/duration-in-seconds.std.ts';
 import type { AciString } from '../../types/ServiceId.std.ts';
 import { IMAGE_PNG } from '../../types/MIME.std.ts';
+import type { Emoji } from '../../axo/emoji.std.ts';
 
 const ALICE_ACI = '00000000-0000-4000-8000-00000000000a' as AciString;
 const BOB_ACI = '00000000-0000-4000-8000-00000000000b' as AciString;
@@ -61,6 +62,7 @@ describe('externalClient/messageDto', () => {
       expiresAt: null,
       read: false,
       sendStatus: null,
+      reactions: [],
     });
   });
 
@@ -72,6 +74,39 @@ describe('externalClient/messageDto', () => {
     assert.strictEqual(dto?.authorConversationId, 'conv-me');
     assert.isNull(dto?.read);
     assert.strictEqual(dto?.sendStatus, 'delivered');
+  });
+
+  it('lists reactions by conversation id, oldest first', () => {
+    const dto = toMessageDTO(
+      {
+        ...incoming,
+        reactions: [
+          {
+            emoji: '😂' as Emoji.Variant,
+            fromId: 'conv-bob',
+            targetTimestamp: 500,
+            timestamp: 9,
+          },
+          {
+            emoji: '👍' as Emoji.Variant,
+            fromId: 'conv-me',
+            targetTimestamp: 500,
+            timestamp: 7,
+          },
+          {
+            emoji: undefined,
+            fromId: 'conv-alice',
+            targetTimestamp: 500,
+            timestamp: 8,
+          },
+        ],
+      },
+      context
+    );
+    assert.deepEqual(dto?.reactions, [
+      { emoji: '👍', authorConversationId: 'conv-me' },
+      { emoji: '😂', authorConversationId: 'conv-bob' },
+    ]);
   });
 
   it('treats read and viewed messages as read', () => {
