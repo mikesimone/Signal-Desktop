@@ -4,9 +4,11 @@
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 BASE=${BASE:-5c1a030485ea64a1c311288cd6b5eecbe36964cd}
-TRAILER='
-Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>
-Claude-Session: https://claude.ai/code/session_014gqdeS39KSgqzSti5HbiX5'
+# Mike's call (2026-10-09 12:20 PT): upstream commits are authored by him (the CLA
+# signer) with no Claude trailers. Fork main keeps the trailers.
+TRAILER=''
+export GIT_AUTHOR_NAME='Mike Simone' GIT_AUTHOR_EMAIL='mike@mikesimone.net'
+export GIT_COMMITTER_NAME='Mike Simone' GIT_COMMITTER_EMAIL='mike@mikesimone.net'
 git checkout -q -B external-client-bridge "$BASE"
 git checkout main -- packages/windows-local-pipe .oxlint/rules/enforceFileSuffix.mjs .oxlintrc.json .prettierignore knip.js package.json pnpm-lock.yaml pnpm-workspace.yaml rolldown.config.ts
 git commit -q -m "Add windows-local-pipe: a user-only, local-only named pipe server
