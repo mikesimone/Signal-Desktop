@@ -15,7 +15,12 @@ GlobalErrors.addHandler();
 // set such that only we have read access to our files
 process.umask(0o077);
 
-export const AUMID = `org.whispersystems.${packageJson.name}`;
+// Fork-only (not upstream): unpackaged builds get their own AUMID so a dev
+// run cannot take over the installed Signal's Start menu entry or taskbar
+// grouping on Windows.
+export const AUMID = app.isPackaged
+  ? `org.whispersystems.${packageJson.name}`
+  : `org.whispersystems.${packageJson.name}.development`;
 log.info('Set Windows Application User Model ID (AUMID)', {
   AUMID,
 });

@@ -481,6 +481,14 @@ following connect, release and disconnect. Not yet verified inside Electron.
 
 ## 6. Build and test notes
 
+- **Windows: keep the dev build apart from the installed Signal.** Upstream
+  unpackaged builds use the installed app's AUMID
+  (`org.whispersystems.signal-desktop`); a dev run on Anton (2026-10-09) left
+  `%APPDATA%\Microsoft\Windows\Start Menu\Programs\Electron.lnk` with that
+  AUMID, which hid the real Signal in Start, and the two tray icons looked
+  identical. The fork gives unpackaged builds `...signal-desktop.development`
+  (`app/startup_config.main.ts`, excluded from the upstream branch). Stop a
+  dev run with Ctrl+C in its console, never from the tray.
 - **Running a dev build against production (do this, not NODE_ENV).** Leave
   `NODE_ENV` unset and put a git-ignored `config/local-development.json` next
   to the other configs: a copy of `production.json` with
