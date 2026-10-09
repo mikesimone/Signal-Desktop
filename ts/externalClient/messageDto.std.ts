@@ -58,7 +58,7 @@ export type MessageDtoContextType = Readonly<{
   getSendStatus: (message: MessageSourceType) => MessageSendStatusType | null;
 }>;
 
-export function getMessageExpiresAt(
+function getMessageExpiresAt(
   message: Pick<MessageSourceType, 'expireTimer' | 'expirationStartTimestamp'>
 ): number | null {
   const { expireTimer, expirationStartTimestamp } = message;

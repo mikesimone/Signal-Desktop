@@ -14,14 +14,14 @@ export type EndpointType =
   | Readonly<{ kind: 'pipe'; path: string }>
   | Readonly<{ kind: 'socket'; path: string; directory: string }>;
 
-export class EndpointError extends Error {
+class EndpointError extends Error {
   override name = 'EndpointError';
 }
 
 // sun_path is 104 bytes on macOS and 108 on Linux, including the NUL.
 const MAX_SOCKET_PATH_BYTES = 103;
 
-export function getEndpointId(userDataPath: string, username: string): string {
+function getEndpointId(userDataPath: string, username: string): string {
   return createHash('sha256')
     .update(userDataPath)
     .update('\0')

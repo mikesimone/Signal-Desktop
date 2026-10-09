@@ -8,7 +8,7 @@ import { z } from 'zod';
 // the public, versioned contract: change it only additively within a version.
 
 export const PROTOCOL_NAME = 'signal-external-client';
-export const SUPPORTED_PROTOCOL_VERSIONS: ReadonlyArray<number> = [1];
+const SUPPORTED_PROTOCOL_VERSIONS: ReadonlyArray<number> = [1];
 
 export const LIMITS = {
   maxFrameBytes: 1024 * 1024,
@@ -202,8 +202,8 @@ const base64UrlSchema = (bytes: number) =>
     .length(Math.ceil((bytes * 4) / 3))
     .regex(/^[A-Za-z0-9_-]+$/);
 export const keySchema = base64UrlSchema(32);
-export const nonceSchema = base64UrlSchema(32);
-export const signatureSchema = base64UrlSchema(64);
+const nonceSchema = base64UrlSchema(32);
+const signatureSchema = base64UrlSchema(64);
 
 // Every inbound message is a request. Params are validated per method after
 // the envelope is accepted.
@@ -352,7 +352,7 @@ export type EventsResultType = Readonly<{
 }>;
 
 // Signal's own composer limit (shouldShowInvalidMessageToast).
-export const MAX_SEND_BODY_LENGTH = 64 * 1024;
+const MAX_SEND_BODY_LENGTH = 64 * 1024;
 
 export const messagesSendTextParamsSchema = z
   .object({

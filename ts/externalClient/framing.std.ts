@@ -14,7 +14,7 @@ export const FrameKind = {
 } as const;
 export type FrameKindType = (typeof FrameKind)[keyof typeof FrameKind];
 
-export const FRAME_HEADER_BYTES = 5;
+const FRAME_HEADER_BYTES = 5;
 
 export type FrameType = Readonly<{
   kind: FrameKindType;

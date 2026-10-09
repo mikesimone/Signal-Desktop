@@ -56,7 +56,7 @@ function reasonForToast(toastType: ToastType): SendBlockReasonType {
 
 // The same conditions under which Signal's composer refuses to send or is
 // replaced by another panel (CompositionArea), in the same order.
-export async function getSendBlockReason(
+async function getSendBlockReason(
   model: ConversationModel,
   body: string
 ): Promise<SendBlockReasonType | undefined> {
