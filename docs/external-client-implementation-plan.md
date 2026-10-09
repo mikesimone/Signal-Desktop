@@ -390,9 +390,11 @@ Scope: live updates, so clients stop polling.
   listed), `message.added` / `message.updated` (MessageDTO),
   `message.removed { messageId, conversationId }`, and `events.dropped {}`.
 - Client contract: subscribe, then snapshot with the list methods, then apply
-  events as idempotent upserts and removals. `message.updated` can arrive
-  before `message.added` for the same message (synced sends update the
-  cache before the timeline add), so treat both as upserts. After `events.dropped` the
+  events as idempotent upserts and removals. Signal caches a new message
+  about a second before adding it to the timeline; updates to a message
+  received after subscribing are held back until its `message.added`
+  (seen live on Anton before the fix: updated ~1 s before added). Still
+  treat both as upserts. After `events.dropped` the
   session holds no topics: subscribe again and resnapshot.
 - `events.dropped` is sent when a client has more than 1 MiB unread
   (`maxEventBacklogBytes`), when the renderer's queue overflows (5000

@@ -27,6 +27,10 @@ export class SentPayloadCache {
     return changed;
   }
 
+  has(key: string): boolean {
+    return this.#sent.has(key);
+  }
+
   forget(key: string): void {
     this.#sent.delete(key);
   }

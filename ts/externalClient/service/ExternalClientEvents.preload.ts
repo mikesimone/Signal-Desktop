@@ -46,6 +46,10 @@ const STORE_WAIT_MS = 1000;
 // resynchronize instead.
 const MAX_QUEUED_EVENTS = 5000;
 const MAX_REMEMBERED_MESSAGES = 2000;
+// Signal caches a new message (an update) shortly before adding it to the
+// conversation (the add). Updates to a message this recent that has not been
+// announced yet are left for the add, which carries the same data.
+const NEW_MESSAGE_WINDOW_MS = 10_000;
 
 type PendingType =
   | Readonly<{ kind: 'message'; message: MessageAttributesType }>
@@ -53,6 +57,9 @@ type PendingType =
   | Readonly<{ kind: 'data'; data: Record<string, unknown> }>;
 
 let topics: ReadonlySet<EventTopicType> = new Set();
+// When the messages topic last started; anything received since then gets
+// its own message.added.
+let messagesSince = Infinity;
 const queue = new EventQueue<PendingType>(MAX_QUEUED_EVENTS);
 const sentMessages = new SentPayloadCache(MAX_REMEMBERED_MESSAGES);
 let overflowed = false;
@@ -108,6 +115,12 @@ function flush(): void {
       if (event === EventName.MessageRemoved) {
         sentMessages.forget(key);
       } else if (data.kind === 'message') {
+        if (
+          event === EventName.MessageUpdated &&
+          isUnannouncedNewMessage(key, data.message)
+        ) {
+          continue;
+        }
         const changed = sentMessages.record(key, JSON.stringify(built));
         if (event === EventName.MessageUpdated && !changed) {
           continue;
@@ -124,6 +137,20 @@ function flush(): void {
   if (queue.size > 0) {
     scheduleFlush();
   }
+}
+
+function isUnannouncedNewMessage(
+  key: string,
+  message: MessageAttributesType
+): boolean {
+  if (sentMessages.has(key)) {
+    return false;
+  }
+  const receivedAt = message.received_at_ms ?? 0;
+  return (
+    receivedAt >= messagesSince &&
+    receivedAt > Date.now() - NEW_MESSAGE_WINDOW_MS
+  );
 }
 
 // Messages are converted at flush time, after coalescing, and only if their
@@ -238,8 +265,12 @@ function setTopics(next: ReadonlySet<EventTopicType>): void {
   topics = next;
 
   if (topics.has(EventTopic.Messages)) {
+    if (messagesSince === Infinity) {
+      messagesSince = Date.now();
+    }
     setExternalClientMessageListener(messageListener);
   } else {
+    messagesSince = Infinity;
     setExternalClientMessageListener(undefined);
   }
 

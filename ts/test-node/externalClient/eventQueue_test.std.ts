@@ -63,7 +63,9 @@ describe('externalClient/eventQueue', () => {
 
   it('remembers sent payloads to skip unchanged updates', () => {
     const cache = new SentPayloadCache(2);
+    assert.isFalse(cache.has('m:1'));
     assert.isTrue(cache.record('m:1', 'a'));
+    assert.isTrue(cache.has('m:1'));
     assert.isFalse(cache.record('m:1', 'a'));
     assert.isTrue(cache.record('m:1', 'b'));
     cache.forget('m:1');
