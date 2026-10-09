@@ -221,6 +221,8 @@ platform, userDataPath, runtimeDir, username })`, `prepareEndpoint()` with
 - `ts/externalClient/hooks.std.ts` (M-D): import-free hook functions that
   Signal's message code calls; no-ops until a client subscribes.
 - `ts/externalClient/eventQueue.std.ts` (M-D): per-object coalescing queue.
+- `ts/externalClient/sentPayloadCache.std.ts` (M-D): last payload sent per
+  message, to skip updates that change nothing.
 - `ts/externalClient/conversationDiff.std.ts` (M-D): turns successive
   conversation lookups into public update/remove events.
 - `ts/externalClient/service/ExternalClientEvents.preload.ts` (M-D):
@@ -395,7 +397,8 @@ Scope: live updates, so clients stop polling.
   `conversationLookup` (by reference, then by DTO) at most every 250 ms.
   Events are coalesced per object and sent to main in batches of up to 200
   every 100 ms; DTOs are built at send time and only for listed
-  conversations.
+  conversations. A `message.updated` whose DTO equals the last one sent for
+  that message is skipped (receipts change nothing in the DTO today).
 - With no subscriber main tells the renderer no topics, the hooks are
   no-ops and Redux is not observed.
 - Known limits: updates to messages not held in `MessageCache` are not seen
@@ -405,7 +408,7 @@ Scope: live updates, so clients stop polling.
 - The approval dialog now labels `messages.read` ("Read your messages,
   including new ones as they arrive").
 
-Verified in a Linux container: 97 tests pass, including subscribe
+Verified in a Linux container: 99 tests pass, including subscribe
 authorization and capability checks, per-session topic routing, `seq`
 order, unsubscribe, topic union tracking, drop-and-resubscribe, a stalled
 reader being dropped, queue coalescing and the conversation diff. The probe's

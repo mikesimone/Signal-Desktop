@@ -10,6 +10,7 @@ import { safeParseUnknown } from '../../util/schemas.std.ts';
 import { ConversationDiffer } from '../conversationDiff.std.ts';
 import { EventQueue } from '../eventQueue.std.ts';
 import { setExternalClientMessageListener } from '../hooks.std.ts';
+import { SentPayloadCache } from '../sentPayloadCache.std.ts';
 import { toMessageDTO } from '../messageDto.std.ts';
 import type {
   BroadcastEventNameType,
@@ -41,6 +42,7 @@ const STORE_WAIT_MS = 1000;
 // Beyond this the renderer gives up on the backlog and has every client
 // resynchronize instead.
 const MAX_QUEUED_EVENTS = 5000;
+const MAX_REMEMBERED_MESSAGES = 2000;
 
 type PendingType =
   | Readonly<{ kind: 'message'; message: MessageAttributesType }>
@@ -49,6 +51,7 @@ type PendingType =
 
 let topics: ReadonlySet<EventTopicType> = new Set();
 const queue = new EventQueue<PendingType>(MAX_QUEUED_EVENTS);
+const sentMessages = new SentPayloadCache(MAX_REMEMBERED_MESSAGES);
 let overflowed = false;
 let flushTimer: NodeJS.Timeout | undefined;
 
@@ -94,11 +97,20 @@ function flush(): void {
 
     const context = getDtoContext();
     const events: RendererEventsType['events'] = [];
-    for (const { event, data } of queue.take(MAX_EVENTS_PER_BATCH)) {
+    for (const { key, event, data } of queue.take(MAX_EVENTS_PER_BATCH)) {
       const built = build(data, context);
-      if (built) {
-        events.push({ event, data: built });
+      if (!built) {
+        continue;
       }
+      if (event === EventName.MessageRemoved) {
+        sentMessages.forget(key);
+      } else if (data.kind === 'message') {
+        const changed = sentMessages.record(key, JSON.stringify(built));
+        if (event === EventName.MessageUpdated && !changed) {
+          continue;
+        }
+      }
+      events.push({ event, data: built });
     }
     if (events.length > 0) {
       ipc.send(EVENTS_CHANNEL, { events } satisfies RendererEventsType);
@@ -236,6 +248,7 @@ function setTopics(next: ReadonlySet<EventTopicType>): void {
 
   if (topics.size === 0) {
     queue.clear();
+    sentMessages.clear();
     overflowed = false;
   }
   log.info(`topics: ${[...topics].join(',') || 'none'}`);

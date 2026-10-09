@@ -10,6 +10,7 @@ import { EventName } from './protocol.std.ts';
 // still queued stays `added`: the client has not heard of it yet.
 
 export type QueuedEventType<T> = Readonly<{
+  key: string;
   event: BroadcastEventNameType;
   data: T;
 }>;
@@ -40,6 +41,7 @@ export class EventQueue<T> {
     // latest change.
     this.#pending.delete(key);
     this.#pending.set(key, {
+      key,
       event: keepAdded ? EventName.MessageAdded : event,
       data,
     });

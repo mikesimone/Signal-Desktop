@@ -4,6 +4,7 @@
 import { assert } from 'chai';
 
 import { EventQueue } from '../../externalClient/eventQueue.std.ts';
+import { SentPayloadCache } from '../../externalClient/sentPayloadCache.std.ts';
 
 describe('externalClient/eventQueue', () => {
   it('keeps one event per object, the newest', () => {
@@ -12,8 +13,8 @@ describe('externalClient/eventQueue', () => {
     queue.push('m:2', 'message.updated', 2);
     queue.push('m:1', 'message.updated', 3);
     assert.deepEqual(queue.take(10), [
-      { event: 'message.updated', data: 2 },
-      { event: 'message.updated', data: 3 },
+      { key: 'm:2', event: 'message.updated', data: 2 },
+      { key: 'm:1', event: 'message.updated', data: 3 },
     ]);
     assert.strictEqual(queue.size, 0);
   });
@@ -23,7 +24,7 @@ describe('externalClient/eventQueue', () => {
     queue.push('m:1', 'message.added', 'first');
     queue.push('m:1', 'message.updated', 'second');
     assert.deepEqual(queue.take(10), [
-      { event: 'message.added', data: 'second' },
+      { key: 'm:1', event: 'message.added', data: 'second' },
     ]);
   });
 
@@ -32,7 +33,7 @@ describe('externalClient/eventQueue', () => {
     queue.push('m:1', 'message.added', 'first');
     queue.push('m:1', 'message.removed', 'gone');
     assert.deepEqual(queue.take(10), [
-      { event: 'message.removed', data: 'gone' },
+      { key: 'm:1', event: 'message.removed', data: 'gone' },
     ]);
   });
 
@@ -58,5 +59,24 @@ describe('externalClient/eventQueue', () => {
     assert.isFalse(queue.push('c:3', 'conversation.updated', 3));
     assert.isTrue(queue.push('c:1', 'conversation.updated', 4));
     assert.strictEqual(queue.size, 2);
+  });
+
+  it('remembers sent payloads to skip unchanged updates', () => {
+    const cache = new SentPayloadCache(2);
+    assert.isTrue(cache.record('m:1', 'a'));
+    assert.isFalse(cache.record('m:1', 'a'));
+    assert.isTrue(cache.record('m:1', 'b'));
+    cache.forget('m:1');
+    assert.isTrue(cache.record('m:1', 'b'));
+  });
+
+  it('evicts the least recently sent payload', () => {
+    const cache = new SentPayloadCache(2);
+    cache.record('m:1', 'a');
+    cache.record('m:2', 'a');
+    cache.record('m:1', 'a');
+    cache.record('m:3', 'a');
+    assert.isFalse(cache.record('m:1', 'a'));
+    assert.isTrue(cache.record('m:2', 'a'));
   });
 });
