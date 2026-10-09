@@ -1,0 +1,111 @@
+# signal-rambox
+
+Use Signal inside [Rambox](https://rambox.app) (or any app that hosts web
+pages) through Signal Desktop's local API for companion apps (the external
+client bridge, signalapp/Signal-Desktop#8054).
+
+Signal Desktop keeps running, minimized to the tray, and stays the real
+client: it holds the keys, sends and receives. This helper is an approved
+companion app. It shows your chats, lets you read and send text messages,
+marks chats read when you look at them, and while its page is open, takes
+over message notifications so you get them from Rambox instead of Signal.
+
+Not here (yet): attachments, reactions, typing indicators, calls, editing
+and deleting. Messages that need them say "open Signal".
+
+## How it works
+
+```
+Rambox  ──http://127.0.0.1:47830/<token>/──▶  signal-rambox  ──pipe──▶  Signal Desktop
+(web page)                                    (this helper)          (bridge)
+```
+
+Rambox can only show web pages, and a web page cannot open Signal's named
+pipe or Unix socket, so this helper sits in between:
+
+- It connects to Signal as an approved app (Ed25519 key, Signal's key pinned
+  after the first approval) and asks for only `conversations.read`,
+  `messages.read`, `messages.send`, `messages.markRead` and
+  `notifications.manage`.
+- It serves a chat page on **127.0.0.1 only**. Everything it serves lives
+  under a random secret token, so the URL you give Rambox is the only way in.
+- Rambox shows the unread badge from the page title (`(3) Signal`), and turns
+  the page's notifications into its own. Muted and archived chats don't
+  count.
+
+### Why the local web server is safe enough
+
+Any program on the computer, and any web page in any browser, can reach a
+port on 127.0.0.1. So every request must:
+
+- start with the secret token (24 random bytes, compared in constant time),
+- carry `Host: 127.0.0.1:<port>` or `localhost:<port>` (stops DNS rebinding),
+- if it has an `Origin` or `Sec-Fetch-Site` header, be same-origin,
+- for POST, use `Content-Type: application/json`, which a foreign page can
+  only send after a CORS preflight that this helper never answers.
+
+The page has a strict Content Security Policy and never inserts text from
+Signal as HTML. The token and key live in a folder only your account can
+read. Another account on the same computer that learned the token could use
+it; on a computer shared with untrusted users, don't run this.
+
+## Setup (Windows)
+
+1. Install [Node.js](https://nodejs.org) 20 or newer.
+2. In Signal Desktop: Settings > Privacy > **Apps on this computer** > on.
+3. Start the helper:
+
+   ```powershell
+   node C:\path\to\signal-rambox\signal-rambox.mjs
+   ```
+
+   Signal shows an approval dialog for "Rambox (signal-rambox)". Allow it.
+   The helper prints the URL to use, or get it any time with `--url`.
+
+4. In Rambox: **Add app > Add Custom App**, name it Signal, paste the URL,
+   and turn on notifications and "Display in tab" for the unread badge.
+
+### Start it at logon (Windows)
+
+```powershell
+$node = (Get-Command node).Source
+$script = 'C:\path\to\signal-rambox\signal-rambox.mjs'
+$action = New-ScheduledTaskAction -Execute $node -Argument "`"$script`""
+$trigger = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
+$settings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit 0 -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1)
+Register-ScheduledTask -TaskName 'signal-rambox' -Action $action -Trigger $trigger -Settings $settings
+```
+
+Remove it with `Unregister-ScheduledTask signal-rambox -Confirm:$false`.
+
+## Options
+
+```
+--user-data <dir>   Signal profile folder (default: the normal one, %APPDATA%\Signal)
+--endpoint <path>   connect to this pipe/socket instead of computing it
+--port <n>          local port (default 47830)
+--config <dir>      where key.json and token live
+                    (default %APPDATA%\signal-rambox, or ~/.config/signal-rambox)
+--url               print the Rambox URL and exit
+```
+
+For a development build of Signal with its own profile, pass that profile with
+`--user-data`.
+
+## Starting over
+
+- New URL: delete `token` in the config folder and restart; update Rambox.
+- Pair again: remove the app in Signal (Settings > Privacy > Apps on this
+  computer), delete `key.json`, restart the helper, approve again.
+- "Signal's identity key changed": Signal's bridge key is not the one this
+  helper pinned (a reinstall or a different profile). Pair again as above if
+  you expected that.
+
+## Tests
+
+```
+node --test contrib/signal-rambox/test/signal-rambox_test.mjs
+```
+
+They run the real helper against a fake Signal bridge (real framing and
+signatures), including the request checks above.

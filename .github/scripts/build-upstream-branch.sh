@@ -23,7 +23,7 @@ name), and exposes connections as Node Duplex streams.
 Used by the external client bridge in the next commit.
 $TRAILER"
 # app/startup_config.main.ts: fork-only dev AUMID change.
-git diff --name-only "$BASE" main | grep -v -e '^docs/' -e '^\.github/' -e '^packages/windows-local-pipe/' -e '^app/startup_config.main.ts$' | xargs git checkout main --
+git diff --name-only "$BASE" main | grep -v -e '^docs/' -e '^\.github/' -e '^packages/windows-local-pipe/' -e '^contrib/' -e '^app/startup_config.main.ts$' | xargs git checkout main --
 git commit -q -m "Add an opt-in local API for companion apps
 
 Lets an app on the same computer, approved by the user, read chats and
@@ -61,6 +61,6 @@ EOF
 git add docs
 git commit -q -m "docs: external client architecture, threat model and reference client
 $TRAILER"
-test -z "$(git diff main -- . ':!docs' ':!.github' ':!app/startup_config.main.ts')" && echo "code identical to main"
+test -z "$(git diff main -- . ':!docs' ':!.github' ':!contrib' ':!app/startup_config.main.ts')" && echo "code identical to main"
 git log --oneline -4
 git checkout -q main

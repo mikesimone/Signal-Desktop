@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="referrer" content="no-referrer" />
+    <title>Signal</title>
+    <link rel="icon" href="icon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="app.css" />
+    <script src="app.js" defer></script>
+  </head>
+  <body>
+    <div id="banner" class="banner" hidden>
+      <span id="banner-text"></span>
+      <button id="banner-action" type="button" hidden></button>
+    </div>
+    <main class="layout">
+      <aside class="sidebar">
+        <div class="sidebar-head">
+          <input
+            id="search"
+            type="search"
+            placeholder="Search chats"
+            autocomplete="off"
+            spellcheck="false"
+          />
+        </div>
+        <ul id="conversations" class="conversations" role="listbox"></ul>
+      </aside>
+      <section class="chat" id="chat">
+        <div class="empty" id="empty">Pick a chat on the left.</div>
+        <header class="chat-head" id="chat-head" hidden>
+          <span id="chat-title"></span>
+          <span id="chat-sub" class="sub"></span>
+        </header>
+        <div class="messages" id="messages" hidden>
+          <button id="older" class="older" type="button" hidden>
+            Load older messages
+          </button>
+          <ol id="message-list"></ol>
+        </div>
+        <form class="composer" id="composer" hidden>
+          <textarea
+            id="compose"
+            rows="1"
+            placeholder="Message"
+            autocomplete="off"
+          ></textarea>
+          <button type="submit" id="send">Send</button>
+        </form>
+        <div class="send-error" id="send-error" hidden></div>
+      </section>
+    </main>
+  </body>
+</html>
