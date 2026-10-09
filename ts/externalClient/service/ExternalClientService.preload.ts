@@ -7,6 +7,7 @@ import { createLogger } from '../../logging/log.std.ts';
 import type { ConversationModel } from '../../models/conversations.preload.ts';
 import type { MessageAttributesType } from '../../model-types.d.ts';
 import { DataReader } from '../../sql/Client.preload.ts';
+import * as RemoteConfig from '../../RemoteConfig.dom.ts';
 import { _getConversationComparator } from '../../state/selectors/conversations.dom.ts';
 import * as Errors from '../../types/errors.std.ts';
 import { drop } from '../../util/drop.std.ts';
@@ -38,6 +39,7 @@ import {
 import type { RendererResultType } from '../rendererChannel.std.ts';
 import {
   CALL_CHANNEL,
+  REFRESH_CHANNEL,
   RESULT_CHANNEL,
   rendererCallSchema,
 } from '../rendererChannel.std.ts';
@@ -245,6 +247,13 @@ async function answer(
 }
 
 export function installExternalClientService(): void {
+  // Main decides whether the bridge runs; it only needs to know when
+  // Signal's flag for it changes.
+  RemoteConfig.onChange(
+    ['desktop.externalClients.beta', 'desktop.externalClients.prod'],
+    () => ipc.send(REFRESH_CHANNEL)
+  );
+
   ipc.on(CALL_CHANNEL, (_event, message: unknown) => {
     const call = safeParseUnknown(rendererCallSchema, message);
     if (!call.success) {

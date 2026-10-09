@@ -262,6 +262,13 @@ platform, userDataPath, runtimeDir, username })`, `prepareEndpoint()` with
 
 - Off unless `items.externalClientsEnabled === true`, or, in unpackaged
   builds only, `SIGNAL_ENABLE_EXTERNAL_CLIENTS=1`.
+  - Since 2026-10-09 the item also needs Signal's remote-config flag
+    (`desktop.externalClients.beta` / `.prod`, semver like other Desktop
+    flags; always on for alpha, staging and internal users). Main reads the
+    stored `remoteConfig` item; the renderer tells main
+    (`external-client:refresh`) when the flag changes, and main stops or
+    starts the listener. The pure flag check moved to
+    `ts/util/isFeatureEnabledInner.std.ts` so main can use it.
 - Listener starts only after SQL initialized successfully.
 - Methods: `session.hello`, `session.disconnect`. `hello` returns protocol
   name, negotiated version, Signal version, capability vocabulary, session id,

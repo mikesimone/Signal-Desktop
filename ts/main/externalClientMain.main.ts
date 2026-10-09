@@ -9,7 +9,10 @@ import { createLogger } from '../logging/log.std.ts';
 import * as Errors from '../types/errors.std.ts';
 import type { LocalizerType } from '../types/Util.std.ts';
 import type { MainSQL } from '../sql/main.main.ts';
+import { drop } from '../util/drop.std.ts';
 import { safeParseUnknown } from '../util/schemas.std.ts';
+import { _isFeatureEnabledInner } from '../util/isFeatureEnabledInner.std.ts';
+import type { ConfigMapType } from '../RemoteConfig.dom.ts';
 import { getExternalClientEndpoint } from '../externalClient/endpoint.node.ts';
 import { ExternalClientAuthority } from '../externalClient/ExternalClientAuthority.node.ts';
 import type { ApprovalPromptType } from '../externalClient/ExternalClientAuthority.node.ts';
@@ -35,6 +38,7 @@ import {
   CALL_CHANNEL,
   EVENTS_CHANNEL,
   EVENTS_READY_CHANNEL,
+  REFRESH_CHANNEL,
   RESULT_CHANNEL,
   TOPICS_CHANNEL,
   rendererEventsSchema,
@@ -98,6 +102,11 @@ export class ExternalClientMain {
     ipcMain.on(EVENTS_CHANNEL, (event, message) =>
       this.#onRendererEvents(event, message)
     );
+    ipcMain.on(REFRESH_CHANNEL, event => {
+      if (this.#isMainRenderer(event)) {
+        drop(this.refresh());
+      }
+    });
     // The renderer (re)loaded. Anything it had queued is gone, so current
     // subscribers must resynchronize; that also resets its topics.
     ipcMain.on(EVENTS_READY_CHANNEL, event => {
@@ -154,11 +163,26 @@ export class ExternalClientMain {
     if (!app.isPackaged && process.env.SIGNAL_ENABLE_EXTERNAL_CLIENTS === '1') {
       return true;
     }
+    // Both Signal (remote config) and the user must have turned it on.
+    if (!(await this.#isAllowedByRemoteConfig())) {
+      return false;
+    }
     const item = await this.#options.sql.sqlRead(
       'getItemById',
       'externalClientsEnabled'
     );
     return item?.value === true;
+  }
+
+  async #isAllowedByRemoteConfig(): Promise<boolean> {
+    const item = await this.#options.sql.sqlRead('getItemById', 'remoteConfig');
+    const remoteConfig: ConfigMapType | undefined = item?.value;
+    return _isFeatureEnabledInner({
+      betaValue: remoteConfig?.['desktop.externalClients.beta']?.value,
+      currentVersion: app.getVersion(),
+      isInternalUser: remoteConfig?.['desktop.internalUser']?.enabled ?? false,
+      prodValue: remoteConfig?.['desktop.externalClients.prod']?.value,
+    });
   }
 
   async #start(): Promise<void> {

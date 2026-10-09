@@ -32,6 +32,8 @@ export const EVENTS_READY_CHANNEL = 'external-client:events-ready';
 export const TOPICS_CHANNEL = 'external-client:topics';
 // renderer -> main: RendererEventsType
 export const EVENTS_CHANNEL = 'external-client:events';
+// renderer -> main, no payload: the bridge's remote-config flag changed.
+export const REFRESH_CHANNEL = 'external-client:refresh';
 
 export const MAX_EVENTS_PER_BATCH = 200;
 

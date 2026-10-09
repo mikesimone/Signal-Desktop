@@ -199,3 +199,12 @@ must resubscribe and resnapshot. No replay buffer.
 WHY: follows D8. Signal has no change log to replay from; a bounded drop
 with an explicit signal is simpler to reason about than an unbounded or
 lossy buffer, and the client already knows how to snapshot.
+
+## D20. A Signal remote-config flag gates the bridge
+
+DECISION: the bridge runs only when both Signal's remote-config flag
+(`desktop.externalClients.beta` / `.prod`) and the user's opt-in are on.
+
+WHY: Signal can roll it out gradually and switch it off centrally without a
+release, the way other Desktop features ship. It is an extra gate, never a
+substitute for the user's consent.
