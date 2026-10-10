@@ -56,11 +56,12 @@ const log = createLogger('externalClientMain');
 
 const RENDERER_CALL_TIMEOUT_MS = 15_000;
 // Fork: sending attachments processes them first (a video gets a
-// screenshot), and a forward can go to hundreds of chats.
+// screenshot), and a forward or a poll can go to hundreds of chats.
 const SLOW_RENDERER_CALL_TIMEOUT_MS = 120_000;
 const SLOW_RENDERER_METHODS: ReadonlySet<ServiceMethodType> = new Set([
   Method.MessagesSendText,
   Method.MessagesForward,
+  Method.PollsSend,
 ]);
 const MAX_PENDING_RENDERER_CALLS = 64;
 

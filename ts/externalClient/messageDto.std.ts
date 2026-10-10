@@ -5,6 +5,7 @@ import { ReadStatus } from '../messages/MessageReadStatus.std.ts';
 import type { MessageAttributesType } from '../model-types.d.ts';
 import { BodyRange } from '../types/BodyRange.std.ts';
 import type { AttachmentType } from '../types/Attachment.std.ts';
+import type { MessagePollVoteType } from '../types/Polls.dom.ts';
 import {
   isGIF,
   isImageAttachment,
@@ -22,6 +23,7 @@ import type {
   StickerDTO,
   FormattingDTO,
   LinkPreviewDTO,
+  PollDTO,
 } from './protocol.std.ts';
 import { MessageKind } from './protocol.std.ts';
 
@@ -57,6 +59,7 @@ export type MessageSourceType = Pick<
   | 'errors'
   | 'sendStateByConversationId'
   | 'preview'
+  | 'poll'
 >;
 
 export type MessageDtoContextType = Readonly<{
@@ -103,10 +106,76 @@ function getKind(message: MessageSourceType): MessageKindType {
   if (message.sticker) {
     return MessageKind.Sticker;
   }
+  if (message.poll) {
+    return MessageKind.Poll;
+  }
   if (message.body || message.attachments?.length) {
     return MessageKind.Text;
   }
   return MessageKind.Unsupported;
+}
+
+// The same reading of votes as the timeline (getPollForMessage).
+function toPoll(
+  message: MessageSourceType,
+  context: MessageDtoContextType
+): PollDTO | null {
+  const { poll } = message;
+  if (!poll) {
+    return null;
+  }
+  const ourId = context.ourConversationId;
+  let mineSent: ReadonlyArray<number> = [];
+  let minePending: ReadonlyArray<number> | null = null;
+  const newest = new Map<string, MessagePollVoteType>();
+  for (const vote of poll.votes ?? []) {
+    const unsent =
+      vote.sendStateByConversationId != null &&
+      Object.keys(vote.sendStateByConversationId).length > 0;
+    if (vote.fromConversationId === ourId && unsent) {
+      minePending = vote.optionIndexes;
+      continue;
+    }
+    if (vote.sendStateByConversationId) {
+      continue;
+    }
+    const existing = newest.get(vote.fromConversationId);
+    if (
+      !existing ||
+      vote.voteCount > existing.voteCount ||
+      (vote.voteCount === existing.voteCount &&
+        vote.timestamp > existing.timestamp)
+    ) {
+      newest.set(vote.fromConversationId, vote);
+    }
+  }
+  const voters = new Set<string>();
+  const options = poll.options.map((text, index) => {
+    const picked = [...newest.values()]
+      .filter(vote => vote.optionIndexes.includes(index))
+      .map(vote => vote.fromConversationId);
+    for (const id of picked) {
+      voters.add(id);
+    }
+    if (ourId && newest.get(ourId)?.optionIndexes.includes(index)) {
+      mineSent = [...mineSent, index];
+    }
+    return { text, voters: [...new Set(picked)] };
+  });
+  const mine = new Set(minePending ?? mineSent);
+  const ended = poll.terminatedAt != null;
+  return {
+    question: poll.question,
+    allowMultiple: poll.allowMultiple,
+    options: options.map((option, index) => ({
+      ...option,
+      mine: mine.has(index),
+    })),
+    uniqueVoters: voters.size,
+    ended,
+    pending: minePending != null,
+    canEnd: message.type === 'outgoing' && !ended,
+  };
 }
 
 function toMentions(
@@ -317,6 +386,7 @@ export function toMessageDTO(
     sticker: hidden ? null : toSticker(message),
     formatting: hidden ? [] : toFormatting(message),
     previews: hidden ? [] : toPreviews(message),
+    poll: hidden ? null : toPoll(message, context),
     ...(hidden
       ? { canEdit: false, canDeleteForEveryone: false }
       : context.getActions(message)),

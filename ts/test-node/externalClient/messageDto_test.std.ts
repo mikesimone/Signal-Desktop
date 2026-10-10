@@ -4,6 +4,7 @@
 import { assert } from 'chai';
 
 import { ReadStatus } from '../../messages/MessageReadStatus.std.ts';
+import { SendStatus } from '../../messages/MessageSendState.std.ts';
 import type {
   MessageDtoContextType,
   MessageSourceType,
@@ -76,6 +77,7 @@ describe('externalClient/messageDto', () => {
       sticker: null,
       formatting: [],
       previews: [],
+      poll: null,
       canEdit: false,
       canDeleteForEveryone: false,
       quote: null,
@@ -322,5 +324,86 @@ describe('externalClient/messageDto', () => {
       toMessageDTO({ ...incoming, body: undefined }, context)?.kind,
       MessageKind.Unsupported
     );
+  });
+  it('reads polls as the timeline does', () => {
+    const poll = {
+      question: 'Lunch?',
+      options: ['Tacos', 'Pho', 'Pizza'],
+      allowMultiple: true,
+      votes: [
+        // Bob changed his vote: only the newest counts.
+        {
+          fromConversationId: 'conv-bob',
+          optionIndexes: [0],
+          voteCount: 1,
+          timestamp: 1,
+        },
+        {
+          fromConversationId: 'conv-bob',
+          optionIndexes: [1, 2],
+          voteCount: 2,
+          timestamp: 2,
+        },
+        {
+          fromConversationId: 'conv-alice',
+          optionIndexes: [1],
+          voteCount: 1,
+          timestamp: 3,
+        },
+        {
+          fromConversationId: 'conv-me',
+          optionIndexes: [0],
+          voteCount: 1,
+          timestamp: 4,
+        },
+        // Our newer vote is still being sent.
+        {
+          fromConversationId: 'conv-me',
+          optionIndexes: [2],
+          voteCount: 2,
+          timestamp: 5,
+          sendStateByConversationId: {
+            'conv-alice': { status: SendStatus.Pending, updatedAt: 5 },
+          },
+        },
+      ],
+    };
+    const dto = toMessageDTO({ ...incoming, body: undefined, poll }, context);
+    assert.strictEqual(dto?.kind, MessageKind.Poll);
+    assert.deepEqual(dto?.poll, {
+      question: 'Lunch?',
+      allowMultiple: true,
+      options: [
+        { text: 'Tacos', voters: ['conv-me'], mine: false },
+        { text: 'Pho', voters: ['conv-bob', 'conv-alice'], mine: false },
+        { text: 'Pizza', voters: ['conv-bob'], mine: true },
+      ],
+      uniqueVoters: 3,
+      ended: false,
+      pending: true,
+      canEnd: false,
+    });
+
+    const ours = toMessageDTO(
+      {
+        ...incoming,
+        type: 'outgoing',
+        body: undefined,
+        poll: { ...poll, votes: [] },
+      },
+      context
+    );
+    assert.isTrue(ours?.poll?.canEnd);
+    const ended = toMessageDTO(
+      {
+        ...incoming,
+        type: 'outgoing',
+        body: undefined,
+        poll: { ...poll, terminatedAt: 9 },
+      },
+      context
+    );
+    assert.isTrue(ended?.poll?.ended);
+    assert.isFalse(ended?.poll?.canEnd);
   });
 });

@@ -345,6 +345,7 @@ export class FakeBridge {
         return;
       }
       case 'messages.forward':
+      case 'polls.send':
         this.#reply(session, id, {
           results: params.conversationIds.map(conversationId => {
             const reason = this.sendRefusals.get(conversationId) ?? null;
@@ -356,6 +357,8 @@ export class FakeBridge {
       case 'messages.react':
       case 'messages.edit':
       case 'messages.delete':
+      case 'polls.vote':
+      case 'polls.end':
         this.#reply(session, id, {});
         return;
       case 'attachments.read': {

@@ -84,6 +84,13 @@
           <button
             type="button"
             class="icon-button"
+            id="poll-open"
+            title="Poll"
+            aria-label="Poll"
+          ></button>
+          <button
+            type="button"
+            class="icon-button"
             id="emoji-open"
             title="Emoji"
             aria-label="Emoji"
@@ -121,10 +128,64 @@
           autocomplete="off"
           spellcheck="false"
         />
+        <div class="modal-note sub" id="forward-note" hidden></div>
         <ul class="forward-list" id="forward-list"></ul>
         <div class="modal-foot">
           <span id="forward-count" class="sub"></span>
           <button type="button" id="forward-send" disabled>Forward</button>
+        </div>
+      </div>
+    </div>
+    <div class="modal-backdrop" id="poll-compose" hidden>
+      <form class="modal" role="dialog" aria-labelledby="poll-compose-title">
+        <div class="modal-head">
+          <span id="poll-compose-title">Poll</span>
+          <button
+            type="button"
+            class="icon-button"
+            id="poll-compose-close"
+            title="Close"
+            aria-label="Close"
+          ></button>
+        </div>
+        <div class="poll-form">
+          <label class="sub" for="poll-question">Question</label>
+          <input
+            id="poll-question"
+            autocomplete="off"
+            placeholder="Ask a question"
+          />
+          <span class="sub">Options</span>
+          <div class="poll-option-inputs" id="poll-option-inputs"></div>
+          <label class="poll-multiple">
+            <input type="checkbox" id="poll-multiple" />
+            <span>Allow multiple votes</span>
+          </label>
+        </div>
+        <div class="modal-foot">
+          <button type="button" class="secondary" id="poll-choose">
+            Send to chats…
+          </button>
+          <button type="submit" id="poll-send" disabled>Send</button>
+        </div>
+      </form>
+    </div>
+    <div class="modal-backdrop" id="poll-votes" hidden>
+      <div class="modal" role="dialog" aria-labelledby="poll-votes-title">
+        <div class="modal-head">
+          <span id="poll-votes-title">Poll votes</span>
+          <button
+            type="button"
+            class="icon-button"
+            id="poll-votes-close"
+            title="Close"
+            aria-label="Close"
+          ></button>
+        </div>
+        <div class="poll-votes-body" id="poll-votes-body"></div>
+        <div class="modal-foot" id="poll-votes-foot">
+          <span></span>
+          <button type="button" id="poll-end">End poll</button>
         </div>
       </div>
     </div>

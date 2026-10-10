@@ -601,6 +601,44 @@ describe('signal-rambox', () => {
     });
   });
 
+  it('sends a poll to many chats and votes', async () => {
+    const ids = ['p0', 'p1', 'p2'];
+    bridge.sendRefusals.set('p1', 'pollsNotSupported');
+    const res = await http(port, {
+      method: 'POST',
+      path: `/${helper.token}/api/pollSend`,
+      headers: json,
+      body: {
+        conversationIds: ids,
+        question: 'Lunch?',
+        options: ['Tacos', 'Pho'],
+        allowMultiple: 'yes',
+      },
+    });
+    bridge.sendRefusals.delete('p1');
+    assert.equal(res.status, 200);
+    const { results } = JSON.parse(res.text);
+    assert.deepEqual(
+      results.map(result => result.ok),
+      [true, false, true]
+    );
+    const send = bridge.calls.findLast(c => c.method === 'polls.send');
+    // Only a real true allows several answers.
+    assert.equal(send.params.allowMultiple, false);
+
+    const vote = await http(port, {
+      method: 'POST',
+      path: `/${helper.token}/api/pollVote`,
+      headers: json,
+      body: { messageId: 'm1', optionIndexes: [1] },
+    });
+    assert.equal(vote.status, 200);
+    assert.deepEqual(
+      bridge.calls.findLast(c => c.method === 'polls.vote').params,
+      { messageId: 'm1', optionIndexes: [1] }
+    );
+  });
+
   it('marks read', async () => {
     const res = await http(port, {
       method: 'POST',

@@ -346,3 +346,21 @@ sync it, so a fresh install starts empty.
 
 WHY: Mike wants the ⋯ after the quick reactions and the recently used list,
 as in Signal (2026-10-10).
+
+## F6. Fork only: polls, and sending one poll to many chats
+
+DECISION: messages carry `poll` (question, options with voters, our own
+vote, ended, pending, canEnd), read the same way as Signal's timeline:
+the newest sent vote per person counts, and our unsent vote shows as
+pending. `polls.vote` (an empty list takes the vote back), `polls.end`
+(our own open poll only) and `polls.send` use capability `messages.send`
+and refuse where Signal would show a dialog (D11). `polls.send` takes up
+to 5000 chats and creates a new poll in each; 1:1 chats are refused with
+`pollsNotSupported` while Signal's 1:1 poll flag is off. Limits are
+Signal's: 2 to 10 options, at most 100 characters (graphemes) for the
+question and each option.
+
+WHY: Mike asked for polls and "the ability to forward a poll to multiple
+groups" (2026-10-10). Signal can't forward a poll (`canForward` excludes
+them) because votes belong to one message, so the closest thing is the
+same poll created in each chat. The page says each chat gets its own copy.

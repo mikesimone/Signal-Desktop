@@ -24,19 +24,23 @@ you pick (Signal stops at five). Photos and files are sent by pasting into
 the message box, dropping them on the chat, or the paperclip button; the
 text becomes their caption. The ⋯ after the quick reactions, and the emoji
 button by the message box, open Signal's full emoji picker with search,
-categories and Signal's own recently used emoji. In a narrow window the chat list shows photos
-only, as Signal's does.
+categories and Signal's own recently used emoji. Polls show and vote as in
+Signal; the poll button by the message box creates one, and "Send to
+chats…" or "Send this poll to…" in a poll's menu sends it to as many chats
+as you pick, each chat getting its own copy with its own votes (Signal
+can't forward a poll). In a narrow window the chat list shows photos only,
+as Signal's does.
 
 Not here yet (being added on the fork, aiming at everything Signal Desktop
-does): contact cards, polls, typing indicators, voice notes, stories and
-calls.
+does): contact cards, typing indicators, voice notes, stories and calls.
 
 Photos, member labels, reactions and replies use fork-only bridge additions
 (`conversations.getAvatar`, `messages.react`, `reactions.getPreferred`,
 `quoteMessageId` on `messages.sendText`, author details on messages, and
 `attachments.getThumbnail`, `attachments.read`, `attachments.download`,
 `messages.edit`, `messages.delete`, `attachments.uploadBegin`,
-`attachments.uploadChunk`, `messages.forward`, `emoji.getCatalog`, `attachmentUploadIds` on
+`attachments.uploadChunk`, `messages.forward`, `emoji.getCatalog`, `polls.vote`, `polls.end`,
+`polls.send`, `attachmentUploadIds` on
 `messages.sendText`, and pin order, formatting and link previews on the
 DTOs),
 not part of the upstream proposal. Against a Signal without them the helper

@@ -72,6 +72,8 @@ const SEND_ERRORS = {
   notDownloaded:
     'Signal is still downloading this message. Try again in a moment.',
   notFound: 'That chat is gone.',
+  pollsNotSupported: "Signal doesn't send polls to 1:1 chats yet.",
+  pollEnded: 'This poll has ended.',
 };
 
 const STATUS_TEXT = {
@@ -139,6 +141,7 @@ const ICONS = {
   forward: 'M14 5l6 6-6 6M20 11H10a6 6 0 0 0-6 6v2',
   search: 'M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14ZM16 16l4.5 4.5',
   file: 'M6 3h8l4 4v14H6zM14 3v4h4',
+  poll: 'M5 20V11M12 20V4M19 20v-6',
   'cat-recent': 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18ZM12 7v5l3 2',
   'cat-smileys':
     'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18ZM8.5 14s1.3 2 3.5 2 3.5-2 3.5-2M9 9.5h.01M15 9.5h.01',
@@ -519,6 +522,8 @@ function summarize(m) {
     }
     case 'sticker':
       return 'Sticker';
+    case 'poll':
+      return `Poll: ${m.poll?.question ?? ''}`;
     case 'viewOnce':
       return 'View-once media';
     case 'deleted':
@@ -1088,7 +1093,9 @@ function renderMessage(m, prev, next) {
     bubble.classList.add('has-media');
     bubble.append(renderAttachments(m));
   }
-  if (m.kind === 'sticker') {
+  if (m.kind === 'poll' && m.poll) {
+    bubble.append(renderPoll(m));
+  } else if (m.kind === 'sticker') {
     bubble.classList.add('sticker-bubble');
     bubble.append(renderSticker(m));
   } else if (m.kind !== 'text') {
@@ -1629,6 +1636,21 @@ function openMoreMenu(m, anchor) {
   if (canForward(m)) {
     add('forward', 'Forward', () => openForward(m));
   }
+  if (m.poll && canSend()) {
+    add('forward', 'Send this poll to…', () =>
+      openPollForward(
+        {
+          question: m.poll.question,
+          options: m.poll.options.map(option => option.text),
+          allowMultiple: m.poll.allowMultiple,
+        },
+        []
+      )
+    );
+  }
+  if (m.poll?.canEnd && canSend()) {
+    add('poll', 'End poll', () => endPoll(m));
+  }
   if (m.canEdit) {
     add('edit', 'Edit', () => startEdit(m));
   }
@@ -2107,12 +2129,33 @@ function renderForwardCount() {
   $('forward-count').textContent =
     n === 0 ? 'Pick chats' : `${n} chat${n === 1 ? '' : 's'} selected`;
   $('forward-send').disabled = n === 0;
-  $('forward-send').textContent = n > 1 ? `Forward to ${n} chats` : 'Forward';
+  const verb = forwarding?.kind === 'poll' ? 'Send' : 'Forward';
+  $('forward-send').textContent = n > 1 ? `${verb} to ${n} chats` : verb;
 }
 
 function openForward(m) {
-  forwarding = m;
+  forwarding = { kind: 'message', message: m };
+  showForward([]);
+}
+
+// Signal can't forward a poll; this sends a new poll with the same question
+// and options to each chat instead.
+function openPollForward(poll, preselected) {
+  forwarding = { kind: 'poll', poll };
+  showForward(preselected);
+}
+
+function showForward(preselected) {
+  const poll = forwarding.kind === 'poll';
+  $('forward-title').textContent = poll ? 'Send poll' : 'Forward message';
+  $('forward-note').hidden = !poll;
+  $('forward-note').textContent = poll
+    ? 'Each chat gets its own copy of this poll, with its own votes.'
+    : '';
   forwardSelected.clear();
+  for (const id of preselected) {
+    forwardSelected.add(id);
+  }
   $('forward-search').value = '';
   renderForwardList();
   $('forward').hidden = false;
@@ -2129,17 +2172,24 @@ async function sendForward() {
     return;
   }
   const conversationIds = [...forwardSelected];
+  const poll = forwarding.kind === 'poll';
+  const done = poll ? 'Sent' : 'Forwarded';
   $('forward-send').disabled = true;
   try {
-    const { results } = await api('api/forward', {
-      messageId: forwarding.id,
-      conversationIds,
-    });
+    const { results } = poll
+      ? await api('api/pollSend', { conversationIds, ...forwarding.poll })
+      : await api('api/forward', {
+          messageId: forwarding.message.id,
+          conversationIds,
+        });
     const failed = results.filter(r => !r.ok);
     closeForward();
+    if (poll && failed.length < results.length) {
+      closePollCompose();
+    }
     if (failed.length === 0) {
       toast(
-        `Forwarded to ${results.length} chat${results.length === 1 ? '' : 's'}.`
+        `${done} to ${results.length} chat${results.length === 1 ? '' : 's'}.`
       );
     } else {
       const names = failed
@@ -2150,14 +2200,14 @@ async function sendForward() {
         })
         .join('\n');
       window.alert(
-        `Forwarded to ${results.length - failed.length} of ${results.length} chats. Not sent:\n${names}`
+        `${done} to ${results.length - failed.length} of ${results.length} chats. Not sent:\n${names}`
       );
     }
   } catch (error) {
     $('forward-send').disabled = false;
     toast(
       SEND_ERRORS[error.reason] ??
-        `Not forwarded (${error.code ?? error.message}).`
+        `Not ${poll ? 'sent' : 'forwarded'} (${error.code ?? error.message}).`
     );
   }
 }
@@ -2171,6 +2221,305 @@ $('forward').addEventListener('click', e => {
 });
 $('forward-search').addEventListener('input', renderForwardList);
 $('forward-send').addEventListener('click', sendForward);
+
+// --- polls ---------------------------------------------------------------------
+
+const POLL_MAX_OPTIONS = 10;
+const POLL_MAX_LENGTH = 100;
+
+function canSend() {
+  return capabilities.includes('messages.send');
+}
+
+// As Signal's poll bubble: question, how to vote, then each option with its
+// count and a bar against the number of people who voted.
+function renderPoll(m) {
+  const { poll } = m;
+  const box = el('div', `poll${poll.pending ? ' pending' : ''}`);
+  box.append(el('div', 'poll-question', poll.question));
+  box.append(
+    el(
+      'div',
+      'poll-status',
+      poll.ended
+        ? 'Final results'
+        : poll.allowMultiple
+          ? 'Select multiple'
+          : 'Select one'
+    )
+  );
+  const voting = !poll.ended && canSend();
+  const voted = poll.uniqueVoters > 0;
+  poll.options.forEach((option, index) => {
+    const row = el(voting ? 'label' : 'div', 'poll-option');
+    if (voting) {
+      const check = el('input');
+      check.type = 'checkbox';
+      check.checked = option.mine;
+      check.addEventListener('change', () => votePoll(m, index, check.checked));
+      row.append(check);
+    }
+    const main = el('span', 'poll-main');
+    const top = el('span', 'poll-top');
+    top.append(el('span', 'poll-text', option.text));
+    if (voted) {
+      const count = el('span', 'poll-count', String(option.voters.length));
+      if (poll.ended && option.mine) {
+        count.prepend(el('span', 'poll-mine', '✓ '));
+      }
+      top.append(count);
+    }
+    const bar = el('span', 'poll-bar');
+    const fill = el('span', 'poll-fill');
+    fill.style.width = `${voted ? (option.voters.length / poll.uniqueVoters) * 100 : 0}%`;
+    bar.append(fill);
+    main.append(top, bar);
+    row.append(main);
+    box.append(row);
+  });
+  if (voted) {
+    const view = el('button', 'poll-view', 'View votes');
+    view.type = 'button';
+    view.addEventListener('click', () => openPollVotes(m));
+    box.append(view);
+  } else {
+    box.append(el('div', 'poll-none', 'No votes'));
+  }
+  return box;
+}
+
+async function votePoll(m, index, checked) {
+  const picked = new Set(
+    m.poll.options.flatMap((option, i) => (option.mine ? [i] : []))
+  );
+  if (checked) {
+    if (!m.poll.allowMultiple) {
+      picked.clear();
+    }
+    picked.add(index);
+  } else {
+    picked.delete(index);
+  }
+  const optionIndexes = [...picked].sort((a, b) => a - b);
+  // Show the vote at once; Signal's update replaces this.
+  putMessage({
+    ...m,
+    poll: {
+      ...m.poll,
+      pending: true,
+      options: m.poll.options.map((option, i) => ({
+        ...option,
+        mine: picked.has(i),
+      })),
+    },
+  });
+  renderMessages();
+  try {
+    await api('api/pollVote', { messageId: m.id, optionIndexes });
+  } catch (error) {
+    if (messages.has(m.id)) {
+      putMessage(m);
+      renderMessages();
+    }
+    toast(
+      SEND_ERRORS[error.reason] ??
+        `Vote not sent (${error.code ?? error.message}).`
+    );
+  }
+}
+
+async function endPoll(m) {
+  if (!window.confirm('End this poll? No one will be able to vote.')) {
+    return;
+  }
+  try {
+    await api('api/pollEnd', { messageId: m.id });
+    closePollVotes();
+  } catch (error) {
+    toast(
+      SEND_ERRORS[error.reason] ??
+        `Poll not ended (${error.code ?? error.message}).`
+    );
+  }
+}
+
+function voterName(conversationId) {
+  return conversations.get(conversationId)?.noteToSelf
+    ? 'You'
+    : nameOf(conversationId);
+}
+
+let pollVotesFor = null;
+
+function openPollVotes(m) {
+  pollVotesFor = m.id;
+  const { poll } = m;
+  const body = $('poll-votes-body');
+  body.replaceChildren(el('div', 'poll-votes-question', poll.question));
+  poll.options.forEach(option => {
+    if (option.voters.length === 0) {
+      return;
+    }
+    const section = el('section', 'poll-votes-option');
+    const head = el('div', 'poll-votes-head');
+    head.append(
+      el('span', '', option.text),
+      el(
+        'span',
+        'sub',
+        `${option.voters.length} vote${option.voters.length === 1 ? '' : 's'}`
+      )
+    );
+    section.append(head);
+    for (const id of option.voters) {
+      const row = el('div', 'poll-voter');
+      const who = authorOf(id) ?? { title: voterName(id) };
+      row.append(avatar(id, who, 28), el('span', '', voterName(id)));
+      section.append(row);
+    }
+    body.append(section);
+  });
+  $('poll-votes-foot').hidden = !(poll.canEnd && canSend());
+  $('poll-votes').hidden = false;
+}
+
+function closePollVotes() {
+  pollVotesFor = null;
+  $('poll-votes').hidden = true;
+}
+
+function pollOptionInput(value = '') {
+  const input = el('input');
+  input.autocomplete = 'off';
+  input.placeholder = 'Option';
+  input.value = value;
+  input.addEventListener('input', syncPollOptions);
+  return input;
+}
+
+// Like Signal's dialog: there is always one empty option to type into, up to
+// ten; emptied options in the middle go away.
+function syncPollOptions() {
+  const box = $('poll-option-inputs');
+  const inputs = [...box.children];
+  inputs.forEach((input, i) => {
+    if (
+      input.value === '' &&
+      i < inputs.length - 1 &&
+      inputs.length > 2 &&
+      document.activeElement !== input
+    ) {
+      input.remove();
+    }
+  });
+  const left = [...box.children];
+  const last = left[left.length - 1];
+  if (last.value !== '' && left.length < POLL_MAX_OPTIONS) {
+    box.append(pollOptionInput());
+  }
+  while (box.children.length < 2) {
+    box.append(pollOptionInput());
+  }
+  $('poll-send').disabled = !readPollForm();
+}
+
+function graphemes(text) {
+  return [...segmenter.segment(text)].length;
+}
+
+// The poll as typed, or null if Signal would not send it yet.
+function readPollForm() {
+  const question = $('poll-question').value.trim();
+  const options = [...$('poll-option-inputs').children]
+    .map(input => input.value.trim())
+    .filter(Boolean);
+  if (
+    !question ||
+    graphemes(question) > POLL_MAX_LENGTH ||
+    options.length < 2 ||
+    options.some(option => graphemes(option) > POLL_MAX_LENGTH)
+  ) {
+    return null;
+  }
+  return { question, options, allowMultiple: $('poll-multiple').checked };
+}
+
+function openPollCompose() {
+  $('poll-question').value = '';
+  $('poll-multiple').checked = false;
+  $('poll-option-inputs').replaceChildren(pollOptionInput(), pollOptionInput());
+  $('poll-send').disabled = true;
+  $('poll-compose').hidden = false;
+  $('poll-question').focus();
+}
+
+function closePollCompose() {
+  $('poll-compose').hidden = true;
+}
+
+async function sendPollHere() {
+  const poll = readPollForm();
+  if (!poll || !selectedId) {
+    return;
+  }
+  $('poll-send').disabled = true;
+  try {
+    const { results } = await api('api/pollSend', {
+      conversationIds: [selectedId],
+      ...poll,
+    });
+    const [result] = results;
+    if (result?.ok) {
+      closePollCompose();
+    } else {
+      $('poll-send').disabled = false;
+      toast(SEND_ERRORS[result?.reason] ?? 'Poll not sent.');
+    }
+  } catch (error) {
+    $('poll-send').disabled = false;
+    toast(
+      SEND_ERRORS[error.reason] ??
+        `Poll not sent (${error.code ?? error.message}).`
+    );
+  }
+}
+
+$('poll-open').append(icon('poll'));
+$('poll-open').addEventListener('click', openPollCompose);
+$('poll-compose-close').append(icon('close'));
+$('poll-compose-close').addEventListener('click', () => closePollCompose());
+$('poll-question').addEventListener('input', syncPollOptions);
+$('poll-multiple').addEventListener('change', syncPollOptions);
+$('poll-option-inputs').addEventListener('focusout', () =>
+  setTimeout(syncPollOptions)
+);
+$('poll-compose').addEventListener('submit', e => {
+  e.preventDefault();
+  sendPollHere();
+});
+$('poll-choose').addEventListener('click', () => {
+  const poll = readPollForm();
+  if (!poll) {
+    toast('Add a question and at least two options.');
+    return;
+  }
+  openPollForward(poll, selectedId ? [selectedId] : []);
+});
+$('poll-votes-close').append(icon('close'));
+$('poll-votes-close').addEventListener('click', closePollVotes);
+$('poll-end').addEventListener('click', () => {
+  const m = messages.get(pollVotesFor);
+  if (m) {
+    endPoll(m);
+  }
+});
+for (const id of ['poll-compose', 'poll-votes']) {
+  $(id).addEventListener('click', e => {
+    if (e.target === $(id)) {
+      $(id).hidden = true;
+    }
+  });
+}
 
 // --- narrow windows ------------------------------------------------------------
 
@@ -2234,7 +2583,12 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Escape') {
     closePopovers();
     closeLightbox();
-    closeForward();
+    if (!$('forward').hidden) {
+      closeForward();
+    } else {
+      closePollCompose();
+      closePollVotes();
+    }
     collapseSidebar();
   }
 });

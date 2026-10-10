@@ -15,6 +15,8 @@ import {
   messagesForwardParamsSchema,
   messagesSendTextParamsSchema,
   negotiateVersion,
+  pollsSendParamsSchema,
+  pollsVoteParamsSchema,
   requestEnvelopeSchema,
 } from '../../externalClient/protocol.std.ts';
 
@@ -176,6 +178,47 @@ describe('externalClient/protocol', () => {
         accepts(messagesForwardParamsSchema, {
           messageId: conversationId,
           conversationIds: Array.from({ length: 300 }, () => conversationId),
+        })
+      );
+    });
+
+    it("keeps polls inside Signal's limits", () => {
+      const poll = {
+        conversationIds: [conversationId],
+        question: 'Lunch?',
+        options: ['Tacos', 'Pho'],
+        allowMultiple: false,
+      };
+      assert.isTrue(accepts(pollsSendParamsSchema, poll));
+      assert.isFalse(
+        accepts(pollsSendParamsSchema, { ...poll, options: ['Tacos'] })
+      );
+      assert.isFalse(
+        accepts(pollsSendParamsSchema, {
+          ...poll,
+          options: Array.from({ length: 11 }, (_, i) => `option ${i}`),
+        })
+      );
+      assert.isFalse(
+        accepts(pollsSendParamsSchema, { ...poll, question: 'x'.repeat(101) })
+      );
+      assert.isFalse(
+        accepts(pollsSendParamsSchema, { ...poll, options: ['Tacos', '  '] })
+      );
+      // Emoji count as one character each, as in Signal's dialog.
+      assert.isTrue(
+        accepts(pollsSendParamsSchema, { ...poll, question: '👍🏽'.repeat(100) })
+      );
+      assert.isTrue(
+        accepts(pollsVoteParamsSchema, {
+          messageId: conversationId,
+          optionIndexes: [],
+        })
+      );
+      assert.isFalse(
+        accepts(pollsVoteParamsSchema, {
+          messageId: conversationId,
+          optionIndexes: [10],
         })
       );
     });

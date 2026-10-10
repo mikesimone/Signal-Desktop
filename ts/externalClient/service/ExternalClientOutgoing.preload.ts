@@ -5,6 +5,8 @@ import { v4 as generateUuid } from 'uuid';
 
 import { createLogger } from '../../logging/log.std.ts';
 import { getMessageById } from '../../messages/getMessageById.preload.ts';
+import { enqueuePollTerminateForSend } from '../../polls/enqueuePollTerminateForSend.preload.ts';
+import { enqueuePollVoteForSend } from '../../polls/enqueuePollVoteForSend.preload.ts';
 import { getValue as getRemoteConfigValue } from '../../RemoteConfig.dom.ts';
 import { getConversationSelector } from '../../state/selectors/conversations.dom.ts';
 import { getHasMediaBackups } from '../../state/selectors/items.dom.ts';
@@ -12,6 +14,7 @@ import {
   canForward,
   getMessagePropsSelector,
 } from '../../state/selectors/message.preload.ts';
+import type { MessageAttributesType } from '../../model-types.d.ts';
 import type { AttachmentType } from '../../types/Attachment.std.ts';
 import {
   getAttachmentSizeLimit,
@@ -24,11 +27,14 @@ import type {
   MessageForwardDraft,
 } from '../../types/ForwardDraft.std.ts';
 import { stringToMIMEType } from '../../types/MIME.std.ts';
+import { isPollSend1to1Enabled } from '../../types/Polls.dom.ts';
 import { hydrateRanges } from '../../util/BodyRange.node.ts';
 import { deleteDraftAttachment } from '../../util/deleteDraftAttachment.preload.ts';
 import { isDownloadableOrBackfillable } from '../../util/downloadAttachment.preload.ts';
 import { drop } from '../../util/drop.std.ts';
+import { enqueuePollCreateForSend } from '../../util/enqueuePollCreateForSend.dom.ts';
 import { maybeForwardMessages } from '../../util/maybeForwardMessages.preload.ts';
+import { isDirectConversation } from '../../util/whatTypeOfConversation.dom.ts';
 import { processAttachment } from '../../util/processAttachment.preload.ts';
 import { resolveAttachmentDraftData } from '../../util/resolveAttachmentDraftData.preload.ts';
 import { writeDraftAttachment } from '../../util/writeDraftAttachment.preload.ts';
@@ -42,6 +48,10 @@ import type {
   ForwardResultDTO,
   MessagesForwardParamsType,
   MessagesForwardResultType,
+  PollsEndParamsType,
+  PollsSendParamsType,
+  PollsSendResultType,
+  PollsVoteParamsType,
   SendBlockReasonType,
 } from '../protocol.std.ts';
 import { ErrorCode, SendBlockReason } from '../protocol.std.ts';
@@ -320,5 +330,143 @@ export async function forwardMessage({
     `forwardMessage: ${allowed.length} of ${results.length} chats accepted`
   );
   const value: MessagesForwardResultType = { results };
+  return { ok: true, value };
+}
+
+// Fork addition: polls, as the timeline's poll bubble and the composer's
+// poll dialog send them.
+
+async function loadOpenPoll(
+  messageId: string
+): Promise<
+  | Readonly<{ ok: true; message: MessageAttributesType }>
+  | Readonly<{ ok: false; result: ServiceResultType }>
+> {
+  const message = await loadMessage(messageId);
+  if (!message || !getListedConversation(message.conversationId)) {
+    return { ok: false, result: { ok: false, code: ErrorCode.NotFound } };
+  }
+  const dto = toMessageDTO(message, getDtoContext());
+  if (!dto?.poll) {
+    return {
+      ok: false,
+      result: { ok: false, code: ErrorCode.InvalidArgument },
+    };
+  }
+  if (dto.poll.ended) {
+    return {
+      ok: false,
+      result: {
+        ok: false,
+        code: ErrorCode.PreconditionFailed,
+        reason: SendBlockReason.PollEnded,
+      },
+    };
+  }
+  return { ok: true, message };
+}
+
+export async function votePoll({
+  messageId,
+  optionIndexes,
+}: PollsVoteParamsType): Promise<ServiceResultType> {
+  const loaded = await loadOpenPoll(messageId);
+  if (!loaded.ok) {
+    return loaded.result;
+  }
+  const { message } = loaded;
+  const options = message.poll?.options.length ?? 0;
+  const picked = [...new Set(optionIndexes)];
+  if (
+    picked.some(index => index >= options) ||
+    (!message.poll?.allowMultiple && picked.length > 1)
+  ) {
+    return { ok: false, code: ErrorCode.InvalidArgument };
+  }
+  const model = getListedConversation(message.conversationId);
+  if (!model) {
+    return { ok: false, code: ErrorCode.NotFound };
+  }
+  const reason = await getSendBlockReason(model, '');
+  if (reason) {
+    return { ok: false, code: ErrorCode.PreconditionFailed, reason };
+  }
+  await enqueuePollVoteForSend({ messageId, optionIndexes: picked });
+  return { ok: true, value: {} };
+}
+
+export async function endPoll({
+  messageId,
+}: PollsEndParamsType): Promise<ServiceResultType> {
+  const loaded = await loadOpenPoll(messageId);
+  if (!loaded.ok) {
+    return loaded.result;
+  }
+  if (!toMessageDTO(loaded.message, getDtoContext())?.poll?.canEnd) {
+    return { ok: false, code: ErrorCode.PreconditionFailed };
+  }
+  const model = getListedConversation(loaded.message.conversationId);
+  if (!model) {
+    return { ok: false, code: ErrorCode.NotFound };
+  }
+  const reason = await getSendBlockReason(model, '');
+  if (reason) {
+    return { ok: false, code: ErrorCode.PreconditionFailed, reason };
+  }
+  await enqueuePollTerminateForSend({ messageId });
+  return { ok: true, value: {} };
+}
+
+// Signal's poll dialog sends to one chat. Here one call can send the same
+// poll to many; each chat gets its own poll with its own votes, and each is
+// refused on its own as a send there would be (decision D11).
+export async function sendPoll({
+  conversationIds,
+  question,
+  options,
+  allowMultiple,
+}: PollsSendParamsType): Promise<ServiceResultType> {
+  const results: Array<ForwardResultDTO> = [];
+  for (const conversationId of new Set(conversationIds)) {
+    const model = getListedConversation(conversationId);
+    if (!model) {
+      results.push({ conversationId, ok: false, reason: 'notFound' });
+      continue;
+    }
+    if (isDirectConversation(model.attributes) && !isPollSend1to1Enabled()) {
+      results.push({
+        conversationId,
+        ok: false,
+        reason: SendBlockReason.PollsNotSupported,
+      });
+      continue;
+    }
+    // oxlint-disable-next-line no-await-in-loop
+    const reason = await getSendBlockReason(model, question);
+    if (reason) {
+      results.push({ conversationId, ok: false, reason });
+      continue;
+    }
+    try {
+      // oxlint-disable-next-line no-await-in-loop
+      await enqueuePollCreateForSend(model, {
+        question,
+        options,
+        allowMultiple,
+      });
+      results.push({ conversationId, ok: true, reason: null });
+    } catch (error) {
+      log.warn('sendPoll failed', Errors.toLogFormat(error));
+      results.push({
+        conversationId,
+        ok: false,
+        reason: SendBlockReason.InvalidConversation,
+      });
+    }
+  }
+  log.info(
+    `sendPoll: ${results.filter(result => result.ok).length} of ${results.length} chats`
+  );
+  const value: PollsSendResultType = { results };
   return { ok: true, value };
 }

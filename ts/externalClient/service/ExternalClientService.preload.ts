@@ -31,7 +31,10 @@ import {
 import {
   appendUpload,
   beginUpload,
+  endPoll,
   forwardMessage,
+  sendPoll,
+  votePoll,
 } from './ExternalClientOutgoing.preload.ts';
 import { markRead, sendText } from './ExternalClientSend.preload.ts';
 import {
@@ -309,6 +312,21 @@ async function dispatch(
       }
       const params = safeParseUnknown(SERVICE_PARAM_SCHEMAS[method], rawParams);
       return params.success ? forwardMessage(params.data) : invalid;
+    }
+    case Method.PollsVote: {
+      const params = safeParseUnknown(SERVICE_PARAM_SCHEMAS[method], rawParams);
+      return params.success ? votePoll(params.data) : invalid;
+    }
+    case Method.PollsEnd: {
+      const params = safeParseUnknown(SERVICE_PARAM_SCHEMAS[method], rawParams);
+      return params.success ? endPoll(params.data) : invalid;
+    }
+    case Method.PollsSend: {
+      if (!window.ConversationController.isInitialFetchComplete()) {
+        return notReady;
+      }
+      const params = safeParseUnknown(SERVICE_PARAM_SCHEMAS[method], rawParams);
+      return params.success ? sendPoll(params.data) : invalid;
     }
     default:
       throw new Error(`Unhandled external client method ${method}`);

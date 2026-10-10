@@ -501,6 +501,32 @@ export function createWebServer({
       sendJson(res, 200, result);
       return;
     }
+    if (req.method === 'POST' && route === 'api/pollVote') {
+      const { messageId, optionIndexes } = await readJson(req);
+      const result = await bridge.call('polls.vote', {
+        messageId,
+        optionIndexes,
+      });
+      sendJson(res, 200, result);
+      return;
+    }
+    if (req.method === 'POST' && route === 'api/pollEnd') {
+      const { messageId } = await readJson(req);
+      sendJson(res, 200, await bridge.call('polls.end', { messageId }));
+      return;
+    }
+    if (req.method === 'POST' && route === 'api/pollSend') {
+      const { conversationIds, question, options, allowMultiple } =
+        await readJson(req);
+      const result = await bridge.call('polls.send', {
+        conversationIds,
+        question,
+        options,
+        allowMultiple: allowMultiple === true,
+      });
+      sendJson(res, 200, result);
+      return;
+    }
     if (req.method === 'POST' && route === 'api/edit') {
       const { messageId, body } = await readJson(req);
       const result = await bridge.call('messages.edit', { messageId, body });

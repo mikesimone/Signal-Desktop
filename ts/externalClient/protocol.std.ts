@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { z } from 'zod';
+import { hasAtMostGraphemes } from '../util/grapheme.std.ts';
 
 // Wire protocol for local external clients. See
 // docs/external-client-architecture.md. Everything in this file is part of
@@ -124,6 +125,9 @@ export const Method = {
   MessagesForward: 'messages.forward',
   EmojiGetCatalog: 'emoji.getCatalog',
   EmojiMarkUsed: 'emoji.markUsed',
+  PollsVote: 'polls.vote',
+  PollsEnd: 'polls.end',
+  PollsSend: 'polls.send',
 } as const;
 export type MethodType = (typeof Method)[keyof typeof Method];
 
@@ -148,6 +152,9 @@ export const SERVICE_METHOD_CAPABILITIES = {
   [Method.MessagesForward]: Capability.MessagesSend,
   [Method.EmojiGetCatalog]: Capability.MessagesReact,
   [Method.EmojiMarkUsed]: Capability.MessagesReact,
+  [Method.PollsVote]: Capability.MessagesSend,
+  [Method.PollsEnd]: Capability.MessagesSend,
+  [Method.PollsSend]: Capability.MessagesSend,
 } as const satisfies Partial<Record<MethodType, CapabilityType>>;
 export type ServiceMethodType = keyof typeof SERVICE_METHOD_CAPABILITIES;
 
@@ -642,6 +649,48 @@ export type MessagesForwardResultType = Readonly<{
   results: ReadonlyArray<ForwardResultDTO>;
 }>;
 
+// Fork addition: polls. A vote replaces our previous one; an empty list
+// takes it back. polls.send creates a new poll in each chat, so one call
+// can put the same poll in many groups; each copy has its own votes.
+export const pollsVoteParamsSchema = z
+  .object({
+    messageId: messageIdSchema,
+    optionIndexes: z.array(z.number().int().min(0).max(9)).max(10),
+  })
+  .strict();
+export type PollsVoteParamsType = z.infer<typeof pollsVoteParamsSchema>;
+
+export const pollsEndParamsSchema = z
+  .object({ messageId: messageIdSchema })
+  .strict();
+export type PollsEndParamsType = z.infer<typeof pollsEndParamsSchema>;
+
+// Signal's poll dialog counts characters as people see them (graphemes):
+// at most 100 for the question and for each option.
+const pollTextSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(2000)
+  .refine(value => hasAtMostGraphemes(value, 100));
+
+export const pollsSendParamsSchema = z
+  .object({
+    conversationIds: z
+      .array(conversationIdSchema)
+      .min(1)
+      .max(MAX_FORWARD_CONVERSATIONS),
+    question: pollTextSchema,
+    options: z.array(pollTextSchema).min(2).max(10),
+    allowMultiple: z.boolean(),
+  })
+  .strict();
+export type PollsSendParamsType = z.infer<typeof pollsSendParamsSchema>;
+
+export type PollsSendResultType = Readonly<{
+  results: ReadonlyArray<ForwardResultDTO>;
+}>;
+
 export const notificationsSetHandledParamsSchema = z
   .object({
     handled: z.boolean(),
@@ -666,6 +715,8 @@ export const SendBlockReason = {
   TooLong: 'tooLong',
   // Fork additions.
   AttachmentTooLarge: 'attachmentTooLarge',
+  PollsNotSupported: 'pollsNotSupported',
+  PollEnded: 'pollEnded',
   NotForwardable: 'notForwardable',
   NotDownloaded: 'notDownloaded',
 } as const;
@@ -692,6 +743,9 @@ export const SERVICE_PARAM_SCHEMAS = {
   [Method.MessagesForward]: messagesForwardParamsSchema,
   [Method.EmojiGetCatalog]: emojiGetCatalogParamsSchema,
   [Method.EmojiMarkUsed]: emojiMarkUsedParamsSchema,
+  [Method.PollsVote]: pollsVoteParamsSchema,
+  [Method.PollsEnd]: pollsEndParamsSchema,
+  [Method.PollsSend]: pollsSendParamsSchema,
 } as const satisfies Record<ServiceMethodType, z.ZodType>;
 
 export type ConversationsListParamsType = z.infer<
@@ -756,6 +810,8 @@ export const MessageKind = {
   ViewOnce: 'viewOnce',
   Deleted: 'deleted',
   Unsupported: 'unsupported',
+  // Fork addition: see `poll`.
+  Poll: 'poll',
 } as const;
 export type MessageKindType = (typeof MessageKind)[keyof typeof MessageKind];
 
@@ -882,6 +938,7 @@ export type MessageDTO = Readonly<{
   previews: ReadonlyArray<LinkPreviewDTO>;
   canEdit: boolean;
   canDeleteForEveryone: boolean;
+  poll: PollDTO | null;
   quote: QuoteDTO | null;
   edited: boolean;
   // Disappearing messages: clients must discard the message by this time.
@@ -892,6 +949,28 @@ export type MessageDTO = Readonly<{
   sendStatus: MessageSendStatusType | null;
   // One entry per person who reacted, oldest first.
   reactions: ReadonlyArray<ReactionDTO>;
+}>;
+
+// Fork addition: a poll as Signal's timeline shows it. Votes are the newest
+// one per voter that has been sent; our own unsent vote is `pending`.
+export type PollOptionDTO = Readonly<{
+  text: string;
+  // Conversation ids of the people who picked this option.
+  voters: ReadonlyArray<string>;
+  // Whether our own vote includes it (the sent one, or the pending one).
+  mine: boolean;
+}>;
+
+export type PollDTO = Readonly<{
+  question: string;
+  allowMultiple: boolean;
+  options: ReadonlyArray<PollOptionDTO>;
+  uniqueVoters: number;
+  ended: boolean;
+  // Our vote is still being sent.
+  pending: boolean;
+  // Signal would offer End poll (our own poll, still open).
+  canEnd: boolean;
 }>;
 
 export type MessagesListResultType = Readonly<{

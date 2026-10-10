@@ -1739,6 +1739,194 @@ button {
   opacity: 0.5;
 }
 
+/* The chat picker opens over the poll dialog. */
+#forward {
+  z-index: 31;
+}
+
+.modal-note {
+  margin: 0 16px 8px;
+}
+
+.modal-foot button.secondary {
+  background: var(--hover);
+  color: var(--text);
+}
+
+/* Polls, laid out like Signal's poll bubble. */
+.poll {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 275px;
+  max-width: 100%;
+  padding: 2px 0 4px;
+}
+
+.poll-question {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.poll-status {
+  margin-top: -10px;
+  font-size: 13px;
+  opacity: 0.75;
+}
+
+.poll-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+label.poll-option {
+  cursor: pointer;
+}
+
+.poll-option input {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin: 1px 0 0;
+  accent-color: var(--accent);
+}
+
+.msg.out .poll-option input {
+  accent-color: currentColor;
+}
+
+.poll.pending .poll-option input {
+  opacity: 0.6;
+}
+
+.poll-main {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.poll-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.poll-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.poll-count {
+  flex: none;
+  font-size: 13px;
+  opacity: 0.8;
+}
+
+.poll-bar {
+  position: relative;
+  height: 8px;
+  overflow: hidden;
+  border-radius: 4px;
+  background: color-mix(in srgb, currentColor 18%, transparent);
+}
+
+.poll-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: 4px;
+  background: var(--accent);
+  transition: width 0.25s;
+}
+
+.msg.out .poll-fill {
+  background: currentColor;
+}
+
+.poll-view {
+  align-self: center;
+  padding: 7px 16px;
+  border: none;
+  border-radius: 18px;
+  background: color-mix(in srgb, currentColor 14%, transparent);
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.poll-none {
+  align-self: center;
+  font-size: 13px;
+  opacity: 0.8;
+}
+
+.poll-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0 16px 12px;
+  overflow-y: auto;
+}
+
+.poll-form input:not([type='checkbox']) {
+  padding: 8px 12px;
+  border: none;
+  border-radius: 8px;
+  background: var(--hover);
+  color: var(--text);
+  font: inherit;
+}
+
+.poll-option-inputs {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.poll-multiple {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.poll-votes-body {
+  padding: 0 16px 12px;
+  overflow-y: auto;
+}
+
+.poll-votes-question {
+  margin-bottom: 8px;
+  font-weight: 600;
+}
+
+.poll-votes-option {
+  padding: 8px 0;
+  border-top: 1px solid var(--border);
+}
+
+.poll-votes-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
+  font-weight: 500;
+}
+
+.poll-voter {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 3px 0;
+}
+
+#poll-votes-foot[hidden] {
+  display: none;
+}
+
 /* Narrow windows (Rambox's usual size): photos-only chat list, as Signal's. */
 #search-open {
   display: none;
