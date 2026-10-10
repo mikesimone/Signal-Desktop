@@ -21,6 +21,8 @@ let bridgeState = 'offline';
 let helperConnected = false;
 let markReadInFlight = false;
 let replyTo = null;
+// The message being edited, if any.
+let editing = null;
 let preferredReactions = null;
 const expiryTimers = new Map();
 
@@ -123,7 +125,10 @@ const ICONS = {
     'M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7ZM2.5 20c.5-3.5 3.2-5.5 6.5-5.5s6 2 6.5 5.5M16 4.3a3.5 3.5 0 0 1 0 6.4M18 14.8c2 .7 3.2 2.5 3.5 5.2',
   note: 'M6 3h9l4 4v14H6zM9 12h7M9 16h7',
   play: 'M8 5v14l11-7z',
+  edit: 'M4 20h4L19 9l-4-4L4 16zM14 6l4 4',
+  trash: 'M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6',
   download: 'M12 4v11M7 10l5 5 5-5M5 20h14',
+  filter: 'M4 7h16M7 12h10M10 17h4',
 };
 
 function icon(name) {
@@ -249,13 +254,47 @@ function displayTitle(c) {
   return c.noteToSelf ? 'Note to Self' : c.title;
 }
 
+// The chat list filters, as in Signal: a tab ('all' | 'direct' | 'group')
+// and the unread filter button, which combine.
+let listFilter = 'all';
+let unreadOnly = false;
+try {
+  listFilter = localStorage.getItem('listFilter') ?? 'all';
+  unreadOnly = localStorage.getItem('unreadOnly') === '1';
+} catch {
+  // Storage blocked; keep the defaults.
+}
+
+function isUnread(c) {
+  return c.unreadCount > 0 || c.markedUnread;
+}
+
+const FILTERS = {
+  all: () => true,
+  direct: c => c.type === 'direct',
+  group: c => c.type === 'group',
+};
+
+function keepConversation(c) {
+  const tab = FILTERS[listFilter] ?? FILTERS.all;
+  // The open chat stays listed while you read it, as in Signal.
+  return tab(c) && (!unreadOnly || isUnread(c) || c.id === selectedId);
+}
+
 function sortedConversations() {
   const query = $('search').value.trim().toLowerCase();
   return [...conversations.values()]
-    .filter(c => (query ? c.title.toLowerCase().includes(query) : !c.archived))
+    .filter(c =>
+      query
+        ? displayTitle(c).toLowerCase().includes(query) ||
+          c.title.toLowerCase().includes(query)
+        : !c.archived
+    )
+    .filter(keepConversation)
     .sort(
       (a, b) =>
         Number(b.pinned) - Number(a.pinned) ||
+        (a.pinnedIndex ?? 0) - (b.pinnedIndex ?? 0) ||
         (b.lastActivityAt ?? 0) - (a.lastActivityAt ?? 0)
     );
 }
@@ -296,12 +335,14 @@ function conversationRow(c) {
     c.lastActivityAt,
     c.id === selectedId,
     shortTime(c.lastActivityAt),
+    c.lastMessage,
   ]);
   const cached = rowCache.get(c.id);
   if (cached && cached.key === key) {
     return cached.li;
   }
   const li = el('li');
+  li.dataset.id = c.id;
   li.setAttribute('role', 'option');
   li.setAttribute('aria-selected', String(c.id === selectedId));
   li.className = [unread ? 'unread' : '', c.muted ? 'muted' : ''].join(' ');
@@ -311,7 +352,7 @@ function conversationRow(c) {
     el('span', 'title', displayTitle(c)),
     el('span', 'time', shortTime(c.lastActivityAt))
   );
-  text.append(top);
+  text.append(top, el('span', 'preview', previewLine(c)));
   li.append(conversationAvatar(c, 48), text);
   if (unread) {
     li.append(
@@ -323,10 +364,83 @@ function conversationRow(c) {
   return li;
 }
 
-function renderConversations() {
-  $('conversations').replaceChildren(
-    ...sortedConversations().map(conversationRow)
+// The second line of a chat list row, as Signal writes it.
+function previewLine(c) {
+  const last = c.lastMessage;
+  if (!last) {
+    return '';
+  }
+  if (last.deleted) {
+    return 'This message was deleted';
+  }
+  const text = (last.text ?? '').replace(/\s+/g, ' ');
+  return last.author && c.type === 'group' ? `${last.author}: ${text}` : text;
+}
+
+const sectionHeads = {};
+function sectionHead(label) {
+  sectionHeads[label] ??= el('li', 'section-head', label);
+  return sectionHeads[label];
+}
+
+function setListFilter(name, unread) {
+  listFilter = name;
+  unreadOnly = unread;
+  try {
+    localStorage.setItem('listFilter', name);
+    localStorage.setItem('unreadOnly', unread ? '1' : '0');
+  } catch {
+    // Storage blocked; the filter still applies until reload.
+  }
+  renderConversations();
+}
+
+// Tabs under the search box, with Signal's unread counts. The filter button
+// beside the search box is the unread filter.
+function renderFilters() {
+  const unarchived = [...conversations.values()].filter(c => !c.archived);
+  const unreadIn = test => unarchived.filter(c => test(c) && isUnread(c));
+  const tabs = [
+    ['all', 'All chats', unreadIn(FILTERS.all).length],
+    ['direct', '1:1 chats', unreadIn(FILTERS.direct).length],
+    ['group', 'Groups', unreadIn(FILTERS.group).length],
+  ];
+  $('filters').replaceChildren(
+    ...tabs.map(([name, label, count]) => {
+      const tab = el('button', 'filter-tab');
+      tab.type = 'button';
+      tab.setAttribute('aria-pressed', String(listFilter === name));
+      tab.append(el('span', '', label));
+      if (count > 0) {
+        tab.append(el('span', 'filter-count', String(count)));
+      }
+      tab.addEventListener('click', () => setListFilter(name, unreadOnly));
+      return tab;
+    })
   );
+  $('filter-unread').setAttribute('aria-pressed', String(unreadOnly));
+}
+
+function renderConversations() {
+  renderFilters();
+  const list = sortedConversations();
+  const searching = $('search').value.trim() !== '';
+  const pinned = list.filter(c => c.pinned);
+  const rows =
+    searching || pinned.length === 0
+      ? list.map(conversationRow)
+      : [
+          sectionHead('Pinned'),
+          ...pinned.map(conversationRow),
+          sectionHead('Chats'),
+          ...list.filter(c => !c.pinned).map(conversationRow),
+        ];
+  if (rows.length === 0 && bridgeState === 'ready') {
+    rows.push(
+      el('li', 'list-empty', unreadOnly ? 'No unread chats' : 'No chats')
+    );
+  }
+  $('conversations').replaceChildren(...rows);
 }
 
 // --- messages --------------------------------------------------------------
@@ -749,6 +863,147 @@ function closeLightbox() {
   $('lightbox-stage').replaceChildren();
 }
 
+// --- message text: mentions, formatting, links ----------------------------------
+
+// The body with mentions written out, for copying and quoting.
+function plainText(m) {
+  let text = m.body ?? '';
+  for (const mention of [...(m.mentions ?? [])].sort(
+    (a, b) => b.start - a.start
+  )) {
+    text =
+      text.slice(0, mention.start) +
+      `@${mention.title ?? 'Someone'}` +
+      text.slice(mention.start + mention.length);
+  }
+  return text;
+}
+
+const URL_PATTERN = /\bhttps?:\/\/[^\s<>"']+[^\s<>"'.,;:!?)\]]/gi;
+
+function appendLinkified(parent, text) {
+  let last = 0;
+  for (const match of text.matchAll(URL_PATTERN)) {
+    if (match.index > last) {
+      parent.append(text.slice(last, match.index));
+    }
+    const link = el('a', 'link', match[0]);
+    link.href = match[0];
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    parent.append(link);
+    last = match.index + match[0].length;
+  }
+  if (last < text.length) {
+    parent.append(text.slice(last));
+  }
+}
+
+const STYLE_CLASS = {
+  bold: 'f-bold',
+  italic: 'f-italic',
+  strikethrough: 'f-strike',
+  monospace: 'f-mono',
+  spoiler: 'f-spoiler',
+};
+
+// Splits the body at every range edge and styles each piece, as Signal's
+// own renderer does.
+function renderBody(m) {
+  const body = el('span', 'body');
+  if (isJumboBody(m)) {
+    body.classList.add('jumbo-body');
+  }
+  const text = m.body ?? '';
+  const mentions = m.mentions ?? [];
+  const formatting = m.formatting ?? [];
+  const edges = new Set([0, text.length]);
+  for (const r of [...mentions, ...formatting]) {
+    edges.add(Math.max(0, Math.min(text.length, r.start)));
+    edges.add(Math.max(0, Math.min(text.length, r.start + r.length)));
+  }
+  const points = [...edges].sort((a, b) => a - b);
+  for (let i = 0; i < points.length - 1; i += 1) {
+    const start = points[i];
+    const end = points[i + 1];
+    const styles = formatting
+      .filter(r => r.start <= start && r.start + r.length >= end)
+      .map(r => STYLE_CLASS[r.style])
+      .filter(Boolean);
+    const mention = mentions.find(
+      r => r.start <= start && r.start + r.length >= end
+    );
+    let node = body;
+    if (styles.length > 0) {
+      node = el('span', styles.join(' '));
+      if (styles.includes('f-spoiler')) {
+        node.title = 'Spoiler: click to reveal';
+        node.addEventListener('click', e => {
+          e.stopPropagation();
+          node.classList.add('revealed');
+        });
+      }
+      body.append(node);
+    }
+    if (mention) {
+      // One mention may span several pieces; write it once.
+      if (start === mention.start) {
+        node.append(el('span', 'mention', `@${mention.title ?? 'Someone'}`));
+      }
+    } else if (styles.includes('f-mono')) {
+      node.append(text.slice(start, end));
+    } else {
+      appendLinkified(node, text.slice(start, end));
+    }
+  }
+  return body;
+}
+
+function isJumboBody(m) {
+  return (
+    m.kind === 'text' &&
+    !m.quote &&
+    m.attachments.length === 0 &&
+    (m.mentions ?? []).length === 0 &&
+    isJumbo(m.body)
+  );
+}
+
+function renderLinkPreview(m, p, index) {
+  const card = el('a', 'link-preview');
+  card.href = p.url;
+  card.target = '_blank';
+  card.rel = 'noopener noreferrer';
+  if (p.hasImage) {
+    const img = el('img', 'link-preview-image');
+    img.alt = '';
+    img.loading = 'lazy';
+    img.src = `api/thumbnail?${new URLSearchParams({
+      messageId: m.id,
+      preview: String(index),
+    })}`;
+    card.append(img);
+  }
+  const text = el('span', 'link-preview-text');
+  if (p.title) {
+    text.append(el('span', 'link-preview-title', p.title));
+  }
+  if (p.description) {
+    text.append(el('span', 'link-preview-description', p.description));
+  }
+  let domain = p.domain;
+  if (!domain) {
+    try {
+      domain = new URL(p.url).hostname;
+    } catch {
+      domain = '';
+    }
+  }
+  text.append(el('span', 'link-preview-domain', domain));
+  card.append(text);
+  return card;
+}
+
 // prev/next: the neighboring messages, to group runs by the same author.
 function renderMessage(m, prev, next) {
   const outgoing = m.direction === 'outgoing';
@@ -802,13 +1057,15 @@ function renderMessage(m, prev, next) {
   } else if (m.kind !== 'text') {
     bubble.append(el('span', 'body note', summarize(m)));
   } else if (m.body) {
-    bubble.append(
-      el(
-        'span',
-        'body',
-        m.bodyTruncated ? `${m.body}… (open Signal for more)` : m.body
-      )
-    );
+    if (m.previews?.length > 0) {
+      bubble.classList.add('has-media');
+      bubble.append(...m.previews.map((p, i) => renderLinkPreview(m, p, i)));
+    }
+    const body = renderBody(m);
+    if (m.bodyTruncated) {
+      body.append(' …');
+    }
+    bubble.append(body);
   }
 
   const meta = el('span', 'meta');
@@ -1130,10 +1387,17 @@ function openMoreMenu(m, anchor) {
     items.push(item);
   };
   if (m.kind === 'text' && m.body) {
-    add('copy', 'Copy text', () => copyText(m.body));
+    add('copy', 'Copy text', () => copyText(plainText(m)));
   }
   if (canReplyTo(m)) {
     add('reply', 'Reply', () => startReply(m));
+  }
+  if (m.canEdit) {
+    add('edit', 'Edit', () => startEdit(m));
+  }
+  add('trash', 'Delete for me', () => deleteMessage(m, false));
+  if (m.canDeleteForEveryone) {
+    add('trash', 'Delete for everyone', () => deleteMessage(m, true));
   }
   if (items.length === 0) {
     items.push(el('span', 'menu-empty', 'Nothing to do here'));
@@ -1164,8 +1428,51 @@ function startReply(m) {
 }
 
 function cancelReply() {
+  const wasEditing = editing !== null;
   replyTo = null;
+  editing = null;
   $('reply-bar').hidden = true;
+  $('reply-bar').classList.remove('editing');
+  if (wasEditing) {
+    $('compose').value = '';
+    autosize();
+  }
+}
+
+// Edit mode reuses the reply bar to show what is being edited.
+function startEdit(m) {
+  cancelReply();
+  editing = m;
+  const quote = $('reply-quote');
+  quote.className = 'reply-quote';
+  quote.replaceChildren(
+    el('span', 'quote-author', 'Edit message'),
+    el('span', 'quote-text', summarize(m))
+  );
+  $('reply-bar').classList.add('editing');
+  $('reply-bar').hidden = false;
+  const box = $('compose');
+  box.value = plainText(m);
+  autosize();
+  box.focus();
+  box.setSelectionRange(box.value.length, box.value.length);
+}
+
+async function deleteMessage(m, forEveryone) {
+  const question = forEveryone
+    ? 'Delete this message for everyone?'
+    : 'Delete this message for you?';
+  if (!window.confirm(question)) {
+    return;
+  }
+  try {
+    await api('api/delete', { messageId: m.id, forEveryone });
+    if (!forEveryone && messages.delete(m.id)) {
+      renderMessages();
+    }
+  } catch (error) {
+    toast(`Not deleted (${error.code ?? error.message}).`);
+  }
 }
 
 // --- notifications -----------------------------------------------------------
@@ -1310,6 +1617,13 @@ async function sendCurrent() {
   $('send').disabled = true;
   $('send-error').hidden = true;
   try {
+    if (editing) {
+      await api('api/edit', { messageId: editing.id, body });
+      cancelReply();
+      box.value = '';
+      autosize();
+      return;
+    }
     const { message } = await api('api/send', {
       conversationId: selectedId,
       body,
@@ -1345,13 +1659,17 @@ $('compose').addEventListener('keydown', e => {
   if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
     e.preventDefault();
     sendCurrent();
-  } else if (e.key === 'Escape' && replyTo) {
+  } else if (e.key === 'Escape' && (replyTo || editing)) {
     cancelReply();
   }
 });
 $('compose').addEventListener('input', autosize);
 $('older').addEventListener('click', () => loadMessages({ older: true }));
 $('search').addEventListener('input', renderConversations);
+$('filter-unread').append(icon('filter'));
+$('filter-unread').addEventListener('click', () =>
+  setListFilter(listFilter, !unreadOnly)
+);
 $('banner-action').addEventListener('click', () =>
   api('api/retry', {}).catch(() => {})
 );

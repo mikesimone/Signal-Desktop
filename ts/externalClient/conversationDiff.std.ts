@@ -21,37 +21,47 @@ type LookupType = Readonly<Record<string, ConversationSourceType>>;
 
 export class ConversationDiffer {
   #lookup: LookupType = {};
+  #pinnedIds: ReadonlyArray<string> = [];
   // Serialized DTO of every conversation clients currently know as listed.
   #sent = new Map<string, string>();
 
   // Takes the current state as known to clients; produces no changes.
-  reset(lookup: LookupType): void {
+  reset(lookup: LookupType, pinnedIds: ReadonlyArray<string> = []): void {
     this.#lookup = lookup;
+    this.#pinnedIds = pinnedIds;
     this.#sent = new Map();
     for (const conversation of Object.values(lookup)) {
       if (isListedConversation(conversation)) {
         this.#sent.set(
           conversation.id,
-          JSON.stringify(toConversationDTO(conversation))
+          JSON.stringify(toConversationDTO(conversation, pinnedIds))
         );
       }
     }
   }
 
-  diff(lookup: LookupType): Array<ConversationChangeType> {
+  diff(
+    lookup: LookupType,
+    pinnedIds: ReadonlyArray<string> = []
+  ): Array<ConversationChangeType> {
     const previous = this.#lookup;
-    if (lookup === previous) {
+    // Reordering pins changes no conversation object, only the order.
+    const pinsChanged =
+      pinnedIds.length !== this.#pinnedIds.length ||
+      pinnedIds.some((id, i) => this.#pinnedIds[i] !== id);
+    if (lookup === previous && !pinsChanged) {
       return [];
     }
     this.#lookup = lookup;
+    this.#pinnedIds = pinnedIds;
 
     const changes = new Array<ConversationChangeType>();
     for (const [id, conversation] of Object.entries(lookup)) {
-      if (previous[id] === conversation) {
+      if (previous[id] === conversation && !pinsChanged) {
         continue;
       }
       if (isListedConversation(conversation)) {
-        const dto = toConversationDTO(conversation);
+        const dto = toConversationDTO(conversation, pinnedIds);
         const serialized = JSON.stringify(dto);
         if (this.#sent.get(id) !== serialized) {
           this.#sent.set(id, serialized);

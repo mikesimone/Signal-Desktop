@@ -20,6 +20,8 @@ import type {
   QuoteDTO,
   ReactionDTO,
   StickerDTO,
+  FormattingDTO,
+  LinkPreviewDTO,
 } from './protocol.std.ts';
 import { MessageKind } from './protocol.std.ts';
 
@@ -54,6 +56,7 @@ export type MessageSourceType = Pick<
   | 'deletedForEveryoneSendStatus'
   | 'errors'
   | 'sendStateByConversationId'
+  | 'preview'
 >;
 
 export type MessageDtoContextType = Readonly<{
@@ -72,6 +75,12 @@ export type MessageDtoContextType = Readonly<{
     conversationId: string,
     serviceId: string | undefined
   ) => AuthorDTO | null;
+  // The name Signal shows for a conversation, or null.
+  getTitle: (conversationId: string) => string | null;
+  // Whether Signal's message menu would offer Edit and Delete for everyone.
+  getActions: (
+    message: MessageSourceType
+  ) => Readonly<{ canEdit: boolean; canDeleteForEveryone: boolean }>;
 }>;
 
 function getMessageExpiresAt(
@@ -104,10 +113,48 @@ function toMentions(
   message: MessageSourceType,
   context: MessageDtoContextType
 ): Array<MentionDTO> {
-  return (message.bodyRanges ?? []).filter(BodyRange.isMention).map(range => ({
-    start: range.start,
-    length: range.length,
-    conversationId: context.resolveConversationId(range.mentionAci),
+  return (message.bodyRanges ?? []).filter(BodyRange.isMention).map(range => {
+    const conversationId = context.resolveConversationId(range.mentionAci);
+    return {
+      start: range.start,
+      length: range.length,
+      conversationId,
+      title: conversationId ? context.getTitle(conversationId) : null,
+    };
+  });
+}
+
+const FORMATTING_STYLES: Partial<
+  Record<BodyRange.Style, FormattingDTO['style']>
+> = {
+  [BodyRange.Style.BOLD]: 'bold',
+  [BodyRange.Style.ITALIC]: 'italic',
+  [BodyRange.Style.STRIKETHROUGH]: 'strikethrough',
+  [BodyRange.Style.MONOSPACE]: 'monospace',
+  [BodyRange.Style.SPOILER]: 'spoiler',
+};
+
+function toFormatting(message: MessageSourceType): Array<FormattingDTO> {
+  const result = new Array<FormattingDTO>();
+  for (const range of message.bodyRanges ?? []) {
+    if (!BodyRange.isFormatting(range)) {
+      continue;
+    }
+    const style = FORMATTING_STYLES[range.style];
+    if (style) {
+      result.push({ start: range.start, length: range.length, style });
+    }
+  }
+  return result;
+}
+
+function toPreviews(message: MessageSourceType): Array<LinkPreviewDTO> {
+  return (message.preview ?? []).map(preview => ({
+    url: preview.url,
+    title: preview.title ?? null,
+    description: preview.description ?? null,
+    domain: preview.domain ?? null,
+    hasImage: Boolean(preview.image?.path || preview.image?.thumbnail?.path),
   }));
 }
 
@@ -268,6 +315,11 @@ export function toMessageDTO(
     mentions: hidden ? [] : toMentions(message, context),
     attachments: hidden ? [] : toAttachments(message),
     sticker: hidden ? null : toSticker(message),
+    formatting: hidden ? [] : toFormatting(message),
+    previews: hidden ? [] : toPreviews(message),
+    ...(hidden
+      ? { canEdit: false, canDeleteForEveryone: false }
+      : context.getActions(message)),
     quote: hidden ? null : toQuote(message, context),
     edited: (message.editHistory?.length ?? 0) > 1,
     expiresAt,

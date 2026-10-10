@@ -449,6 +449,45 @@ describe('signal-rambox', () => {
     assert.equal(download.status, 200);
   });
 
+  it('asks for link preview images by preview index', async () => {
+    const thumb = await http(port, {
+      path: `/${helper.token}/api/thumbnail?messageId=m1&preview=0`,
+    });
+    assert.equal(thumb.status, 200);
+    const call = bridge.calls.findLast(
+      c => c.method === 'attachments.getThumbnail'
+    );
+    assert.deepEqual(call.params, { messageId: 'm1', preview: 0 });
+  });
+
+  it('edits and deletes', async () => {
+    const edit = await http(port, {
+      method: 'POST',
+      path: `/${helper.token}/api/edit`,
+      headers: json,
+      body: { messageId: 'm1', body: 'fixed' },
+    });
+    assert.equal(edit.status, 200);
+    assert.deepEqual(
+      bridge.calls.findLast(c => c.method === 'messages.edit').params,
+      { messageId: 'm1', body: 'fixed' }
+    );
+    for (const forEveryone of [true, undefined]) {
+      // oxlint-disable-next-line no-await-in-loop
+      const res = await http(port, {
+        method: 'POST',
+        path: `/${helper.token}/api/delete`,
+        headers: json,
+        body: { messageId: 'm1', forEveryone },
+      });
+      assert.equal(res.status, 200);
+      assert.deepEqual(
+        bridge.calls.findLast(c => c.method === 'messages.delete').params,
+        { messageId: 'm1', forEveryone: forEveryone === true }
+      );
+    }
+  });
+
   it('marks read', async () => {
     const res = await http(port, {
       method: 'POST',

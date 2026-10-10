@@ -3,7 +3,7 @@
 
 import type { ConversationType } from '../state/ducks/conversations.preload.ts';
 import { isConversationMuted } from '../util/isConversationMuted.std.ts';
-import type { ConversationDTO } from './protocol.std.ts';
+import type { ConversationDTO, LastMessageDTO } from './protocol.std.ts';
 
 // Maps Signal's conversation view model to the public DTO. Fields are copied
 // one by one on purpose: a new internal field must never reach clients just
@@ -30,6 +30,7 @@ export type ConversationSourceType = Pick<
   | 'avatarUrl'
   | 'avatarHash'
   | 'color'
+  | 'lastMessage'
 >;
 
 // A polynomial string hash, as hex. Turns internal values into an opaque
@@ -56,20 +57,57 @@ export function getAvatarVersion(
   );
 }
 
+// The chat list's preview line, with mentions written out.
+function toLastMessage(
+  lastMessage: ConversationSourceType['lastMessage']
+): LastMessageDTO | null {
+  if (!lastMessage) {
+    return null;
+  }
+  if (lastMessage.deletedForEveryone) {
+    return { text: null, author: null, deleted: true };
+  }
+  let { text } = lastMessage;
+  const mentions = [...(lastMessage.bodyRanges ?? [])]
+    .filter(range => 'replacementText' in range)
+    .sort((a, b) => b.start - a.start);
+  for (const range of mentions) {
+    if ('replacementText' in range) {
+      text =
+        text.slice(0, range.start) +
+        `@${range.replacementText}` +
+        text.slice(range.start + range.length);
+    }
+  }
+  return {
+    text: lastMessage.prefix ? `${lastMessage.prefix} ${text}` : text,
+    author: lastMessage.author ?? null,
+    deleted: false,
+  };
+}
+
 // Same rule as the left pane (_getLeftPaneLists): a conversation is listed
 // when it is pinned or has had activity.
 export function isListedConversation(
   conversation: ConversationSourceType
 ): boolean {
-  if (conversation.isPinned) {
+  // Fork addition: Note to Self is always there, as in Signal's search.
+  if (conversation.isPinned || conversation.isMe) {
     return true;
   }
   return conversation.activeAt != null && conversation.activeAt !== 0;
 }
 
 export function toConversationDTO(
-  conversation: ConversationSourceType
+  conversation: ConversationSourceType,
+  // Signal's pinned order (the pinnedConversationIds item).
+  pinnedIds: ReadonlyArray<string> = []
 ): ConversationDTO {
+  let pinnedIndex: number | null = null;
+  if (conversation.isPinned) {
+    const at = pinnedIds.indexOf(conversation.id);
+    pinnedIndex = at === -1 ? pinnedIds.length : at;
+  }
   const lastActivityAt =
     conversation.lastMessageReceivedAtMs || conversation.timestamp || null;
   return {
@@ -92,5 +130,7 @@ export function toConversationDTO(
         : null,
     avatarColor: conversation.color ?? null,
     avatarVersion: getAvatarVersion(conversation),
+    lastMessage: toLastMessage(conversation.lastMessage),
+    pinnedIndex,
   };
 }

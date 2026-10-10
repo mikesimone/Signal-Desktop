@@ -7,6 +7,13 @@ import type {
   MessageAttributesType,
 } from '../../model-types.d.ts';
 import { DataReader } from '../../sql/Client.preload.ts';
+import { itemStorage } from '../../textsecure/Storage.preload.ts';
+import { areWeAdmin } from '../../util/areWeAdmin.preload.ts';
+import { canSendDeleteForEveryone } from '../../util/canDeleteForEveryone.preload.ts';
+import {
+  canEditMessage,
+  isWithinMaxEdits,
+} from '../../util/canEditMessage.dom.ts';
 import { getContactNameColorSelector } from '../../state/selectors/conversations.dom.ts';
 import { getMessagePropStatus } from '../../state/selectors/message.preload.ts';
 import {
@@ -95,11 +102,41 @@ function makeGetAuthor(): MessageDtoContextType['getAuthor'] {
   };
 }
 
+function getActions(
+  message: Parameters<MessageDtoContextType['getActions']>[0]
+): ReturnType<MessageDtoContextType['getActions']> {
+  const full = message as MessageAttributesType;
+  const conversation = window.ConversationController.get(
+    message.conversationId
+  );
+  const ourAci = itemStorage.user.getAci();
+  let canDeleteForEveryone = false;
+  if (conversation && ourAci) {
+    try {
+      canDeleteForEveryone = canSendDeleteForEveryone({
+        targetMessage: full,
+        targetConversation: conversation.attributes,
+        ourAci,
+        isDeleterGroupAdmin: areWeAdmin(conversation.attributes),
+      }).ok;
+    } catch {
+      canDeleteForEveryone = false;
+    }
+  }
+  return {
+    canEdit: canEditMessage(full) && isWithinMaxEdits(full),
+    canDeleteForEveryone,
+  };
+}
+
 export function getDtoContext(): MessageDtoContextType {
   const controller = window.ConversationController;
   const ourConversationId = controller.getOurConversationId();
   return {
     getAuthor: makeGetAuthor(),
+    getTitle: conversationId =>
+      controller.get(conversationId)?.getTitle() ?? null,
+    getActions,
     resolveConversationId: serviceId => controller.get(serviceId)?.id ?? null,
     ourConversationId: ourConversationId ?? null,
     now: Date.now(),

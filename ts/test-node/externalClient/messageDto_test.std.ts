@@ -24,6 +24,8 @@ const context: MessageDtoContextType = {
   ourConversationId: 'conv-me',
   now: 1_000_000,
   getSendStatus: () => 'delivered',
+  getTitle: conversationId => `title of ${conversationId}`,
+  getActions: () => ({ canEdit: false, canDeleteForEveryone: false }),
   getAuthor: (authorConversationId, conversationId, serviceId) => ({
     title: `${authorConversationId} in ${conversationId}`,
     avatarColor: 'A100',
@@ -72,6 +74,10 @@ describe('externalClient/messageDto', () => {
       mentions: [],
       attachments: [],
       sticker: null,
+      formatting: [],
+      previews: [],
+      canEdit: false,
+      canDeleteForEveryone: false,
       quote: null,
       edited: false,
       expiresAt: null,
@@ -219,8 +225,13 @@ describe('externalClient/messageDto', () => {
       context
     );
     assert.deepEqual(dto?.mentions, [
-      { start: 0, length: 1, conversationId: 'conv-bob' },
-      { start: 2, length: 2, conversationId: null },
+      {
+        start: 0,
+        length: 1,
+        conversationId: 'conv-bob',
+        title: 'title of conv-bob',
+      },
+      { start: 2, length: 2, conversationId: null, title: null },
     ]);
     assert.deepEqual(dto?.attachments, [
       {

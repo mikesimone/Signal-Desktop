@@ -223,12 +223,16 @@ function startConversations(): void {
   }
   // Clients snapshot after subscribing, so the current state is the
   // baseline and produces no events.
-  differ.reset(lookup);
+  differ.reset(lookup, getPinnedIds());
   unsubscribeStore = window.reduxStore.subscribe(() => {
     if (!diffTimer) {
       diffTimer = setTimeout(diffConversations, CONVERSATION_DIFF_DELAY_MS);
     }
   });
+}
+
+function getPinnedIds(): ReadonlyArray<string> {
+  return window.reduxStore.getState().items.pinnedConversationIds ?? [];
 }
 
 function stopConversations(): void {
@@ -246,7 +250,7 @@ function diffConversations(): void {
   if (!lookup || !topics.has(EventTopic.Conversations)) {
     return;
   }
-  for (const change of differ.diff(lookup)) {
+  for (const change of differ.diff(lookup, getPinnedIds())) {
     if (change.type === 'updated') {
       enqueue(`c:${change.conversation.id}`, EventName.ConversationUpdated, {
         kind: 'data',

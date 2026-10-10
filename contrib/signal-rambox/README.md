@@ -15,14 +15,22 @@ open, takes over message notifications so you get them from Rambox instead
 of Signal. Group chats show each sender's photo, name color and member
 label, as Signal does. The page uses Signal's own emoji and Inter fonts.
 
+The chat list has Signal's Pinned and Chats sections in Signal's pin order,
+preview lines, the All chats / 1:1 chats / Groups tabs and the unread filter
+button. Messages show text formatting, mentions, links and link preview
+cards, and can be edited and deleted from the message's menu.
+
 Not here yet (being added on the fork, aiming at everything Signal Desktop
-does): sending attachments, link previews, contact cards, polls, typing
-indicators, editing, deleting, forwarding, stories and calls.
+does): sending attachments (including paste), forwarding (with no limit on
+recipients, unlike Signal), contact cards, polls, typing indicators, stories
+and calls.
 
 Photos, member labels, reactions and replies use fork-only bridge additions
 (`conversations.getAvatar`, `messages.react`, `reactions.getPreferred`,
 `quoteMessageId` on `messages.sendText`, author details on messages, and
-`attachments.getThumbnail`, `attachments.read` and `attachments.download`),
+`attachments.getThumbnail`, `attachments.read`, `attachments.download`,
+`messages.edit`, `messages.delete`, and pin order, formatting and link
+previews on the DTOs),
 not part of the upstream proposal. Against a Signal without them the helper
 asks only for what Signal offers and the rest of the page still works.
 

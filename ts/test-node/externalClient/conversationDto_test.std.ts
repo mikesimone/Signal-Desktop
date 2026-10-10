@@ -27,6 +27,7 @@ describe('externalClient/conversationDto', () => {
     assert.isTrue(
       isListedConversation({ ...base, activeAt: 0, isPinned: true })
     );
+    assert.isTrue(isListedConversation({ ...base, activeAt: 0, isMe: true }));
   });
 
   it('maps only allow-listed fields with safe defaults', () => {
@@ -53,6 +54,33 @@ describe('externalClient/conversationDto', () => {
       memberCount: null,
       avatarColor: null,
       avatarVersion: null,
+      lastMessage: null,
+      pinnedIndex: null,
+    });
+  });
+
+  it('writes out mentions in the preview line', () => {
+    const dto = toConversationDTO({
+      ...base,
+      lastMessage: {
+        deletedForEveryone: false,
+        text: 'hi \uFFFC!',
+        author: 'Bob',
+        bodyRanges: [
+          {
+            start: 3,
+            length: 1,
+            mentionAci: 'aci' as never,
+            replacementText: 'Alice',
+            conversationID: 'x',
+          },
+        ],
+      },
+    });
+    assert.deepEqual(dto.lastMessage, {
+      text: 'hi @Alice!',
+      author: 'Bob',
+      deleted: false,
     });
   });
 

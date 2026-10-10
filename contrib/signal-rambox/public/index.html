@@ -17,13 +17,24 @@
     <main class="layout">
       <aside class="sidebar">
         <div class="sidebar-head">
-          <input
-            id="search"
-            type="search"
-            placeholder="Search chats"
-            autocomplete="off"
-            spellcheck="false"
-          />
+          <div class="search-row">
+            <input
+              id="search"
+              type="search"
+              placeholder="Search chats"
+              autocomplete="off"
+              spellcheck="false"
+            />
+            <button
+              type="button"
+              class="icon-button"
+              id="filter-unread"
+              title="Filter by unread"
+              aria-label="Filter by unread"
+              aria-pressed="false"
+            ></button>
+          </div>
+          <div class="filters" id="filters" role="toolbar"></div>
         </div>
         <ul id="conversations" class="conversations" role="listbox"></ul>
       </aside>

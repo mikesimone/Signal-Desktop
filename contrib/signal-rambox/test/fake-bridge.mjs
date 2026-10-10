@@ -54,6 +54,8 @@ export function makeConversation(overrides = {}) {
     memberCount: null,
     avatarColor: 'A120',
     avatarVersion: null,
+    lastMessage: null,
+    pinnedIndex: null,
     ...overrides,
   };
 }
@@ -84,6 +86,11 @@ export function makeMessage(conversationId, overrides = {}) {
     read: false,
     sendStatus: null,
     reactions: [],
+    sticker: null,
+    formatting: [],
+    previews: [],
+    canEdit: false,
+    canDeleteForEveryone: false,
     ...overrides,
   };
 }
@@ -293,12 +300,17 @@ export class FakeBridge {
       }
       case 'messages.markRead':
       case 'messages.react':
+      case 'messages.edit':
+      case 'messages.delete':
         this.#reply(session, id, {});
         return;
       case 'attachments.read': {
-        const key = params.sticker
-          ? `${params.messageId}:sticker`
-          : `${params.messageId}:${params.index}`;
+        let key = `${params.messageId}:${params.index}`;
+        if (params.sticker) {
+          key = `${params.messageId}:sticker`;
+        } else if (params.preview !== undefined) {
+          key = `${params.messageId}:preview${params.preview}`;
+        }
         const file = this.attachments.get(key);
         if (!file) {
           this.#error(session, id, 'NOT_FOUND');
@@ -319,7 +331,9 @@ export class FakeBridge {
           contentType: 'image/webp',
           width: 1,
           height: 1,
-          data: (this.thumbnailBytes ?? Buffer.from('thumb')).toString('base64'),
+          data: (this.thumbnailBytes ?? Buffer.from('thumb')).toString(
+            'base64'
+          ),
         });
         return;
       case 'attachments.download':

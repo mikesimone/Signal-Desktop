@@ -13,6 +13,9 @@ import { getLocalAttachmentUrl } from '../../util/getLocalAttachmentUrl.std.ts';
 import { getLocalAvatarUrl } from '../../util/avatarUtils.preload.ts';
 import { isSignalConversation } from '../../util/isSignalConversation.dom.ts';
 import { getAvatarVersion } from '../conversationDto.std.ts';
+import { sendEditedMessage } from '../../util/sendEditedMessage.preload.ts';
+import { sendDeleteForEveryoneMessage } from '../../util/sendDeleteForEveryoneMessage.preload.ts';
+import { getMessageSentTimestamp } from '../../util/getMessageSentTimestamp.std.ts';
 import type { ServiceResultType } from '../hostTypes.std.ts';
 import { toMessageDTO } from '../messageDto.std.ts';
 import type {
@@ -23,6 +26,8 @@ import type {
   AttachmentsReadResultType,
   ConversationsGetAvatarParamsType,
   ConversationsGetAvatarResultType,
+  MessagesDeleteParamsType,
+  MessagesEditParamsType,
   MessagesReactParamsType,
   ReactionsGetPreferredResultType,
 } from '../protocol.std.ts';
@@ -154,8 +159,10 @@ async function findAttachment({
   messageId,
   index,
   sticker,
+  preview,
 }: AttachmentsGetThumbnailParamsType): Promise<AttachmentType | undefined> {
-  if ((index === undefined) === (sticker === undefined)) {
+  const targets = [index, sticker, preview].filter(t => t !== undefined);
+  if (targets.length !== 1) {
     return undefined;
   }
   const message = await loadMessage(messageId);
@@ -168,6 +175,11 @@ async function findAttachment({
   }
   if (sticker) {
     return dto.sticker ? message.sticker?.data : undefined;
+  }
+  if (preview !== undefined) {
+    return dto.previews[preview]?.hasImage
+      ? message.preview?.[preview]?.image
+      : undefined;
   }
   if (index === undefined || index >= dto.attachments.length) {
     return undefined;
@@ -188,7 +200,9 @@ export async function getAttachmentThumbnail(
   } else if (attachment.screenshot?.path) {
     source = attachment.screenshot;
   } else if (
-    (isImageAttachment(attachment) || params.sticker) &&
+    (isImageAttachment(attachment) ||
+      params.sticker ||
+      params.preview !== undefined) &&
     attachment.path
   ) {
     source = attachment;
@@ -328,5 +342,67 @@ export async function react({
       : Emoji.getDefaultVariant(Emoji.getParent(emoji)),
     remove,
   });
+  return { ok: true, value: {} };
+}
+
+// Edits as Signal's composer does, keeping the message's quote. The body
+// replaces the old one as plain text.
+export async function editMessage({
+  messageId,
+  body,
+}: MessagesEditParamsType): Promise<ServiceResultType> {
+  const message = await loadMessage(messageId);
+  if (!message) {
+    return notFound;
+  }
+  const model = getListedConversation(message.conversationId);
+  if (!model) {
+    return notFound;
+  }
+  if (!getDtoContext().getActions(message).canEdit) {
+    return { ok: false, code: ErrorCode.PreconditionFailed };
+  }
+  const reason = await getSendBlockReason(model, body);
+  if (reason) {
+    return { ok: false, code: ErrorCode.PreconditionFailed, reason };
+  }
+  await sendEditedMessage(model.id, {
+    body,
+    preview: [],
+    quoteSentAt: message.quote?.id ?? undefined,
+    quoteAuthorAci: message.quote?.authorAci,
+    targetMessageId: messageId,
+  });
+  return { ok: true, value: {} };
+}
+
+// Delete for me (this device and linked devices) or for everyone, as the
+// message menu offers them.
+export async function deleteMessage({
+  messageId,
+  forEveryone,
+}: MessagesDeleteParamsType): Promise<ServiceResultType> {
+  const message = await loadMessage(messageId);
+  if (!message) {
+    return notFound;
+  }
+  const model = getListedConversation(message.conversationId);
+  if (!model) {
+    return notFound;
+  }
+  if (forEveryone) {
+    if (!getDtoContext().getActions(message).canDeleteForEveryone) {
+      return { ok: false, code: ErrorCode.PreconditionFailed };
+    }
+    await sendDeleteForEveryoneMessage(model.attributes, {
+      id: message.id,
+      timestamp: getMessageSentTimestamp(message, { log }),
+    });
+  } else {
+    window.reduxActions.conversations.deleteMessages({
+      conversationId: model.id,
+      messageIds: [message.id],
+    });
+  }
   return { ok: true, value: {} };
 }

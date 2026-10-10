@@ -17,7 +17,9 @@ import {
   toConversationDTO,
 } from '../conversationDto.std.ts';
 import {
+  deleteMessage,
   downloadAttachments,
+  editMessage,
   getAttachmentThumbnail,
   getAvatar,
   getPreferredReactions,
@@ -64,6 +66,10 @@ import {
 
 const log = createLogger('ExternalClientService');
 
+function getPinnedIds(): ReadonlyArray<string> {
+  return window.reduxStore.getState().items.pinnedConversationIds ?? [];
+}
+
 const notReady: ServiceResultType = { ok: false, code: ErrorCode.NotReady };
 const notFound: ServiceResultType = { ok: false, code: ErrorCode.NotFound };
 
@@ -85,7 +91,9 @@ function listConversations({
   const offset = cursor === undefined ? 0 : Number(cursor);
   const end = offset + limit;
   const value: ConversationsListResultType = {
-    conversations: listed.slice(offset, end).map(toConversationDTO),
+    conversations: listed
+      .slice(offset, end)
+      .map(conversation => toConversationDTO(conversation, getPinnedIds())),
     nextCursor: end < listed.length ? String(end) : null,
   };
   return { ok: true, value };
@@ -103,7 +111,7 @@ function getConversation({
   }
   return {
     ok: true,
-    value: { conversation: toConversationDTO(model.format()) },
+    value: { conversation: toConversationDTO(model.format(), getPinnedIds()) },
   };
 }
 
@@ -254,6 +262,20 @@ async function dispatch(
       }
       const params = safeParseUnknown(SERVICE_PARAM_SCHEMAS[method], rawParams);
       return params.success ? downloadAttachments(params.data) : invalid;
+    }
+    case Method.MessagesEdit: {
+      if (!window.ConversationController.isInitialFetchComplete()) {
+        return notReady;
+      }
+      const params = safeParseUnknown(SERVICE_PARAM_SCHEMAS[method], rawParams);
+      return params.success ? editMessage(params.data) : invalid;
+    }
+    case Method.MessagesDelete: {
+      if (!window.ConversationController.isInitialFetchComplete()) {
+        return notReady;
+      }
+      const params = safeParseUnknown(SERVICE_PARAM_SCHEMAS[method], rawParams);
+      return params.success ? deleteMessage(params.data) : invalid;
     }
     default:
       throw new Error(`Unhandled external client method ${method}`);

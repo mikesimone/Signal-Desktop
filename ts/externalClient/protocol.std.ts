@@ -117,6 +117,8 @@ export const Method = {
   AttachmentsGetThumbnail: 'attachments.getThumbnail',
   AttachmentsRead: 'attachments.read',
   AttachmentsDownload: 'attachments.download',
+  MessagesEdit: 'messages.edit',
+  MessagesDelete: 'messages.delete',
 } as const;
 export type MethodType = (typeof Method)[keyof typeof Method];
 
@@ -134,6 +136,8 @@ export const SERVICE_METHOD_CAPABILITIES = {
   [Method.AttachmentsGetThumbnail]: Capability.AttachmentsRead,
   [Method.AttachmentsRead]: Capability.AttachmentsRead,
   [Method.AttachmentsDownload]: Capability.AttachmentsRead,
+  [Method.MessagesEdit]: Capability.MessagesSend,
+  [Method.MessagesDelete]: Capability.MessagesSend,
 } as const satisfies Partial<Record<MethodType, CapabilityType>>;
 export type ServiceMethodType = keyof typeof SERVICE_METHOD_CAPABILITIES;
 
@@ -445,6 +449,8 @@ const attachmentTargetShape = {
   messageId: messageIdSchema,
   index: z.number().int().min(0).max(63).optional(),
   sticker: z.literal(true).optional(),
+  // A link preview's image, by its position in `previews`.
+  preview: z.number().int().min(0).max(15).optional(),
 };
 
 export const attachmentsGetThumbnailParamsSchema = z
@@ -493,6 +499,26 @@ export type AttachmentsDownloadParamsType = z.infer<
   typeof attachmentsDownloadParamsSchema
 >;
 
+// Fork additions: edit and delete, as Signal's message menu does them.
+export const messagesEditParamsSchema = z
+  .object({
+    messageId: messageIdSchema,
+    body: z.string().min(1).max(MAX_SEND_BODY_LENGTH),
+  })
+  .strict();
+export type MessagesEditParamsType = z.infer<typeof messagesEditParamsSchema>;
+
+export const messagesDeleteParamsSchema = z
+  .object({
+    messageId: messageIdSchema,
+    // False deletes from this device and the user's linked devices only.
+    forEveryone: z.boolean(),
+  })
+  .strict();
+export type MessagesDeleteParamsType = z.infer<
+  typeof messagesDeleteParamsSchema
+>;
+
 export const notificationsSetHandledParamsSchema = z
   .object({
     handled: z.boolean(),
@@ -532,6 +558,8 @@ export const SERVICE_PARAM_SCHEMAS = {
   [Method.AttachmentsGetThumbnail]: attachmentsGetThumbnailParamsSchema,
   [Method.AttachmentsRead]: attachmentsReadParamsSchema,
   [Method.AttachmentsDownload]: attachmentsDownloadParamsSchema,
+  [Method.MessagesEdit]: messagesEditParamsSchema,
+  [Method.MessagesDelete]: messagesDeleteParamsSchema,
 } as const satisfies Record<ServiceMethodType, z.ZodType>;
 
 export type ConversationsListParamsType = z.infer<
@@ -564,6 +592,19 @@ export type ConversationDTO = Readonly<{
   // Changes whenever the photo does; null when there is none. Fetch the
   // photo with conversations.getAvatar.
   avatarVersion: string | null;
+  // Fork addition: the chat list's preview line.
+  lastMessage: LastMessageDTO | null;
+  // Fork addition: position among pinned chats (0 first), as Signal orders
+  // them; null when not pinned.
+  pinnedIndex: number | null;
+}>;
+
+export type LastMessageDTO = Readonly<{
+  // With mentions written out as @Name. Null for a deleted message.
+  text: string | null;
+  // Groups: who wrote it ("You" for the user), as Signal shows it.
+  author: string | null;
+  deleted: boolean;
 }>;
 
 export type ConversationsListResultType = Readonly<{
@@ -591,6 +632,25 @@ export type MentionDTO = Readonly<{
   length: number;
   // Null when the mentioned person has no conversation on this device.
   conversationId: string | null;
+  // Fork addition: the name Signal shows for the mention (without "@").
+  title: string | null;
+}>;
+
+// Fork addition: text styles, over `body` offsets.
+export type FormattingDTO = Readonly<{
+  start: number;
+  length: number;
+  style: 'bold' | 'italic' | 'strikethrough' | 'monospace' | 'spoiler';
+}>;
+
+// Fork addition. Fetch the image with attachments.getThumbnail and
+// `preview`.
+export type LinkPreviewDTO = Readonly<{
+  url: string;
+  title: string | null;
+  description: string | null;
+  domain: string | null;
+  hasImage: boolean;
 }>;
 
 // Metadata only. Attachment content and storage paths never cross the bridge
@@ -685,6 +745,11 @@ export type MessageDTO = Readonly<{
   mentions: ReadonlyArray<MentionDTO>;
   attachments: ReadonlyArray<AttachmentMetadataDTO>;
   sticker: StickerDTO | null;
+  // Fork additions.
+  formatting: ReadonlyArray<FormattingDTO>;
+  previews: ReadonlyArray<LinkPreviewDTO>;
+  canEdit: boolean;
+  canDeleteForEveryone: boolean;
   quote: QuoteDTO | null;
   edited: boolean;
   // Disappearing messages: clients must discard the message by this time.

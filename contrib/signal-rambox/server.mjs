@@ -248,9 +248,13 @@ export function createWebServer({
 
   function attachmentTarget(url) {
     const messageId = url.searchParams.get('messageId');
-    return url.searchParams.get('sticker') === '1'
-      ? { messageId, sticker: true }
-      : { messageId, index: Number(url.searchParams.get('index') ?? 0) };
+    if (url.searchParams.get('sticker') === '1') {
+      return { messageId, sticker: true };
+    }
+    if (url.searchParams.has('preview')) {
+      return { messageId, preview: Number(url.searchParams.get('preview')) };
+    }
+    return { messageId, index: Number(url.searchParams.get('index') ?? 0) };
   }
 
   // Streams decrypted attachment content from Signal in chunks, honoring
@@ -407,6 +411,21 @@ export function createWebServer({
         conversationId,
         body,
         ...(quoteMessageId ? { quoteMessageId } : {}),
+      });
+      sendJson(res, 200, result);
+      return;
+    }
+    if (req.method === 'POST' && route === 'api/edit') {
+      const { messageId, body } = await readJson(req);
+      const result = await bridge.call('messages.edit', { messageId, body });
+      sendJson(res, 200, result);
+      return;
+    }
+    if (req.method === 'POST' && route === 'api/delete') {
+      const { messageId, forEveryone } = await readJson(req);
+      const result = await bridge.call('messages.delete', {
+        messageId,
+        forEveryone: forEveryone === true,
       });
       sendJson(res, 200, result);
       return;

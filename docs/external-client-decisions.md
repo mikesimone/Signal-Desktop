@@ -290,3 +290,21 @@ crosses, as in D7.
 
 WHY: "open Signal to view" is not acceptable for a client that replaces
 Signal's window (Mike, 2026-10-10).
+
+## F3. Fork only: chat list, rich text, link previews, edit and delete
+
+DECISION: `ConversationDTO` gains `lastMessage` (the chat list's preview
+line, mentions written out) and `pinnedIndex` (the position in Signal's
+`pinnedConversationIds`); a change in pin order re-sends every
+conversation. Note to Self is always listed. `MessageDTO` gains
+`formatting` (bold, italic, strikethrough, monospace, spoiler ranges),
+`previews` (link preview title, description, domain, and whether an image
+exists; the image comes through `attachments.getThumbnail` with
+`preview: <index>`), and `canEdit` / `canDeleteForEveryone`, computed with
+Signal's own rules. `MentionDTO` gains `title`. `messages.edit` and
+`messages.delete` (`forEveryone` or only for this device and linked ones)
+use the `messages.send` capability, and go through Signal's own edit and
+delete paths.
+
+WHY: Mike asked for Signal's pinned order, Note to Self in search, link
+preview cards, and every Signal Desktop feature (2026-10-10).
