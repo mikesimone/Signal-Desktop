@@ -26,9 +26,18 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Build
-        run: >-
-          docker build -f contrib/signal-headless/Dockerfile
-          -t signal-headless .
+        run: |
+          set -o pipefail
+          docker build --progress=plain -f contrib/signal-headless/Dockerfile \
+            -t signal-headless . 2>&1 | tee build.log || {
+            # Surface the failure as annotations, which can be read without
+            # downloading the full log.
+            grep -E 'ERROR|ERR!|error|Error' build.log | tail -n 9 |
+              while IFS= read -r line; do echo "::error::${line:0:900}"; done
+            echo "::error::$(tail -n 5 build.log | tr '\n' ' ' | cut -c1-900)"
+            exit 1
+          }
+        shell: bash
         env:
           DOCKER_BUILDKIT: '1'
 
