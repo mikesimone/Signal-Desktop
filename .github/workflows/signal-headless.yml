@@ -46,7 +46,20 @@ jobs:
 
       - name: Check the image
         run: |
-          docker run --rm --entrypoint node signal-headless \
-            /opt/signal-rambox/signal-rambox.mjs --config /tmp/c --url
-          docker run --rm --entrypoint /opt/Signal/signal-desktop \
-            signal-headless --version
+          check() {
+            local name="$1"; shift
+            if "$@" > check.log 2>&1; then
+              echo "::notice title=$name::$(tail -n 3 check.log | tr '\n' ' ')"
+            else
+              rc=$?
+              tail -n 15 check.log | while IFS= read -r line; do
+                echo "::error title=$name (exit $rc)::$line"
+              done
+              return $rc
+            fi
+          }
+          check helper docker run --rm --entrypoint node signal-headless \
+            /opt/signal-rambox/signal-rambox.mjs --config /tmp/c --url || fail=1
+          check desktop docker run --rm --entrypoint /opt/Signal/signal-desktop \
+            signal-headless --version || fail=1
+          exit "${fail:-0}"
