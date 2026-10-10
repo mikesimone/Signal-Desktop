@@ -12,6 +12,10 @@
 //   --user-data <dir>   Signal profile dir (default: the platform default)
 //   --endpoint <path>   connect here instead of computing the endpoint
 //   --port <n>          local port (default 47830)
+//   --bind <address>    listen address (default 127.0.0.1; a container may
+//                       need 0.0.0.0 behind its port mapping)
+//   --origin <url>      also accept this origin, e.g. https://signal.example
+//                       behind a reverse proxy (repeatable)
 //   --config <dir>      where the key and token live (default: per-user config)
 //
 // The first run asks Signal for approval; answer the dialog in Signal.
@@ -28,19 +32,24 @@ import {
   defaultUserData,
   endpointFor,
 } from './bridge.mjs';
-import { createWebServer } from './server.mjs';
+import { allowedOrigins, createWebServer } from './server.mjs';
 import { Store } from './store.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
 function parseArgs(argv) {
-  const out = { port: 47830, printUrl: false };
+  const out = { port: 47830, bind: '127.0.0.1', origins: [], printUrl: false };
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
     if (arg === '--user-data') {
       out.userData = argv[++i];
     } else if (arg === '--endpoint') {
       out.endpoint = argv[++i];
+    } else if (arg === '--bind') {
+      out.bind = argv[++i];
+    } else if (arg === '--origin') {
+      const origin = new URL(argv[++i]).origin;
+      out.origins.push(origin);
     } else if (arg === '--port') {
       out.port = Number(argv[++i]);
     } else if (arg === '--config') {
@@ -90,7 +99,9 @@ function log(message) {
 const args = parseArgs(process.argv.slice(2));
 const configDir = args.configDir || defaultConfigDir();
 const token = loadToken(join(configDir, 'token'));
-const url = `http://127.0.0.1:${args.port}/${token}/`;
+const origins = allowedOrigins(args.port, args.origins);
+// The address to give Rambox: the --origin name if there is one.
+const url = `${args.origins[0] ?? origins[0]}/${token}/`;
 
 if (args.printUrl) {
   process.stdout.write(`${url}\n`);
@@ -129,6 +140,8 @@ const bridge = new Bridge({
 
 web = createWebServer({
   port: args.port,
+  bindAddress: args.bind,
+  origins,
   token,
   publicDir: join(HERE, 'public'),
   store,
@@ -139,7 +152,7 @@ web = createWebServer({
 try {
   await web.listen();
 } catch (error) {
-  log(`cannot listen on 127.0.0.1:${args.port}: ${error.code}`);
+  log(`cannot listen on ${args.bind}:${args.port}: ${error.code}`);
   process.exit(1);
 }
 

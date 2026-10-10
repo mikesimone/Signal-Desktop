@@ -1,0 +1,39 @@
+# Copyright 2026 Mike Simone
+# SPDX-License-Identifier: AGPL-3.0-only
+
+# Fork-only: checks that the headless Signal image still builds. Run it by
+# hand after rebasing onto a new Signal release.
+name: Signal headless image
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'contrib/signal-headless/**'
+      - '.github/workflows/signal-headless.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build image
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Build
+        run: >-
+          docker build -f contrib/signal-headless/Dockerfile
+          -t signal-headless .
+        env:
+          DOCKER_BUILDKIT: '1'
+
+      - name: Check the image
+        run: |
+          docker run --rm --entrypoint /opt/Signal/signal-desktop \
+            -e ELECTRON_RUN_AS_NODE=1 signal-headless \
+            /opt/signal-rambox/signal-rambox.mjs --config /tmp/c --url

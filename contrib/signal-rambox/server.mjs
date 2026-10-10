@@ -45,14 +45,20 @@ function tokenMatches(given, token) {
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
+// The origins the page may be served from: the loopback address by default,
+// plus any given with --origin (e.g. an HTTPS name behind a reverse proxy).
+export function allowedOrigins(port, extra = []) {
+  return [`http://127.0.0.1:${port}`, `http://localhost:${port}`, ...extra];
+}
+
 // Returns null when the request may proceed, else [status, reason].
-export function checkRequest(req, { port, token }) {
-  const hosts = [`127.0.0.1:${port}`, `localhost:${port}`];
+export function checkRequest(req, { origins, token }) {
+  const hosts = origins.map(o => new URL(o).host);
   if (!hosts.includes(req.headers.host ?? '')) {
     return [421, 'wrong host'];
   }
   const { origin } = req.headers;
-  if (origin !== undefined && !hosts.some(h => origin === `http://${h}`)) {
+  if (origin !== undefined && !origins.includes(origin)) {
     return [403, 'wrong origin'];
   }
   const fetchSite = req.headers['sec-fetch-site'];
@@ -115,6 +121,8 @@ function readJson(req) {
 // store: Store (see store.mjs); bridge: Bridge.
 export function createWebServer({
   port,
+  bindAddress = '127.0.0.1',
+  origins = allowedOrigins(port),
   token,
   publicDir,
   store,
@@ -199,7 +207,7 @@ export function createWebServer({
   }
 
   const server = createServer(async (req, res) => {
-    const refused = checkRequest(req, { port, token });
+    const refused = checkRequest(req, { origins, token });
     if (refused) {
       const [status, reason] = refused;
       log(`refused ${req.method} (${reason})`);
@@ -248,7 +256,7 @@ export function createWebServer({
     listen() {
       return new Promise((resolve, reject) => {
         server.once('error', reject);
-        server.listen(port, '127.0.0.1', () => {
+        server.listen(port, bindAddress, () => {
           server.off('error', reject);
           resolve();
         });

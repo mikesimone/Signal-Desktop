@@ -75,7 +75,7 @@ function bridgePath(dir) {
     : join(dir, 'bridge.sock');
 }
 
-async function startHelper({ socketPath, port }) {
+async function startHelper({ socketPath, port, extraArgs = [] }) {
   const config = mkdtempSync(join(tmpdir(), 'srb-'));
   const child = spawn(
     process.execPath,
@@ -87,6 +87,7 @@ async function startHelper({ socketPath, port }) {
       String(port),
       '--config',
       config,
+      ...extraArgs,
     ],
     { stdio: ['ignore', 'pipe', 'pipe'] }
   );
@@ -98,7 +99,7 @@ async function startHelper({ socketPath, port }) {
     output += d;
   });
   const url = await waitFor(
-    () => output.match(/custom app: (http:\/\/\S+)/)?.[1]
+    () => output.match(/custom app: (https?:\/\/\S+)/)?.[1]
   );
   const token = new URL(url).pathname.split('/')[1];
   return {
@@ -411,5 +412,72 @@ describe('signal-rambox when the user says no', () => {
     assert.equal(res.status, 200);
     await waitFor(() => /bridge: ready/.test(helper.output()));
     assert.equal(asked(), 2);
+  });
+});
+
+describe('signal-rambox behind a reverse proxy', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'srb-sock-'));
+  const socketPath = bridgePath(dir);
+  const port = 48_500 + Math.floor(Math.random() * 500);
+  const bridge = new FakeBridge();
+  const origin = 'https://sigdesktop.example';
+  let helper;
+
+  before(async () => {
+    await bridge.listen(socketPath);
+    helper = await startHelper({
+      socketPath,
+      port,
+      extraArgs: ['--origin', origin],
+    });
+  });
+
+  after(async () => {
+    await helper.stop();
+    await bridge.close();
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('prints the proxy URL for Rambox', () => {
+    assert.match(
+      helper.output(),
+      new RegExp(`custom app: ${origin}/${helper.token}/`)
+    );
+  });
+
+  it('accepts requests for the proxy name', async () => {
+    const res = await http(port, {
+      path: `/${helper.token}/api/state`,
+      headers: {
+        host: 'sigdesktop.example',
+        origin,
+        'sec-fetch-site': 'same-origin',
+      },
+    });
+    assert.equal(res.status, 200);
+  });
+
+  it('still accepts loopback requests', async () => {
+    const res = await http(port, { path: `/${helper.token}/api/state` });
+    assert.equal(res.status, 200);
+  });
+
+  it('refuses the proxy name over plain http', async () => {
+    const res = await http(port, {
+      path: `/${helper.token}/api/state`,
+      headers: {
+        host: 'sigdesktop.example',
+        origin: 'http://sigdesktop.example',
+      },
+    });
+    assert.equal(res.status, 403);
+  });
+
+  it('refuses other names', async () => {
+    const res = await http(port, {
+      path: `/${helper.token}/api/state`,
+      headers: { host: 'evil.example' },
+    });
+    assert.equal(res.status, 421);
   });
 });

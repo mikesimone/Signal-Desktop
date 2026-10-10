@@ -1,0 +1,17 @@
+diff --git a/ts/main/externalClientMain.main.ts b/ts/main/externalClientMain.main.ts
+index a33a789..b1243a4 100644
+--- a/ts/main/externalClientMain.main.ts
++++ b/ts/main/externalClientMain.main.ts
+@@ -191,8 +191,10 @@ export class ExternalClientMain {
+   }
+ 
+   async #isEnabled(): Promise<boolean> {
+-    // Unpackaged development builds can opt in without touching the database.
+-    if (!app.isPackaged && process.env.SIGNAL_ENABLE_EXTERNAL_CLIENTS === '1') {
++    // Headless image (contrib/signal-headless): the container opts in with
++    // an environment variable, packaged or not, since nobody can click the
++    // setting and Signal's remote config has not enabled the feature.
++    if (process.env.SIGNAL_ENABLE_EXTERNAL_CLIENTS === '1') {
+       return true;
+     }
+     // Both Signal (remote config) and the user must have turned it on.

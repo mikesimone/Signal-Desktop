@@ -84,13 +84,17 @@ Remove it with `Unregister-ScheduledTask signal-rambox -Confirm:$false`.
 --user-data <dir>   Signal profile folder (default: the normal one, %APPDATA%\Signal)
 --endpoint <path>   connect to this pipe/socket instead of computing it
 --port <n>          local port (default 47830)
+--bind <address>    listen address (default 127.0.0.1)
+--origin <url>      also accept this origin, e.g. an HTTPS name on a reverse
+                    proxy in front of the helper (repeatable); --url prints it
 --config <dir>      where key.json and token live
                     (default %APPDATA%\signal-rambox, or ~/.config/signal-rambox)
 --url               print the Rambox URL and exit
 ```
 
 For a development build of Signal with its own profile, pass that profile with
-`--user-data`.
+`--user-data`. To run Signal and the helper together in Docker on a server,
+see [signal-headless](../signal-headless).
 
 ## Starting over
 

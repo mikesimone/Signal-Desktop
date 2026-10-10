@@ -1,0 +1,6 @@
+# Used by BuildKit for contrib/signal-headless/Dockerfile only.
+.git
+node_modules
+**/node_modules
+release
+artifacts
