@@ -71,6 +71,7 @@ describe('externalClient/messageDto', () => {
       bodyTruncated: false,
       mentions: [],
       attachments: [],
+      sticker: null,
       quote: null,
       edited: false,
       expiresAt: null,
@@ -228,8 +229,15 @@ describe('externalClient/messageDto', () => {
         fileName: 'a.png',
         width: 10,
         height: 20,
+        state: 'ready',
+        hasThumbnail: true,
+        isVoiceMessage: false,
+        isGif: false,
+        caption: null,
+        blurHash: null,
       },
     ]);
+    assert.notInclude(JSON.stringify(dto), 'secret');
     assert.deepEqual(dto?.quote, {
       authorConversationId: 'conv-bob',
       author: {

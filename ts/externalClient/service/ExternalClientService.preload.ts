@@ -17,9 +17,12 @@ import {
   toConversationDTO,
 } from '../conversationDto.std.ts';
 import {
+  downloadAttachments,
+  getAttachmentThumbnail,
   getAvatar,
   getPreferredReactions,
   react,
+  readAttachment,
 } from './ExternalClientExtras.preload.ts';
 import { markRead, sendText } from './ExternalClientSend.preload.ts';
 import {
@@ -230,6 +233,27 @@ async function dispatch(
     case Method.ReactionsGetPreferred: {
       const params = safeParseUnknown(SERVICE_PARAM_SCHEMAS[method], rawParams);
       return params.success ? getPreferredReactions() : invalid;
+    }
+    case Method.AttachmentsGetThumbnail: {
+      if (!window.ConversationController.isInitialFetchComplete()) {
+        return notReady;
+      }
+      const params = safeParseUnknown(SERVICE_PARAM_SCHEMAS[method], rawParams);
+      return params.success ? getAttachmentThumbnail(params.data) : invalid;
+    }
+    case Method.AttachmentsRead: {
+      if (!window.ConversationController.isInitialFetchComplete()) {
+        return notReady;
+      }
+      const params = safeParseUnknown(SERVICE_PARAM_SCHEMAS[method], rawParams);
+      return params.success ? readAttachment(params.data) : invalid;
+    }
+    case Method.AttachmentsDownload: {
+      if (!window.ConversationController.isInitialFetchComplete()) {
+        return notReady;
+      }
+      const params = safeParseUnknown(SERVICE_PARAM_SCHEMAS[method], rawParams);
+      return params.success ? downloadAttachments(params.data) : invalid;
     }
     default:
       throw new Error(`Unhandled external client method ${method}`);

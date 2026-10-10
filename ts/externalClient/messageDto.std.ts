@@ -4,6 +4,12 @@
 import { ReadStatus } from '../messages/MessageReadStatus.std.ts';
 import type { MessageAttributesType } from '../model-types.d.ts';
 import { BodyRange } from '../types/BodyRange.std.ts';
+import type { AttachmentType } from '../types/Attachment.std.ts';
+import {
+  isGIF,
+  isImageAttachment,
+  isVoiceMessage,
+} from '../util/Attachment.std.ts';
 import type {
   AttachmentMetadataDTO,
   AuthorDTO,
@@ -13,6 +19,7 @@ import type {
   MessageSendStatusType,
   QuoteDTO,
   ReactionDTO,
+  StickerDTO,
 } from './protocol.std.ts';
 import { MessageKind } from './protocol.std.ts';
 
@@ -120,6 +127,35 @@ function toReactions(
     }));
 }
 
+function getAttachmentState(
+  attachment: AttachmentType
+): AttachmentMetadataDTO['state'] {
+  if (attachment.path) {
+    return 'ready';
+  }
+  if (attachment.pending) {
+    return 'downloading';
+  }
+  if (
+    attachment.error ||
+    attachment.isCorrupted ||
+    attachment.wasTooBig ||
+    attachment.backfillError
+  ) {
+    return 'failed';
+  }
+  return 'notDownloaded';
+}
+
+// Whether the service can produce a preview image right now.
+export function hasAttachmentThumbnail(attachment: AttachmentType): boolean {
+  return Boolean(
+    attachment.thumbnail?.path ||
+    attachment.screenshot?.path ||
+    (isImageAttachment(attachment) && attachment.path)
+  );
+}
+
 function toAttachments(
   message: MessageSourceType
 ): Array<AttachmentMetadataDTO> {
@@ -129,7 +165,26 @@ function toAttachments(
     fileName: attachment.fileName ?? null,
     width: attachment.width ?? null,
     height: attachment.height ?? null,
+    state: getAttachmentState(attachment),
+    hasThumbnail: hasAttachmentThumbnail(attachment),
+    isVoiceMessage: isVoiceMessage(attachment),
+    isGif: isGIF(attachment),
+    caption: attachment.caption ?? null,
+    blurHash: attachment.blurHash ?? null,
   }));
+}
+
+function toSticker(message: MessageSourceType): StickerDTO | null {
+  const { sticker } = message;
+  if (!sticker) {
+    return null;
+  }
+  return {
+    emoji: sticker.emoji ?? null,
+    width: sticker.width ?? sticker.data?.width ?? null,
+    height: sticker.height ?? sticker.data?.height ?? null,
+    ready: Boolean(sticker.data?.path),
+  };
 }
 
 function toQuote(
@@ -212,6 +267,7 @@ export function toMessageDTO(
     bodyTruncated: !hidden && message.bodyAttachment != null,
     mentions: hidden ? [] : toMentions(message, context),
     attachments: hidden ? [] : toAttachments(message),
+    sticker: hidden ? null : toSticker(message),
     quote: hidden ? null : toQuote(message, context),
     edited: (message.editHistory?.length ?? 0) > 1,
     expiresAt,

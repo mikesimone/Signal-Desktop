@@ -8,18 +8,21 @@ Signal Desktop keeps running, minimized to the tray, and stays the real
 client: it holds the keys, sends and receives. This helper is an approved
 companion app. It shows your chats with their photos, lets you read and send
 text messages, reply with a quote, react with your quick-reaction bar and
-copy text, marks chats read when you look at them, and while its page is
+copy text, shows photos, videos, GIFs, voice notes, files and stickers
+(with a full-screen viewer, and a Download button for anything Signal has
+not fetched yet), marks chats read when you look at them, and while its page is
 open, takes over message notifications so you get them from Rambox instead
 of Signal. Group chats show each sender's photo, name color and member
 label, as Signal does. The page uses Signal's own emoji and Inter fonts.
 
 Not here yet (being added on the fork, aiming at everything Signal Desktop
-does): attachments, stickers, typing indicators, editing, deleting,
-forwarding and calls. Messages that need them say "open Signal".
+does): sending attachments, link previews, contact cards, polls, typing
+indicators, editing, deleting, forwarding, stories and calls.
 
 Photos, member labels, reactions and replies use fork-only bridge additions
 (`conversations.getAvatar`, `messages.react`, `reactions.getPreferred`,
-`quoteMessageId` on `messages.sendText`, and author details on messages),
+`quoteMessageId` on `messages.sendText`, author details on messages, and
+`attachments.getThumbnail`, `attachments.read` and `attachments.download`),
 not part of the upstream proposal. Against a Signal without them the helper
 asks only for what Signal offers and the rest of the page still works.
 
@@ -35,8 +38,8 @@ pipe or Unix socket, so this helper sits in between:
 
 - It connects to Signal as an approved app (Ed25519 key, Signal's key pinned
   after the first approval) and asks for only `conversations.read`,
-  `messages.read`, `messages.send`, `messages.markRead`, `messages.react`
-  and `notifications.manage`. Adding a capability makes Signal ask for
+  `messages.read`, `messages.send`, `messages.markRead`, `messages.react`,
+  `attachments.read` and `notifications.manage`. Adding a capability makes Signal ask for
   approval once more.
 - It serves a chat page on **127.0.0.1 only**. Everything it serves lives
   under a random secret token, so the URL you give Rambox is the only way in.
@@ -57,7 +60,11 @@ port on 127.0.0.1. So every request must:
 
 The page has a strict Content Security Policy and never inserts text from
 Signal as HTML. Photos are decoded inside Signal and handed over as small
-re-encoded images; no file path or key leaves Signal.
+re-encoded images; no file path or key leaves Signal. Attachments are read
+from Signal in chunks of at most 512 KB and streamed to the page with HTTP
+range support (so video can seek). Only images, video and audio are served
+inline; every other type is served as a download, so a file from a chat can
+never run as a page under the helper's address.
 
 ### Fonts
 

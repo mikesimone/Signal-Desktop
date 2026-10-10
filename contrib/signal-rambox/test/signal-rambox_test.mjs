@@ -166,6 +166,14 @@ describe('signal-rambox', () => {
     bridge.conversations = [alice, group];
     bridge.messages.set(alice.id, [makeMessage(alice.id, { body: 'hi' })]);
     bridge.sendRefusals.set(group.id, 'announcementOnly');
+    bridge.attachments.set('m1:0', {
+      contentType: 'video/mp4',
+      bytes: Buffer.alloc(1_200_000, 7),
+    });
+    bridge.attachments.set('m1:1', {
+      contentType: 'text/html',
+      bytes: Buffer.from('<script>alert(1)</script>'),
+    });
     bridge.avatars.set(alice.id, {
       avatarVersion: 'v1',
       contentType: 'image/png',
@@ -185,6 +193,7 @@ describe('signal-rambox', () => {
   it('asks for exactly the capabilities it uses', () => {
     const req = bridge.calls.find(c => c.method === 'authorization.request');
     assert.deepEqual(req.params.capabilities.sort(), [
+      'attachments.read',
       'conversations.read',
       'messages.markRead',
       'messages.react',
@@ -389,6 +398,55 @@ describe('signal-rambox', () => {
     assert.equal(res.status, 200);
     assert.equal(res.headers['content-type'], 'font/woff2');
     assert.match(res.headers['content-security-policy'], /font-src 'self'/);
+  });
+
+  it('streams attachments in chunks, with ranges', async () => {
+    const base = `/${helper.token}/api/attachment?messageId=m1&index=0&name=clip.mp4`;
+    const whole = await http(port, { path: base });
+    assert.equal(whole.status, 200);
+    assert.equal(whole.headers['content-type'], 'video/mp4');
+    assert.equal(whole.headers['content-length'], '1200000');
+    assert.equal(whole.headers['accept-ranges'], 'bytes');
+    const part = await http(port, {
+      path: base,
+      headers: { range: 'bytes=1199990-' },
+    });
+    assert.equal(part.status, 206);
+    assert.equal(
+      part.headers['content-range'],
+      'bytes 1199990-1199999/1200000'
+    );
+    assert.equal(part.headers['content-length'], '10');
+    const reads = bridge.calls.filter(c => c.method === 'attachments.read');
+    assert.ok(reads.every(c => c.params.length <= 512 * 1024));
+  });
+
+  it('never serves a chat file as a page', async () => {
+    const res = await http(port, {
+      path: `/${helper.token}/api/attachment?messageId=m1&index=1&name=x.html`,
+    });
+    assert.equal(res.status, 200);
+    assert.equal(res.headers['content-type'], 'application/octet-stream');
+    assert.match(res.headers['content-disposition'], /^attachment;/);
+  });
+
+  it('serves thumbnails and asks Signal to download', async () => {
+    const thumb = await http(port, {
+      path: `/${helper.token}/api/thumbnail?messageId=m1&index=0`,
+    });
+    assert.equal(thumb.status, 200);
+    assert.equal(thumb.headers['content-type'], 'image/webp');
+    const missing = await http(port, {
+      path: `/${helper.token}/api/attachment?messageId=nope&index=0`,
+    });
+    assert.equal(missing.status, 404);
+    const download = await http(port, {
+      method: 'POST',
+      path: `/${helper.token}/api/download`,
+      headers: json,
+      body: { messageId: 'm1' },
+    });
+    assert.equal(download.status, 200);
   });
 
   it('marks read', async () => {

@@ -122,6 +122,8 @@ const ICONS = {
   group:
     'M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7ZM2.5 20c.5-3.5 3.2-5.5 6.5-5.5s6 2 6.5 5.5M16 4.3a3.5 3.5 0 0 1 0 6.4M18 14.8c2 .7 3.2 2.5 3.5 5.2',
   note: 'M6 3h9l4 4v14H6zM9 12h7M9 16h7',
+  play: 'M8 5v14l11-7z',
+  download: 'M12 4v11M7 10l5 5 5-5M5 20h14',
 };
 
 function icon(name) {
@@ -513,6 +515,240 @@ function renderActions(m) {
   return actions;
 }
 
+// --- attachments ---------------------------------------------------------------
+
+function formatSize(bytes) {
+  if (bytes < 1024) {
+    return `${bytes} B`;
+  }
+  if (bytes < 1024 * 1024) {
+    return `${(bytes / 1024).toFixed(0)} KB`;
+  }
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function attachmentParams(m, index, extra = {}) {
+  return new URLSearchParams({
+    messageId: m.id,
+    index: String(index),
+    ...extra,
+  });
+}
+
+function attachmentUrl(m, index, a, extra = {}) {
+  return `api/attachment?${attachmentParams(m, index, {
+    name: a.fileName ?? 'attachment',
+    ...extra,
+  })}`;
+}
+
+function kindOf(a) {
+  const type = a.contentType.split('/')[0];
+  if (a.isVoiceMessage || type === 'audio') {
+    return 'audio';
+  }
+  if (type === 'image') {
+    return 'image';
+  }
+  if (type === 'video') {
+    return a.isGif ? 'gif' : 'video';
+  }
+  return 'file';
+}
+
+function requestDownload(m) {
+  api('api/download', { messageId: m.id }).catch(error =>
+    toast(`Couldn't download (${error.code ?? error.message}).`)
+  );
+}
+
+// The status line on media that is not on this computer yet.
+function downloadState(m, a) {
+  if (a.state === 'downloading') {
+    return el('span', 'media-state', 'Downloading…');
+  }
+  if (a.state === 'failed') {
+    return el('span', 'media-state', "Couldn't download");
+  }
+  const button = el(
+    'button',
+    'media-state action',
+    `Download · ${formatSize(a.size)}`
+  );
+  button.type = 'button';
+  button.addEventListener('click', e => {
+    e.stopPropagation();
+    requestDownload(m);
+  });
+  return button;
+}
+
+function mediaBox(a, multiple) {
+  const box = el('span', `media${multiple ? ' tile' : ''}`);
+  if (!multiple && a.width && a.height) {
+    // Keep the shape before the image arrives, as Signal does.
+    const width = Math.min(320, a.width);
+    box.style.width = `${width}px`;
+    box.style.aspectRatio = `${a.width} / ${Math.max(1, a.height)}`;
+  }
+  return box;
+}
+
+function renderVisual(m, a, index, multiple) {
+  const box = mediaBox(a, multiple);
+  const kind = kindOf(a);
+  if (kind === 'gif' && a.state === 'ready') {
+    const video = el('video');
+    video.src = attachmentUrl(m, index, a);
+    video.autoplay = true;
+    video.loop = true;
+    video.muted = true;
+    video.playsInline = true;
+    box.append(video);
+    return box;
+  }
+  if (a.hasThumbnail) {
+    const img = el('img');
+    img.alt = a.caption ?? '';
+    img.loading = 'lazy';
+    img.src = `api/thumbnail?${attachmentParams(m, index)}`;
+    box.append(img);
+  } else {
+    box.classList.add('placeholder');
+  }
+  if (kind === 'video' || kind === 'gif') {
+    const play = el('span', 'play');
+    play.append(icon('play'));
+    box.append(play);
+  }
+  if (a.state !== 'ready') {
+    box.append(downloadState(m, a));
+    return box;
+  }
+  box.classList.add('clickable');
+  box.addEventListener('click', () => openLightbox(m, index));
+  return box;
+}
+
+function renderAudio(m, a, index) {
+  const box = el('span', 'audio');
+  if (a.state === 'ready') {
+    const audio = el('audio');
+    audio.controls = true;
+    audio.preload = 'metadata';
+    audio.src = attachmentUrl(m, index, a);
+    box.append(audio);
+  } else {
+    box.append(
+      el(
+        'span',
+        'file-name',
+        a.isVoiceMessage ? 'Voice message' : (a.fileName ?? 'Audio')
+      ),
+      downloadState(m, a)
+    );
+  }
+  return box;
+}
+
+function renderFile(m, a, index) {
+  const row = el(a.state === 'ready' ? 'a' : 'span', 'file');
+  const badge = el('span', 'file-icon');
+  badge.textContent = (a.fileName?.split('.').pop() ?? '')
+    .slice(0, 4)
+    .toUpperCase();
+  const text = el('span', 'file-text');
+  text.append(
+    el('span', 'file-name', a.fileName ?? 'File'),
+    el('span', 'file-size', formatSize(a.size))
+  );
+  row.append(badge, text);
+  if (a.state === 'ready') {
+    row.href = attachmentUrl(m, index, a, { download: '1' });
+    row.download = a.fileName ?? 'attachment';
+  } else {
+    row.append(downloadState(m, a));
+  }
+  return row;
+}
+
+function renderAttachments(m) {
+  const box = el('span', 'attachments');
+  const visual = [];
+  m.attachments.forEach((a, index) => {
+    const kind = kindOf(a);
+    if (kind === 'image' || kind === 'video' || kind === 'gif') {
+      visual.push([a, index]);
+    }
+  });
+  if (visual.length > 0) {
+    const grid = el('span', `media-grid${visual.length > 1 ? ' multi' : ''}`);
+    for (const [a, index] of visual) {
+      grid.append(renderVisual(m, a, index, visual.length > 1));
+    }
+    box.append(grid);
+  }
+  m.attachments.forEach((a, index) => {
+    const kind = kindOf(a);
+    if (kind === 'audio') {
+      box.append(renderAudio(m, a, index));
+    } else if (kind === 'file') {
+      box.append(renderFile(m, a, index));
+    }
+  });
+  const captions = m.attachments.map(a => a.caption).filter(Boolean);
+  if (captions.length > 0 && !m.body) {
+    box.append(el('span', 'body', captions.join('\n')));
+  }
+  return box;
+}
+
+function renderSticker(m) {
+  const box = el('span', 'sticker');
+  if (m.sticker?.ready) {
+    const img = el('img');
+    img.alt = m.sticker.emoji ?? 'Sticker';
+    img.src = `api/attachment?${new URLSearchParams({ messageId: m.id, sticker: '1' })}`;
+    box.append(img);
+  } else {
+    box.append(el('span', 'body note', `Sticker ${m.sticker?.emoji ?? ''}`));
+    const button = el('button', 'media-state action', 'Download');
+    button.type = 'button';
+    button.addEventListener('click', () => requestDownload(m));
+    box.append(button);
+  }
+  return box;
+}
+
+// Full-size view of a message's photos and videos, like Signal's.
+function openLightbox(m, index) {
+  const a = m.attachments[index];
+  const box = $('lightbox');
+  const stage = $('lightbox-stage');
+  let content;
+  if (kindOf(a) === 'image') {
+    content = el('img');
+    content.alt = a.caption ?? '';
+  } else {
+    content = el('video');
+    content.controls = true;
+    content.autoplay = true;
+    content.loop = a.isGif;
+    content.playsInline = true;
+  }
+  content.src = attachmentUrl(m, index, a);
+  stage.replaceChildren(content);
+  $('lightbox-caption').textContent = a.caption ?? '';
+  $('lightbox-save').href = attachmentUrl(m, index, a, { download: '1' });
+  $('lightbox-save').download = a.fileName ?? 'attachment';
+  box.hidden = false;
+}
+
+function closeLightbox() {
+  $('lightbox').hidden = true;
+  $('lightbox-stage').replaceChildren();
+}
+
 // prev/next: the neighboring messages, to group runs by the same author.
 function renderMessage(m, prev, next) {
   const outgoing = m.direction === 'outgoing';
@@ -556,23 +792,24 @@ function renderMessage(m, prev, next) {
   if (m.quote) {
     bubble.append(renderQuote(m.quote));
   }
-  const body = el('span', 'body');
-  if (m.kind === 'text') {
-    const parts = [];
-    if (m.body) {
-      parts.push(
-        m.bodyTruncated ? `${m.body}… (open Signal for more)` : m.body
-      );
-    }
-    for (const a of describeAttachments(m.attachments)) {
-      parts.push(`[${a}: open Signal to view]`);
-    }
-    body.textContent = parts.join('\n');
-  } else {
-    body.classList.add('note');
-    body.textContent = summarize(m);
+  if (m.kind === 'text' && m.attachments.length > 0) {
+    bubble.classList.add('has-media');
+    bubble.append(renderAttachments(m));
   }
-  bubble.append(body);
+  if (m.kind === 'sticker') {
+    bubble.classList.add('sticker-bubble');
+    bubble.append(renderSticker(m));
+  } else if (m.kind !== 'text') {
+    bubble.append(el('span', 'body note', summarize(m)));
+  } else if (m.body) {
+    bubble.append(
+      el(
+        'span',
+        'body',
+        m.bodyTruncated ? `${m.body}… (open Signal for more)` : m.body
+      )
+    );
+  }
 
   const meta = el('span', 'meta');
   const bits = [formatTime(m.sentAt)];
@@ -599,14 +836,56 @@ function sortedMessages() {
   return [...messages.values()].sort((a, b) => a.sentAt - b.sentAt);
 }
 
+// Rendered messages are kept and reused while unchanged, and the list is
+// patched in place, so playing media and loaded images are left alone.
+const messageCache = new Map();
+
+function cachedMessage(m, prev, next) {
+  const key = JSON.stringify([
+    m,
+    prev?.authorConversationId,
+    prev?.direction,
+    prev?.sentAt,
+    next?.authorConversationId,
+    next?.direction,
+    next?.sentAt,
+    capabilities,
+    formatTime(m.sentAt),
+  ]);
+  const cached = messageCache.get(m.id);
+  if (cached && cached.key === key) {
+    return cached.li;
+  }
+  const li = renderMessage(m, prev, next);
+  messageCache.set(m.id, { key, li });
+  return li;
+}
+
+function patchChildren(parent, wanted) {
+  wanted.forEach((node, i) => {
+    if (parent.children[i] !== node) {
+      parent.insertBefore(node, parent.children[i] ?? null);
+    }
+  });
+  while (parent.children.length > wanted.length) {
+    parent.lastElementChild.remove();
+  }
+}
+
 function renderMessages({ keepBottom = true } = {}) {
   const box = $('messages');
   const atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 40;
   const previousHeight = box.scrollHeight;
   const list = sortedMessages();
-  $('message-list').replaceChildren(
-    ...list.map((m, i) => renderMessage(m, list[i - 1], list[i + 1]))
+  patchChildren(
+    $('message-list'),
+    list.map((m, i) => cachedMessage(m, list[i - 1], list[i + 1]))
   );
+  for (const id of messageCache.keys()) {
+    if (!messages.has(id)) {
+      messageCache.delete(id);
+    }
+  }
   $('older').hidden = !nextCursor;
   if (keepBottom && atBottom) {
     box.scrollTop = box.scrollHeight;
@@ -1077,6 +1356,14 @@ $('banner-action').addEventListener('click', () =>
   api('api/retry', {}).catch(() => {})
 );
 $('reply-cancel').append(icon('close'));
+$('lightbox-close').append(icon('close'));
+$('lightbox-save').append(icon('download'));
+$('lightbox-close').addEventListener('click', closeLightbox);
+$('lightbox').addEventListener('click', e => {
+  if (e.target === $('lightbox') || e.target === $('lightbox-stage')) {
+    closeLightbox();
+  }
+});
 $('reply-cancel').addEventListener('click', cancelReply);
 document.addEventListener('click', e => {
   if (!e.target.closest?.('.popover')) {
@@ -1086,6 +1373,7 @@ document.addEventListener('click', e => {
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') {
     closePopovers();
+    closeLightbox();
   }
 });
 $('messages').addEventListener('scroll', closePopovers, { passive: true });

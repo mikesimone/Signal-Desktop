@@ -108,8 +108,11 @@ export class FakeBridge {
     'messages.send',
     'messages.markRead',
     'messages.react',
+    'attachments.read',
     'notifications.manage',
   ];
+  // `${messageId}:${index}` -> { contentType, bytes }
+  attachments = new Map();
   // conversationId -> { avatarVersion, contentType, data }
   avatars = new Map();
   reactionEmoji = ['🔥', '👍', '👎', '😂', '😮', '😢'];
@@ -290,6 +293,36 @@ export class FakeBridge {
       }
       case 'messages.markRead':
       case 'messages.react':
+        this.#reply(session, id, {});
+        return;
+      case 'attachments.read': {
+        const key = params.sticker
+          ? `${params.messageId}:sticker`
+          : `${params.messageId}:${params.index}`;
+        const file = this.attachments.get(key);
+        if (!file) {
+          this.#error(session, id, 'NOT_FOUND');
+          return;
+        }
+        this.#reply(session, id, {
+          contentType: file.contentType,
+          size: file.bytes.length,
+          offset: params.offset,
+          data: file.bytes
+            .subarray(params.offset, params.offset + params.length)
+            .toString('base64'),
+        });
+        return;
+      }
+      case 'attachments.getThumbnail':
+        this.#reply(session, id, {
+          contentType: 'image/webp',
+          width: 1,
+          height: 1,
+          data: (this.thumbnailBytes ?? Buffer.from('thumb')).toString('base64'),
+        });
+        return;
+      case 'attachments.download':
         this.#reply(session, id, {});
         return;
       case 'reactions.getPreferred':

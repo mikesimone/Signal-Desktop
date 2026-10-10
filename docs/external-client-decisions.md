@@ -274,3 +274,19 @@ the user's quick-reaction bar. `messages.sendText` takes an optional
 
 WHY: Mike uses the Rambox page instead of Signal's window, so it has to
 look and act like Signal; the goal is every Signal Desktop feature.
+
+## F2. Fork only: attachment content
+
+DECISION: capability `attachments.read` (approved by name, "See photos,
+videos and files in your messages") with `attachments.getThumbnail` (a
+preview re-encoded inside Signal, at most 640 px), `attachments.read`
+(decrypted content in chunks of at most 512 KB at an offset, through the
+timeline's own range-capable URL) and `attachments.download` (what clicking
+a not-yet-downloaded attachment does). `AttachmentMetadataDTO` gains
+`state`, `hasThumbnail`, `isVoiceMessage`, `isGif`, `caption` and
+`blurHash`; `MessageDTO` gains `sticker`. A target is reachable only when
+the message's DTO shows it, so view-once, deleted and erased content never
+crosses, as in D7.
+
+WHY: "open Signal to view" is not acceptable for a client that replaces
+Signal's window (Mike, 2026-10-10).

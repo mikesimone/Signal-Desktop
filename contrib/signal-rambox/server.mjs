@@ -24,6 +24,34 @@ const MAX_EVENT_STREAMS = 8;
 // page's own calls while a chat list full of photos loads.
 const MAX_AVATAR_CALLS = 4;
 const MAX_CACHED_AVATARS = 2000;
+// Must not exceed the bridge's MAX_ATTACHMENT_CHUNK_BYTES.
+const ATTACHMENT_CHUNK_BYTES = 512 * 1024;
+
+// "bytes=a-b" or "bytes=a-" within size, else null (serve everything).
+export function parseRange(header, size) {
+  const match = /^bytes=(\d*)-(\d*)$/.exec(header ?? '');
+  if (!match || (match[1] === '' && match[2] === '')) {
+    return null;
+  }
+  let start;
+  let end;
+  if (match[1] === '') {
+    start = Math.max(0, size - Number(match[2]));
+    end = size - 1;
+  } else {
+    start = Number(match[1]);
+    end = match[2] === '' ? size - 1 : Math.min(Number(match[2]), size - 1);
+  }
+  if (start > end || start >= size) {
+    return 'unsatisfiable';
+  }
+  return { start, end };
+}
+
+// Only these types are shown inline; anything else is a download, so a file
+// from a chat can never run as a page on this origin.
+const INLINE_TYPES =
+  /^(image\/(jpeg|png|gif|webp|avif|bmp)|video\/(mp4|webm|quicktime)|audio\/[a-z0-9.+-]+)$/i;
 
 // Signal's own fonts: its emoji set and Inter. Served from fontDir, which
 // holds Signal's fonts/ folder layout (the repository's, or a copy).
@@ -49,7 +77,8 @@ const SECURITY_HEADERS = {
   'Cache-Control': 'no-store',
   'Content-Security-Policy':
     "default-src 'none'; script-src 'self'; style-src 'self'; " +
-    "img-src 'self'; font-src 'self'; connect-src 'self'; base-uri 'none'; " +
+    "img-src 'self'; font-src 'self'; media-src 'self'; connect-src 'self'; " +
+    "base-uri 'none'; " +
     "form-action 'none'; frame-ancestors 'none'",
   'Referrer-Policy': 'no-referrer',
   'X-Content-Type-Options': 'nosniff',
@@ -217,6 +246,79 @@ export function createWebServer({
     bridge.setNotificationsWanted(streams.size > 0).catch(() => {});
   }
 
+  function attachmentTarget(url) {
+    const messageId = url.searchParams.get('messageId');
+    return url.searchParams.get('sticker') === '1'
+      ? { messageId, sticker: true }
+      : { messageId, index: Number(url.searchParams.get('index') ?? 0) };
+  }
+
+  // Streams decrypted attachment content from Signal in chunks, honoring
+  // Range so video can seek.
+  async function streamAttachment(req, res, url) {
+    const target = attachmentTarget(url);
+    const first = await bridge.call('attachments.read', {
+      ...target,
+      offset: 0,
+      length: 1,
+    });
+    const { size } = first;
+    const type = first.contentType || 'application/octet-stream';
+    const inline =
+      INLINE_TYPES.test(type) && url.searchParams.get('download') !== '1';
+    const name = (url.searchParams.get('name') ?? 'attachment').replace(
+      /[^\p{L}\p{N} ._()-]/gu,
+      '_'
+    );
+    const range = parseRange(req.headers.range, size);
+    if (range === 'unsatisfiable') {
+      res.writeHead(416, {
+        ...SECURITY_HEADERS,
+        'Content-Range': `bytes */${size}`,
+      });
+      res.end();
+      return;
+    }
+    const start = range ? range.start : 0;
+    const end = range ? range.end : size - 1;
+    res.writeHead(range ? 206 : 200, {
+      ...SECURITY_HEADERS,
+      'Content-Type': inline ? type : 'application/octet-stream',
+      'Content-Length': String(Math.max(0, end - start + 1)),
+      'Accept-Ranges': 'bytes',
+      'Content-Disposition': `${inline ? 'inline' : 'attachment'}; filename*=UTF-8''${encodeURIComponent(name)}`,
+      'Cache-Control': 'private, max-age=3600',
+      ...(range ? { 'Content-Range': `bytes ${start}-${end}/${size}` } : {}),
+    });
+    let closed = false;
+    req.on('close', () => {
+      closed = true;
+    });
+    let offset = start;
+    while (offset <= end && !closed) {
+      const length = Math.min(ATTACHMENT_CHUNK_BYTES, end - offset + 1);
+      // oxlint-disable-next-line no-await-in-loop
+      const chunk = await bridge.call('attachments.read', {
+        ...target,
+        offset,
+        length,
+      });
+      const bytes = Buffer.from(chunk.data, 'base64');
+      if (bytes.length === 0) {
+        break;
+      }
+      if (!res.write(bytes)) {
+        // oxlint-disable-next-line no-await-in-loop
+        await new Promise(resolve => {
+          res.once('drain', resolve);
+          res.once('close', resolve);
+        });
+      }
+      offset += bytes.length;
+    }
+    res.end();
+  }
+
   async function handleApi(req, res, route, url) {
     if (req.method === 'GET' && route === 'api/state') {
       sendJson(res, 200, {
@@ -243,6 +345,30 @@ export function createWebServer({
           : {}),
       });
       res.end(avatar.bytes);
+      return;
+    }
+    if (req.method === 'GET' && route === 'api/thumbnail') {
+      const target = attachmentTarget(url);
+      const thumb = await bridge.call('attachments.getThumbnail', target);
+      res.writeHead(200, {
+        ...SECURITY_HEADERS,
+        'Content-Type': thumb.contentType,
+        'Cache-Control': 'private, max-age=3600',
+      });
+      res.end(Buffer.from(thumb.data, 'base64'));
+      return;
+    }
+    if (req.method === 'GET' && route === 'api/attachment') {
+      await streamAttachment(req, res, url);
+      return;
+    }
+    if (req.method === 'POST' && route === 'api/download') {
+      const { messageId } = await readJson(req);
+      sendJson(
+        res,
+        200,
+        await bridge.call('attachments.download', { messageId })
+      );
       return;
     }
     if (req.method === 'GET' && route === 'api/reactions') {
@@ -339,7 +465,17 @@ export function createWebServer({
       try {
         await handleApi(req, res, route, url);
       } catch (error) {
-        sendJson(res, error.code === 'OFFLINE' ? 503 : 400, {
+        if (res.headersSent) {
+          res.destroy();
+          return;
+        }
+        const status =
+          error.code === 'OFFLINE'
+            ? 503
+            : error.code === 'NOT_FOUND'
+              ? 404
+              : 400;
+        sendJson(res, status, {
           error: {
             code: error.code ?? 'ERROR',
             reason: error.reason,

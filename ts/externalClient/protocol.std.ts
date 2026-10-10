@@ -58,6 +58,7 @@ export const IMPLEMENTED_CAPABILITIES: ReadonlyArray<CapabilityType> = [
   Capability.MessagesSend,
   Capability.MessagesMarkRead,
   Capability.MessagesReact,
+  Capability.AttachmentsRead,
   Capability.NotificationsManage,
 ];
 
@@ -113,6 +114,9 @@ export const Method = {
   ConversationsGetAvatar: 'conversations.getAvatar',
   MessagesReact: 'messages.react',
   ReactionsGetPreferred: 'reactions.getPreferred',
+  AttachmentsGetThumbnail: 'attachments.getThumbnail',
+  AttachmentsRead: 'attachments.read',
+  AttachmentsDownload: 'attachments.download',
 } as const;
 export type MethodType = (typeof Method)[keyof typeof Method];
 
@@ -127,6 +131,9 @@ export const SERVICE_METHOD_CAPABILITIES = {
   [Method.ConversationsGetAvatar]: Capability.ConversationsRead,
   [Method.MessagesReact]: Capability.MessagesReact,
   [Method.ReactionsGetPreferred]: Capability.MessagesReact,
+  [Method.AttachmentsGetThumbnail]: Capability.AttachmentsRead,
+  [Method.AttachmentsRead]: Capability.AttachmentsRead,
+  [Method.AttachmentsDownload]: Capability.AttachmentsRead,
 } as const satisfies Partial<Record<MethodType, CapabilityType>>;
 export type ServiceMethodType = keyof typeof SERVICE_METHOD_CAPABILITIES;
 
@@ -431,6 +438,61 @@ export type ReactionsGetPreferredResultType = Readonly<{
   emoji: ReadonlyArray<string>;
 }>;
 
+// Fork addition: attachment content. `index` is the position in the
+// message's `attachments`; `sticker: true` names the message's sticker
+// instead. Content of view-once, deleted and erased messages never crosses.
+const attachmentTargetShape = {
+  messageId: messageIdSchema,
+  index: z.number().int().min(0).max(63).optional(),
+  sticker: z.literal(true).optional(),
+};
+
+export const attachmentsGetThumbnailParamsSchema = z
+  .object(attachmentTargetShape)
+  .strict();
+export type AttachmentsGetThumbnailParamsType = z.infer<
+  typeof attachmentsGetThumbnailParamsSchema
+>;
+
+export const THUMBNAIL_SIZE_PX = 640;
+
+export type AttachmentsGetThumbnailResultType = Readonly<{
+  contentType: 'image/webp' | 'image/png';
+  width: number;
+  height: number;
+  data: string;
+}>;
+
+// Base64 grows content by a third; this keeps a chunk well inside a frame.
+export const MAX_ATTACHMENT_CHUNK_BYTES = 512 * 1024;
+
+export const attachmentsReadParamsSchema = z
+  .object({
+    ...attachmentTargetShape,
+    offset: z.number().int().min(0),
+    length: z.number().int().min(1).max(MAX_ATTACHMENT_CHUNK_BYTES),
+  })
+  .strict();
+export type AttachmentsReadParamsType = z.infer<
+  typeof attachmentsReadParamsSchema
+>;
+
+export type AttachmentsReadResultType = Readonly<{
+  contentType: string;
+  // Total size of the decrypted content.
+  size: number;
+  offset: number;
+  // Base64; shorter than asked for at the end.
+  data: string;
+}>;
+
+export const attachmentsDownloadParamsSchema = z
+  .object({ messageId: messageIdSchema })
+  .strict();
+export type AttachmentsDownloadParamsType = z.infer<
+  typeof attachmentsDownloadParamsSchema
+>;
+
 export const notificationsSetHandledParamsSchema = z
   .object({
     handled: z.boolean(),
@@ -467,6 +529,9 @@ export const SERVICE_PARAM_SCHEMAS = {
   [Method.ConversationsGetAvatar]: conversationsGetAvatarParamsSchema,
   [Method.MessagesReact]: messagesReactParamsSchema,
   [Method.ReactionsGetPreferred]: reactionsGetPreferredParamsSchema,
+  [Method.AttachmentsGetThumbnail]: attachmentsGetThumbnailParamsSchema,
+  [Method.AttachmentsRead]: attachmentsReadParamsSchema,
+  [Method.AttachmentsDownload]: attachmentsDownloadParamsSchema,
 } as const satisfies Record<ServiceMethodType, z.ZodType>;
 
 export type ConversationsListParamsType = z.infer<
@@ -536,6 +601,24 @@ export type AttachmentMetadataDTO = Readonly<{
   fileName: string | null;
   width: number | null;
   height: number | null;
+  // Fork additions. `ready`: attachments.read works; `notDownloaded`: ask
+  // with attachments.download.
+  state: 'ready' | 'downloading' | 'notDownloaded' | 'failed';
+  // attachments.getThumbnail can return a preview image now.
+  hasThumbnail: boolean;
+  isVoiceMessage: boolean;
+  isGif: boolean;
+  caption: string | null;
+  blurHash: string | null;
+}>;
+
+// Fork addition.
+export type StickerDTO = Readonly<{
+  emoji: string | null;
+  width: number | null;
+  height: number | null;
+  // attachments.read with `sticker: true` works.
+  ready: boolean;
 }>;
 
 // Who wrote a message, as Signal shows it in that conversation.
@@ -601,6 +684,7 @@ export type MessageDTO = Readonly<{
   bodyTruncated: boolean;
   mentions: ReadonlyArray<MentionDTO>;
   attachments: ReadonlyArray<AttachmentMetadataDTO>;
+  sticker: StickerDTO | null;
   quote: QuoteDTO | null;
   edited: boolean;
   // Disappearing messages: clients must discard the message by this time.

@@ -34,9 +34,13 @@ export const CAPABILITIES = [
   'messages.send',
   'messages.markRead',
   'notifications.manage',
-  // Fork-only (Better Signal): reactions.
+  // Fork-only (Better Signal): reactions, attachment content.
   'messages.react',
+  'attachments.read',
 ];
+
+// Signal answers at most 16 requests at once per app.
+const MAX_IN_FLIGHT = 12;
 
 export const BridgeState = {
   // Signal is not running, or its bridge is off.
@@ -154,6 +158,8 @@ export class Bridge {
   #wantNotifications = false;
   #notificationsHeld = false;
   #capabilities = [];
+  #inFlight = 0;
+  #queued = [];
 
   // onEvent({ event, seq, data }), onState(state), onReady()
   constructor({
@@ -243,7 +249,22 @@ export class Bridge {
     }
   }
 
-  call(method, params) {
+  // Like #send, but waits for a free slot so that bursts (a page of photos,
+  // a video being streamed) stay under Signal's limit.
+  async call(method, params) {
+    if (this.#inFlight >= MAX_IN_FLIGHT) {
+      await new Promise(resolve => this.#queued.push(resolve));
+    }
+    this.#inFlight += 1;
+    try {
+      return await this.#send(method, params);
+    } finally {
+      this.#inFlight -= 1;
+      this.#queued.shift()?.();
+    }
+  }
+
+  #send(method, params) {
     const socket = this.#socket;
     if (!socket || socket.destroyed) {
       return Promise.reject(
