@@ -22,6 +22,7 @@ import {
   editMessage,
   getAttachmentThumbnail,
   getAvatar,
+  getEmojiCatalog,
   getPreferredReactions,
   react,
   readAttachment,
@@ -242,6 +243,10 @@ async function dispatch(
       }
       const params = safeParseUnknown(SERVICE_PARAM_SCHEMAS[method], rawParams);
       return params.success ? react(params.data) : invalid;
+    }
+    case Method.EmojiGetCatalog: {
+      const params = safeParseUnknown(SERVICE_PARAM_SCHEMAS[method], rawParams);
+      return params.success ? getEmojiCatalog() : invalid;
     }
     case Method.ReactionsGetPreferred: {
       const params = safeParseUnknown(SERVICE_PARAM_SCHEMAS[method], rawParams);

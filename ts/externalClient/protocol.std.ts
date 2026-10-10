@@ -122,6 +122,7 @@ export const Method = {
   AttachmentsUploadBegin: 'attachments.uploadBegin',
   AttachmentsUploadChunk: 'attachments.uploadChunk',
   MessagesForward: 'messages.forward',
+  EmojiGetCatalog: 'emoji.getCatalog',
 } as const;
 export type MethodType = (typeof Method)[keyof typeof Method];
 
@@ -144,6 +145,7 @@ export const SERVICE_METHOD_CAPABILITIES = {
   [Method.AttachmentsUploadBegin]: Capability.MessagesSend,
   [Method.AttachmentsUploadChunk]: Capability.MessagesSend,
   [Method.MessagesForward]: Capability.MessagesSend,
+  [Method.EmojiGetCatalog]: Capability.MessagesReact,
 } as const satisfies Partial<Record<MethodType, CapabilityType>>;
 export type ServiceMethodType = keyof typeof SERVICE_METHOD_CAPABILITIES;
 
@@ -459,6 +461,23 @@ export const reactionsGetPreferredParamsSchema = z.object({}).strict();
 export type ReactionsGetPreferredResultType = Readonly<{
   // The user's quick-reaction bar, in order, with their skin tone applied.
   emoji: ReadonlyArray<string>;
+  // Fork addition: Signal's recently used emoji, newest first, likewise.
+  recent: ReadonlyArray<string>;
+}>;
+
+// Fork addition: every emoji Signal's picker offers, by category, with the
+// user's skin tone applied, for a full picker after the quick-reaction bar.
+export const emojiGetCatalogParamsSchema = z.object({}).strict();
+
+export type EmojiCatalogCategoryDTO = Readonly<{
+  // Signal's category id, e.g. SMILIES_AND_PEOPLE.
+  id: string;
+  // [emoji, short name], in Signal's order.
+  emoji: ReadonlyArray<readonly [string, string]>;
+}>;
+
+export type EmojiGetCatalogResultType = Readonly<{
+  categories: ReadonlyArray<EmojiCatalogCategoryDTO>;
 }>;
 
 // Fork addition: attachment content. `index` is the position in the
@@ -662,6 +681,7 @@ export const SERVICE_PARAM_SCHEMAS = {
   [Method.AttachmentsUploadBegin]: attachmentsUploadBeginParamsSchema,
   [Method.AttachmentsUploadChunk]: attachmentsUploadChunkParamsSchema,
   [Method.MessagesForward]: messagesForwardParamsSchema,
+  [Method.EmojiGetCatalog]: emojiGetCatalogParamsSchema,
 } as const satisfies Record<ServiceMethodType, z.ZodType>;
 
 export type ConversationsListParamsType = z.infer<

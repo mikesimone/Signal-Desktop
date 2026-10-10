@@ -185,7 +185,7 @@ export function createWebServer({
   const avatarLoads = new Map();
   let avatarCalls = 0;
   const avatarQueue = [];
-  let preferredReactions = null;
+  let emojiCatalog = null;
 
   async function withAvatarSlot(task) {
     if (avatarCalls >= MAX_AVATAR_CALLS) {
@@ -437,8 +437,17 @@ export function createWebServer({
         sendJson(res, 200, { emoji: DEFAULT_REACTIONS });
         return;
       }
-      preferredReactions ??= await bridge.call('reactions.getPreferred', {});
-      sendJson(res, 200, preferredReactions);
+      // Not cached: the recently used list changes as the user reacts.
+      sendJson(res, 200, await bridge.call('reactions.getPreferred', {}));
+      return;
+    }
+    if (req.method === 'GET' && route === 'api/emoji') {
+      if (!bridge.capabilities.includes('messages.react')) {
+        sendJson(res, 404, { error: { code: 'NOT_FOUND' } });
+        return;
+      }
+      emojiCatalog ??= await bridge.call('emoji.getCatalog', {});
+      sendJson(res, 200, emojiCatalog);
       return;
     }
     if (req.method === 'POST' && route === 'api/react') {
@@ -621,7 +630,7 @@ export function createWebServer({
     broadcast,
     // A new connection may come with a different Signal or settings.
     forgetCachedState() {
-      preferredReactions = null;
+      emojiCatalog = null;
     },
     get streamCount() {
       return streams.size;

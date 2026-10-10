@@ -5,7 +5,10 @@ import { createLogger } from '../../logging/log.std.ts';
 import { drop } from '../../util/drop.std.ts';
 import { Emoji } from '../../axo/emoji.std.ts';
 import { enqueueReactionForSend } from '../../reactions/enqueueReactionForSend.preload.ts';
-import { getPreferredReactionEmoji } from '../../state/selectors/items.dom.ts';
+import {
+  getEmojiSkinToneDefault,
+  getPreferredReactionEmoji,
+} from '../../state/selectors/items.dom.ts';
 import * as Errors from '../../types/errors.std.ts';
 import type { AttachmentType } from '../../types/Attachment.std.ts';
 import { isImageAttachment } from '../../util/Attachment.std.ts';
@@ -26,6 +29,7 @@ import type {
   AttachmentsReadResultType,
   ConversationsGetAvatarParamsType,
   ConversationsGetAvatarResultType,
+  EmojiGetCatalogResultType,
   MessagesDeleteParamsType,
   MessagesEditParamsType,
   MessagesReactParamsType,
@@ -325,10 +329,31 @@ export async function downloadAttachments({
   return { ok: true, value: {} };
 }
 
+function withSkinTone(parent: Emoji.Parent): string {
+  const skinTone =
+    getEmojiSkinToneDefault(window.reduxStore.getState()) ??
+    Emoji.SkinTone.None;
+  return Emoji.getVariant(parent, skinTone);
+}
+
 export function getPreferredReactions(): ServiceResultType {
+  const state = window.reduxStore.getState();
   const value: ReactionsGetPreferredResultType = {
-    emoji: getPreferredReactionEmoji(window.reduxStore.getState()),
+    emoji: getPreferredReactionEmoji(state),
+    recent: state.emojis.recentEmojis.map(parent => withSkinTone(parent)),
   };
+  return { ok: true, value };
+}
+
+// Signal's full emoji picker: its categories and order, its short names.
+export function getEmojiCatalog(): ServiceResultType {
+  const categories = Object.values(Emoji.Category).map(id => ({
+    id,
+    emoji: Emoji.getCategoryParents(id).map(
+      parent => [withSkinTone(parent), Emoji.getDisplayLabel(parent)] as const
+    ),
+  }));
+  const value: EmojiGetCatalogResultType = { categories };
   return { ok: true, value };
 }
 
@@ -362,13 +387,16 @@ export async function react({
     return { ok: false, code: ErrorCode.PreconditionFailed, reason };
   }
 
-  await enqueueReactionForSend({
-    messageId,
-    emoji: Emoji.isSkinToneVariant(emoji)
-      ? emoji
-      : Emoji.getDefaultVariant(Emoji.getParent(emoji)),
-    remove,
-  });
+  const variant: Emoji.Variant = Emoji.isSkinToneVariant(emoji)
+    ? emoji
+    : Emoji.getDefaultVariant(Emoji.getParent(emoji));
+  await enqueueReactionForSend({ messageId, emoji: variant, remove });
+  // As Signal's picker does for anything beyond the quick-reaction bar:
+  // it goes into the recently used list.
+  const bar = getPreferredReactionEmoji(window.reduxStore.getState());
+  if (!remove && !bar.some(item => item === emoji)) {
+    window.reduxActions.emojis.onUseEmoji({ emoji: variant });
+  }
   return { ok: true, value: {} };
 }
 

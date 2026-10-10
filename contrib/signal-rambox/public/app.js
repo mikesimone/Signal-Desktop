@@ -139,6 +139,21 @@ const ICONS = {
   forward: 'M14 5l6 6-6 6M20 11H10a6 6 0 0 0-6 6v2',
   search: 'M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14ZM16 16l4.5 4.5',
   file: 'M6 3h8l4 4v14H6zM14 3v4h4',
+  'cat-recent': 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18ZM12 7v5l3 2',
+  'cat-smileys':
+    'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18ZM8.5 14s1.3 2 3.5 2 3.5-2 3.5-2M9 9.5h.01M15 9.5h.01',
+  'cat-animals':
+    'M7 9a2 2 0 1 0 0-4 2 2 0 0 0 0 4ZM17 9a2 2 0 1 0 0-4 2 2 0 0 0 0 4ZM12 20c-4 0-6-2.5-6-6s2.7-6 6-6 6 2.5 6 6-2 6-6 6Z',
+  'cat-food':
+    'M4 11h16M5 11a7 5 0 0 1 14 0M4 15h16M5 15v1a3 3 0 0 0 3 3h8a3 3 0 0 0 3-3v-1',
+  'cat-activities':
+    'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18ZM3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18',
+  'cat-travel': 'M5 16v-5l2-5h10l2 5v5M3 16h18v2H3zM7 19v1M17 19v1M5 11h14',
+  'cat-objects':
+    'M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.4.4.5.9.5 1.4V16h6v-.7c0-.5.2-1 .5-1.4A6 6 0 0 0 12 3Z',
+  'cat-symbols':
+    'M12 20s-7-4.5-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.5-7 10-7 10Z',
+  'cat-flags': 'M5 21V4M5 4h11l-2 4 2 4H5',
 };
 
 function icon(name) {
@@ -1321,18 +1336,27 @@ function toast(text) {
 function closePopovers() {
   $('reaction-picker').hidden = true;
   $('more-menu').hidden = true;
+  $('emoji-picker').hidden = true;
 }
 
+// anchor: an element, or a rect taken before its element was hidden.
 function placePopover(popover, anchor) {
   popover.hidden = false;
-  const a = anchor.getBoundingClientRect();
+  const a =
+    'getBoundingClientRect' in anchor ? anchor.getBoundingClientRect() : anchor;
   const p = popover.getBoundingClientRect();
   const left = Math.min(
     Math.max(8, a.left + a.width / 2 - p.width / 2),
     window.innerWidth - p.width - 8
   );
   const above = a.top - p.height - 6;
-  const top = above >= 8 ? above : a.bottom + 6;
+  const top = Math.max(
+    8,
+    Math.min(
+      above >= 8 ? above : a.bottom + 6,
+      window.innerHeight - p.height - 8
+    )
+  );
   popover.style.left = `${left}px`;
   popover.style.top = `${top}px`;
 }
@@ -1365,9 +1389,193 @@ async function openReactionPicker(m, anchor) {
         sendReaction(m, e, e === mine);
       });
       return button;
-    })
+    }),
+    morePicks(m, mine)
   );
   placePopover(picker, anchor);
+}
+
+// The ⋯ after the quick reactions: Signal's full picker.
+function morePicks(m, mine) {
+  const more = el('button', 'pick pick-more');
+  more.type = 'button';
+  more.title = 'More reactions';
+  more.setAttribute('aria-label', 'More reactions');
+  more.append(icon('more'));
+  more.addEventListener('click', ev => {
+    ev.stopPropagation();
+    const anchor = $('reaction-picker');
+    openEmojiPicker(anchor, e => sendReaction(m, e, e === mine));
+  });
+  return more;
+}
+
+// --- full emoji picker ---------------------------------------------------------
+
+const EMOJI_TABS = [
+  ['recent', 'cat-recent', 'Recently used'],
+  ['SMILIES_AND_PEOPLE', 'cat-smileys', 'Smileys & people'],
+  ['ANIMALS_AND_NATURE', 'cat-animals', 'Animals & nature'],
+  ['FOOD_AND_DRINK', 'cat-food', 'Food & drink'],
+  ['ACTIVITIES', 'cat-activities', 'Activities'],
+  ['TRAVEL_AND_PLACES', 'cat-travel', 'Travel & places'],
+  ['OBJECTS', 'cat-objects', 'Objects'],
+  ['SYMBOLS', 'cat-symbols', 'Symbols'],
+  ['FLAGS', 'cat-flags', 'Flags'],
+];
+
+let emojiCatalog = null;
+let emojiPick = null;
+
+async function loadEmojiCatalog() {
+  emojiCatalog ??= await api('api/emoji');
+  return emojiCatalog;
+}
+
+function emojiButton(e, label) {
+  const button = el('button', 'emoji-cell');
+  button.type = 'button';
+  button.title = label ? `:${label}:` : e;
+  button.append(el('span', 'emoji', e));
+  button.addEventListener('click', ev => {
+    ev.stopPropagation();
+    const pick = emojiPick;
+    closePopovers();
+    pick?.(e);
+  });
+  return button;
+}
+
+function emojiSection(id, title, cells) {
+  const section = el('div', 'emoji-section');
+  section.dataset.category = id;
+  section.append(
+    el('div', 'emoji-section-title', title),
+    el('div', 'emoji-grid')
+  );
+  section.lastChild.append(...cells);
+  return section;
+}
+
+async function openEmojiPicker(anchorElement, onPick) {
+  const anchor = anchorElement.getBoundingClientRect();
+  const picker = $('emoji-picker');
+  emojiPick = onPick;
+  let catalog;
+  let recent = [];
+  try {
+    [catalog, { recent = [] }] = await Promise.all([
+      loadEmojiCatalog(),
+      api('api/reactions'),
+    ]);
+  } catch (error) {
+    toast(`Couldn't load emoji (${error.code ?? error.message}).`);
+    return;
+  }
+  closePopovers();
+  emojiPick = onPick;
+
+  const names = new Map();
+  for (const category of catalog.categories) {
+    for (const [e, name] of category.emoji) {
+      names.set(e, name);
+    }
+  }
+
+  const search = el('input', 'emoji-search');
+  search.type = 'search';
+  search.placeholder = 'Search emoji';
+  search.autocomplete = 'off';
+  search.spellcheck = false;
+  const body = el('div', 'emoji-body');
+  const tabs = el('div', 'emoji-tabs');
+
+  const sections = [];
+  if (recent.length > 0) {
+    sections.push(
+      emojiSection(
+        'recent',
+        'Recently Used',
+        recent.map(e => emojiButton(e, names.get(e)))
+      )
+    );
+  }
+  for (const category of catalog.categories) {
+    const title = EMOJI_TABS.find(([id]) => id === category.id)?.[2] ?? '';
+    sections.push(
+      emojiSection(
+        category.id,
+        title,
+        category.emoji.map(([e, name]) => emojiButton(e, name))
+      )
+    );
+  }
+  body.replaceChildren(...sections);
+
+  for (const [id, tabIcon, title] of EMOJI_TABS) {
+    const target = sections.find(sec => sec.dataset.category === id);
+    if (!target) {
+      continue;
+    }
+    const tab = el('button', 'emoji-tab');
+    tab.type = 'button';
+    tab.title = title;
+    tab.setAttribute('aria-label', title);
+    tab.append(icon(tabIcon));
+    tab.addEventListener('click', ev => {
+      ev.stopPropagation();
+      search.value = '';
+      body.replaceChildren(...sections);
+      body.scrollTop = target.offsetTop - body.offsetTop;
+    });
+    tabs.append(tab);
+  }
+
+  search.addEventListener('input', () => {
+    const query = search.value.trim().toLowerCase().replace(/^:/, '');
+    if (query === '') {
+      body.replaceChildren(...sections);
+      return;
+    }
+    const words = query.split(/\s+/);
+    const found = [];
+    for (const [e, name] of names) {
+      const label = name.toLowerCase();
+      if (words.every(w => label.includes(w))) {
+        found.push(emojiButton(e, name));
+      }
+      if (found.length >= 200) {
+        break;
+      }
+    }
+    body.replaceChildren(
+      found.length > 0
+        ? emojiSection('search', 'Results', found)
+        : el('div', 'emoji-none', 'No emoji found')
+    );
+  });
+  search.addEventListener('keydown', ev => {
+    if (ev.key === 'Enter') {
+      ev.preventDefault();
+      body.querySelector('.emoji-cell')?.click();
+    }
+  });
+
+  picker.replaceChildren(search, body, tabs);
+  placePopover(picker, anchor);
+  search.focus();
+}
+
+// The composer's emoji button inserts at the cursor.
+function insertEmoji(e) {
+  const box = $('compose');
+  const start = box.selectionStart ?? box.value.length;
+  const end = box.selectionEnd ?? start;
+  box.value = box.value.slice(0, start) + e + box.value.slice(end);
+  const at = start + e.length;
+  box.focus();
+  box.setSelectionRange(at, at);
+  autosize();
 }
 
 async function sendReaction(m, emoji, remove) {
@@ -1800,6 +2008,15 @@ $('compose').addEventListener('paste', e => {
     e.preventDefault();
     addDrafts(files);
   }
+});
+$('emoji-open').append(icon('react'));
+$('emoji-open').addEventListener('click', ev => {
+  ev.stopPropagation();
+  if (!$('emoji-picker').hidden) {
+    closePopovers();
+    return;
+  }
+  openEmojiPicker($('emoji-open'), insertEmoji);
 });
 $('attach').append(icon('attach'));
 $('attach').addEventListener('click', () => $('attach-input').click());

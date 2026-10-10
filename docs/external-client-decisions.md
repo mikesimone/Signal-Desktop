@@ -333,3 +333,14 @@ capability. Renderer calls for sending and forwarding may take up to 120 s.
 WHY: Mike pastes images into chats all day; and Signal's five-chat forward
 limit is why his Signal-Forwarder exists, so this one has no limit and lists
 every chat by most recent activity (2026-10-10).
+
+## F5. Fork only: the full emoji picker and recently used emoji
+
+DECISION: `emoji.getCatalog` (capability `messages.react`) returns Signal's
+picker categories in Signal's order with short names and the user's skin
+tone applied; `reactions.getPreferred` also returns Signal's recently used
+emoji (`recent`). A reaction outside the quick-reaction bar is recorded as
+used, as Signal's picker does, so the two clients share one history.
+
+WHY: Mike wants the ⋯ after the quick reactions and the recently used list,
+as in Signal (2026-10-10).

@@ -401,6 +401,18 @@ describe('signal-rambox', () => {
     });
   });
 
+  it("serves Signal's full emoji list and recently used emoji", async () => {
+    const catalog = await http(port, { path: `/${helper.token}/api/emoji` });
+    assert.equal(catalog.status, 200);
+    assert.deepEqual(JSON.parse(catalog.text).categories[1].emoji[0], [
+      '🦃',
+      'turkey',
+    ]);
+    bridge.recentEmoji = ['😂'];
+    const bar = await http(port, { path: `/${helper.token}/api/reactions` });
+    assert.deepEqual(JSON.parse(bar.text).recent, ['😂']);
+  });
+
   it("serves Signal's emoji font", async () => {
     const res = await http(port, {
       path: `/${helper.token}/fonts/emoji.woff2`,

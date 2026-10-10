@@ -124,6 +124,18 @@ export class FakeBridge {
   avatars = new Map();
   // uploadId -> { contentType, fileName, size, bytes: Buffer[] }
   uploads = new Map();
+  recentEmoji = ['🦃', '🤘'];
+  emojiCatalog = [
+    {
+      id: 'SMILIES_AND_PEOPLE',
+      emoji: [
+        ['😀', 'grinning'],
+        ['😂', 'joy'],
+        ['🤘', 'the_horns'],
+      ],
+    },
+    { id: 'ANIMALS_AND_NATURE', emoji: [['🦃', 'turkey']] },
+  ];
   reactionEmoji = ['🔥', '👍', '👎', '😂', '😮', '😢'];
 
   get publicKey() {
@@ -382,7 +394,13 @@ export class FakeBridge {
         this.#reply(session, id, {});
         return;
       case 'reactions.getPreferred':
-        this.#reply(session, id, { emoji: this.reactionEmoji });
+        this.#reply(session, id, {
+          emoji: this.reactionEmoji,
+          recent: this.recentEmoji,
+        });
+        return;
+      case 'emoji.getCatalog':
+        this.#reply(session, id, { categories: this.emojiCatalog });
         return;
       case 'conversations.getAvatar': {
         const avatar = this.avatars.get(params.conversationId);

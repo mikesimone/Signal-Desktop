@@ -81,6 +81,13 @@
             aria-label="Add attachment"
           ></button>
           <input id="attach-input" type="file" multiple hidden />
+          <button
+            type="button"
+            class="icon-button"
+            id="emoji-open"
+            title="Emoji"
+            aria-label="Emoji"
+          ></button>
           <textarea
             id="compose"
             rows="1"
@@ -93,6 +100,7 @@
     </main>
     <div class="popover" id="reaction-picker" role="menu" hidden></div>
     <div class="popover menu" id="more-menu" role="menu" hidden></div>
+    <div class="popover emoji-picker" id="emoji-picker" hidden></div>
     <div class="toast" id="toast" role="status" hidden></div>
     <div class="modal-backdrop" id="forward" hidden>
       <div class="modal" role="dialog" aria-labelledby="forward-title">
