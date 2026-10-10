@@ -28,17 +28,16 @@ dir`) and a slim runtime image with Xvfb. Signal runs with
 1. Create `.env` next to `compose.yml` (see the comment in it), with the
    data folder owned by `SIGNAL_UID`.
 2. `docker compose up -d --build` (the build takes a while).
-3. Link it: `docker compose exec signal-desktop screen.sh shot`, copy
+3. Link it: `docker compose exec signal-desktop screen.sh qr` prints the
+   link QR code as text to scan from your phone (Settings > Linked devices),
+   or `screen.sh shot` saves a screenshot: copy
    `/data/screen.png` (in the data folder) somewhere you can see it, and scan
    the QR code from your phone (Settings > Linked devices). Name the device
    when asked: `screen.sh shot` again to see the screen, `screen.sh click X Y`
    and `screen.sh key` to answer. `screen.sh vnc` gives a live view instead.
 4. The helper asks Signal for approval; Signal shows a dialog. Approve it the
    same way.
-5. Get the Rambox URL:
-   `docker compose exec signal-desktop sh -c 'ELECTRON_RUN_AS_NODE=1
-/opt/Signal/signal-desktop /opt/signal-rambox/signal-rambox.mjs --config
-/data/signal-rambox --origin "$RAMBOX_ORIGIN" --url'`
+5. Get the Rambox URL: `docker compose exec signal-desktop screen.sh url`.
 
 ## Keeping it current
 

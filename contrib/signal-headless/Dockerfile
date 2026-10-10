@@ -30,7 +30,7 @@ FROM debian:bookworm-slim
 
 RUN apt-get update \
   && apt-get install -y --no-install-recommends \
-    ca-certificates tini xvfb xauth x11vnc xdotool imagemagick \
+    ca-certificates tini xvfb xauth x11vnc xdotool imagemagick zbar-tools qrencode \
     libgtk-3-0 libnss3 libxss1 libasound2 libgbm1 libxshmfence1 libdrm2 \
     libatk-bridge2.0-0 libcups2 libx11-xcb1 libxkbcommon0 libxcomposite1 \
     libxdamage1 libxrandr2 libpango-1.0-0 libnotify4 libpulse0 libsecret-1-0 \
