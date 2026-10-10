@@ -649,7 +649,7 @@ function openReactionViewer(m, anchor, selected) {
           const row = el('div', 'viewer-row');
           const who = authorOf(id) ?? { title: nameOf(id) };
           const name = el('span', 'viewer-name', r.fromMe ? 'You' : nameOf(id));
-          row.append(avatar(id, who, 32), name, el('span', 'emoji', r.emoji));
+          row.append(avatar(id, who, 36), name, el('span', 'emoji', r.emoji));
           if (r.fromMe && canReact()) {
             row.classList.add('mine');
             name.append(el('span', 'sub', 'Click to remove'));
