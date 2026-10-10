@@ -122,6 +122,8 @@ export class FakeBridge {
   attachments = new Map();
   // conversationId -> { avatarVersion, contentType, data }
   avatars = new Map();
+  // uploadId -> { contentType, fileName, size, bytes: Buffer[] }
+  uploads = new Map();
   reactionEmoji = ['🔥', '👍', '👎', '😂', '😮', '😢'];
 
   get publicKey() {
@@ -290,7 +292,23 @@ export class FakeBridge {
         }
         const message = makeMessage(params.conversationId, {
           direction: 'outgoing',
-          body: params.body,
+          body: params.body || null,
+          attachments: (params.attachmentUploadIds ?? []).map(uploadId => {
+            const upload = this.uploads.get(uploadId);
+            return {
+              contentType: upload.contentType,
+              size: upload.size,
+              fileName: upload.fileName ?? null,
+              width: null,
+              height: null,
+              state: 'ready',
+              hasThumbnail: false,
+              isVoiceMessage: false,
+              isGif: false,
+              caption: null,
+              blurHash: null,
+            };
+          }),
           read: null,
           sendStatus: 'sending',
           authorConversationId: null,
@@ -298,6 +316,30 @@ export class FakeBridge {
         this.#reply(session, id, { message });
         return;
       }
+      case 'attachments.uploadBegin': {
+        const uploadId = randomUUID();
+        this.uploads.set(uploadId, { ...params, bytes: [] });
+        this.#reply(session, id, { uploadId });
+        return;
+      }
+      case 'attachments.uploadChunk': {
+        const upload = this.uploads.get(params.uploadId);
+        upload.bytes.push(Buffer.from(params.data, 'base64'));
+        const received = Buffer.concat(upload.bytes).length;
+        this.#reply(session, id, {
+          received,
+          complete: received === upload.size,
+        });
+        return;
+      }
+      case 'messages.forward':
+        this.#reply(session, id, {
+          results: params.conversationIds.map(conversationId => {
+            const reason = this.sendRefusals.get(conversationId) ?? null;
+            return { conversationId, ok: reason === null, reason };
+          }),
+        });
+        return;
       case 'messages.markRead':
       case 'messages.react':
       case 'messages.edit':

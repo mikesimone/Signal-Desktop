@@ -119,6 +119,9 @@ export const Method = {
   AttachmentsDownload: 'attachments.download',
   MessagesEdit: 'messages.edit',
   MessagesDelete: 'messages.delete',
+  AttachmentsUploadBegin: 'attachments.uploadBegin',
+  AttachmentsUploadChunk: 'attachments.uploadChunk',
+  MessagesForward: 'messages.forward',
 } as const;
 export type MethodType = (typeof Method)[keyof typeof Method];
 
@@ -138,6 +141,9 @@ export const SERVICE_METHOD_CAPABILITIES = {
   [Method.AttachmentsDownload]: Capability.AttachmentsRead,
   [Method.MessagesEdit]: Capability.MessagesSend,
   [Method.MessagesDelete]: Capability.MessagesSend,
+  [Method.AttachmentsUploadBegin]: Capability.MessagesSend,
+  [Method.AttachmentsUploadChunk]: Capability.MessagesSend,
+  [Method.MessagesForward]: Capability.MessagesSend,
 } as const satisfies Partial<Record<MethodType, CapabilityType>>;
 export type ServiceMethodType = keyof typeof SERVICE_METHOD_CAPABILITIES;
 
@@ -372,16 +378,29 @@ export type EventsResultType = Readonly<{
 
 // Signal's own composer limit (shouldShowInvalidMessageToast).
 const MAX_SEND_BODY_LENGTH = 64 * 1024;
+// As many as Signal's composer takes.
+export const MAX_SEND_ATTACHMENTS = 32;
 
 export const messagesSendTextParamsSchema = z
   .object({
     conversationId: conversationIdSchema,
-    body: z.string().min(1).max(MAX_SEND_BODY_LENGTH),
+    body: z.string().max(MAX_SEND_BODY_LENGTH),
     // Reply to this message (it must be in the same conversation), quoting
     // it as Signal's own reply does.
     quoteMessageId: messageIdSchema.optional(),
+    // Fork addition: finished uploads (attachments.uploadBegin) to send as
+    // the message's attachments; the body is then their caption and may be
+    // empty.
+    attachmentUploadIds: z
+      .array(z.string().uuid())
+      .min(1)
+      .max(MAX_SEND_ATTACHMENTS)
+      .optional(),
   })
-  .strict();
+  .strict()
+  .refine(params => params.body !== '' || params.attachmentUploadIds, {
+    message: 'body or attachments required',
+  });
 export type MessagesSendTextParamsType = z.infer<
   typeof messagesSendTextParamsSchema
 >;
@@ -519,6 +538,74 @@ export type MessagesDeleteParamsType = z.infer<
   typeof messagesDeleteParamsSchema
 >;
 
+// Fork addition: uploads for sending. The client announces a file, sends
+// its content in order in chunks, then names the upload in
+// messages.sendText. Signal processes it as its composer does (images
+// re-encoded without metadata, size limits by type). Unsent uploads expire.
+export const attachmentsUploadBeginParamsSchema = z
+  .object({
+    contentType: z.string().min(1).max(255),
+    fileName: z.string().min(1).max(255).optional(),
+    size: z.number().int().min(1),
+  })
+  .strict();
+export type AttachmentsUploadBeginParamsType = z.infer<
+  typeof attachmentsUploadBeginParamsSchema
+>;
+
+export type AttachmentsUploadBeginResultType = Readonly<{
+  uploadId: string;
+}>;
+
+export const attachmentsUploadChunkParamsSchema = z
+  .object({
+    uploadId: z.string().uuid(),
+    // Must equal the bytes received so far.
+    offset: z.number().int().min(0),
+    // Base64, at most MAX_ATTACHMENT_CHUNK_BYTES decoded.
+    data: z
+      .string()
+      .min(1)
+      .max(Math.ceil(MAX_ATTACHMENT_CHUNK_BYTES / 3) * 4),
+  })
+  .strict();
+export type AttachmentsUploadChunkParamsType = z.infer<
+  typeof attachmentsUploadChunkParamsSchema
+>;
+
+export type AttachmentsUploadChunkResultType = Readonly<{
+  received: number;
+  complete: boolean;
+}>;
+
+// Fork addition: forward a message, as Signal's Forward does, to any number
+// of chats (Signal's dialog stops at five; Mike asked for no limit). Each
+// chat is refused on its own for the same reasons sending would be.
+export const MAX_FORWARD_CONVERSATIONS = 5000;
+
+export const messagesForwardParamsSchema = z
+  .object({
+    messageId: messageIdSchema,
+    conversationIds: z
+      .array(conversationIdSchema)
+      .min(1)
+      .max(MAX_FORWARD_CONVERSATIONS),
+  })
+  .strict();
+export type MessagesForwardParamsType = z.infer<
+  typeof messagesForwardParamsSchema
+>;
+
+export type ForwardResultDTO = Readonly<{
+  conversationId: string;
+  ok: boolean;
+  reason: SendBlockReasonType | 'notFound' | null;
+}>;
+
+export type MessagesForwardResultType = Readonly<{
+  results: ReadonlyArray<ForwardResultDTO>;
+}>;
+
 export const notificationsSetHandledParamsSchema = z
   .object({
     handled: z.boolean(),
@@ -541,6 +628,10 @@ export const SendBlockReason = {
   Terminated: 'terminated',
   UntrustedIdentity: 'untrustedIdentity',
   TooLong: 'tooLong',
+  // Fork additions.
+  AttachmentTooLarge: 'attachmentTooLarge',
+  NotForwardable: 'notForwardable',
+  NotDownloaded: 'notDownloaded',
 } as const;
 export type SendBlockReasonType =
   (typeof SendBlockReason)[keyof typeof SendBlockReason];
@@ -560,6 +651,9 @@ export const SERVICE_PARAM_SCHEMAS = {
   [Method.AttachmentsDownload]: attachmentsDownloadParamsSchema,
   [Method.MessagesEdit]: messagesEditParamsSchema,
   [Method.MessagesDelete]: messagesDeleteParamsSchema,
+  [Method.AttachmentsUploadBegin]: attachmentsUploadBeginParamsSchema,
+  [Method.AttachmentsUploadChunk]: attachmentsUploadChunkParamsSchema,
+  [Method.MessagesForward]: messagesForwardParamsSchema,
 } as const satisfies Record<ServiceMethodType, z.ZodType>;
 
 export type ConversationsListParamsType = z.infer<

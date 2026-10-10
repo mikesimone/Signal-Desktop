@@ -8,8 +8,12 @@ import { safeParseUnknown } from '../../util/schemas.std.ts';
 import {
   ALL_CAPABILITIES,
   LIMITS,
+  MAX_ATTACHMENT_CHUNK_BYTES,
   PROTOCOL_NAME,
+  attachmentsUploadChunkParamsSchema,
   helloParamsSchema,
+  messagesForwardParamsSchema,
+  messagesSendTextParamsSchema,
   negotiateVersion,
   requestEnvelopeSchema,
 } from '../../externalClient/protocol.std.ts';
@@ -133,5 +137,47 @@ describe('externalClient/protocol', () => {
       ALL_CAPABILITIES as ReadonlyArray<string>,
       'calls.control'
     );
+  });
+
+  describe('fork: sending attachments and forwarding', () => {
+    const conversationId = '0b3f5c2e-1d4a-4c8e-9f00-123456789abc';
+    const uploadId = '9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d';
+
+    it('needs a body or attachments', () => {
+      const schema = messagesSendTextParamsSchema;
+      assert.isTrue(accepts(schema, { conversationId, body: 'hi' }));
+      assert.isFalse(accepts(schema, { conversationId, body: '' }));
+      assert.isTrue(
+        accepts(schema, {
+          conversationId,
+          body: '',
+          attachmentUploadIds: [uploadId],
+        })
+      );
+      assert.isFalse(
+        accepts(schema, { conversationId, body: '', attachmentUploadIds: [] })
+      );
+    });
+
+    it('keeps upload chunks inside a frame', () => {
+      const max = Math.ceil(MAX_ATTACHMENT_CHUNK_BYTES / 3) * 4;
+      const ok = { uploadId, offset: 0, data: 'A'.repeat(max) };
+      assert.isTrue(accepts(attachmentsUploadChunkParamsSchema, ok));
+      assert.isFalse(
+        accepts(attachmentsUploadChunkParamsSchema, {
+          ...ok,
+          data: 'A'.repeat(max + 4),
+        })
+      );
+    });
+
+    it('forwards to far more than five chats', () => {
+      assert.isTrue(
+        accepts(messagesForwardParamsSchema, {
+          messageId: conversationId,
+          conversationIds: Array.from({ length: 300 }, () => conversationId),
+        })
+      );
+    });
   });
 });

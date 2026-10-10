@@ -10,8 +10,9 @@
 //   - carry the secret token as its first path segment,
 //   - name this server in Host (stops DNS rebinding),
 //   - if it has an Origin, come from this server (stops other pages),
-//   - for POST, send application/json (forces a CORS preflight, which this
-//     server never approves).
+//   - for POST, send application/json, or application/octet-stream for file
+//     uploads (both force a CORS preflight, which this server never
+//     approves).
 
 import { timingSafeEqual } from 'node:crypto';
 import { readFileSync } from 'node:fs';
@@ -77,7 +78,7 @@ const SECURITY_HEADERS = {
   'Cache-Control': 'no-store',
   'Content-Security-Policy':
     "default-src 'none'; script-src 'self'; style-src 'self'; " +
-    "img-src 'self'; font-src 'self'; media-src 'self'; connect-src 'self'; " +
+    "img-src 'self' blob:; font-src 'self'; media-src 'self'; connect-src 'self'; " +
     "base-uri 'none'; " +
     "form-action 'none'; frame-ancestors 'none'",
   'Referrer-Policy': 'no-referrer',
@@ -122,8 +123,9 @@ export function checkRequest(req, { origins, token }) {
   }
   if (req.method === 'POST') {
     const type = (req.headers['content-type'] ?? '').split(';')[0].trim();
-    if (type !== 'application/json') {
-      return [415, 'expected application/json'];
+    const upload = path.endsWith('/api/upload');
+    if (type !== (upload ? 'application/octet-stream' : 'application/json')) {
+      return [415, 'wrong content type'];
     }
   } else if (req.method !== 'GET') {
     return [405, 'method not allowed'];
@@ -255,6 +257,54 @@ export function createWebServer({
       return { messageId, preview: Number(url.searchParams.get('preview')) };
     }
     return { messageId, index: Number(url.searchParams.get('index') ?? 0) };
+  }
+
+  // Passes a file from the page to Signal in chunks, reading the request
+  // only as fast as Signal takes it.
+  async function uploadAttachment(req, res, url) {
+    const size = Number(req.headers['content-length']);
+    const contentType = url.searchParams.get('contentType') ?? '';
+    const fileName = url.searchParams.get('name') || undefined;
+    if (!Number.isSafeInteger(size) || size < 1 || contentType === '') {
+      sendJson(res, 400, { error: { code: 'INVALID_ARGUMENT' } });
+      return;
+    }
+    const { uploadId } = await bridge.call('attachments.uploadBegin', {
+      contentType,
+      size,
+      ...(fileName ? { fileName: fileName.slice(0, 255) } : {}),
+    });
+    let offset = 0;
+    let pending = [];
+    let pendingBytes = 0;
+    const flush = async () => {
+      const data = Buffer.concat(pending);
+      pending = [];
+      pendingBytes = 0;
+      for (let at = 0; at < data.length; at += ATTACHMENT_CHUNK_BYTES) {
+        const chunk = data.subarray(at, at + ATTACHMENT_CHUNK_BYTES);
+        // oxlint-disable-next-line no-await-in-loop
+        await bridge.call('attachments.uploadChunk', {
+          uploadId,
+          offset,
+          data: chunk.toString('base64'),
+        });
+        offset += chunk.length;
+      }
+    };
+    for await (const chunk of req) {
+      pending.push(chunk);
+      pendingBytes += chunk.length;
+      if (pendingBytes >= ATTACHMENT_CHUNK_BYTES) {
+        await flush();
+      }
+    }
+    await flush();
+    if (offset !== size) {
+      sendJson(res, 400, { error: { code: 'INVALID_ARGUMENT' } });
+      return;
+    }
+    sendJson(res, 200, { uploadId });
   }
 
   // Streams decrypted attachment content from Signal in chunks, honoring
@@ -406,11 +456,26 @@ export function createWebServer({
       return;
     }
     if (req.method === 'POST' && route === 'api/send') {
-      const { conversationId, body, quoteMessageId } = await readJson(req);
+      const { conversationId, body, quoteMessageId, attachmentUploadIds } =
+        await readJson(req);
       const result = await bridge.call('messages.sendText', {
         conversationId,
         body,
         ...(quoteMessageId ? { quoteMessageId } : {}),
+        ...(attachmentUploadIds?.length ? { attachmentUploadIds } : {}),
+      });
+      sendJson(res, 200, result);
+      return;
+    }
+    if (req.method === 'POST' && route === 'api/upload') {
+      await uploadAttachment(req, res, url);
+      return;
+    }
+    if (req.method === 'POST' && route === 'api/forward') {
+      const { messageId, conversationIds } = await readJson(req);
+      const result = await bridge.call('messages.forward', {
+        messageId,
+        conversationIds,
       });
       sendJson(res, 200, result);
       return;

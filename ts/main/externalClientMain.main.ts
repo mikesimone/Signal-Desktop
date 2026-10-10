@@ -31,6 +31,7 @@ import type {
 import {
   Capability,
   ErrorCode,
+  Method,
   SessionStatus,
 } from '../externalClient/protocol.std.ts';
 import type {
@@ -54,6 +55,13 @@ import {
 const log = createLogger('externalClientMain');
 
 const RENDERER_CALL_TIMEOUT_MS = 15_000;
+// Fork: sending attachments processes them first (a video gets a
+// screenshot), and a forward can go to hundreds of chats.
+const SLOW_RENDERER_CALL_TIMEOUT_MS = 120_000;
+const SLOW_RENDERER_METHODS: ReadonlySet<ServiceMethodType> = new Set([
+  Method.MessagesSendText,
+  Method.MessagesForward,
+]);
 const MAX_PENDING_RENDERER_CALLS = 64;
 
 export type ExternalClientMainOptionsType = Readonly<{
@@ -283,11 +291,16 @@ export class ExternalClientMain {
     const seq = this.#nextSeq;
     this.#nextSeq += 1;
     return new Promise(resolve => {
-      const timer = setTimeout(() => {
-        this.#pending.delete(seq);
-        log.warn(`renderer call ${method} timed out`);
-        resolve({ ok: false, code: ErrorCode.NotReady });
-      }, RENDERER_CALL_TIMEOUT_MS);
+      const timer = setTimeout(
+        () => {
+          this.#pending.delete(seq);
+          log.warn(`renderer call ${method} timed out`);
+          resolve({ ok: false, code: ErrorCode.NotReady });
+        },
+        SLOW_RENDERER_METHODS.has(method)
+          ? SLOW_RENDERER_CALL_TIMEOUT_MS
+          : RENDERER_CALL_TIMEOUT_MS
+      );
       this.#pending.set(seq, { resolve, timer });
       webContents.send(CALL_CHANNEL, { seq, method, params });
     });

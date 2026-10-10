@@ -1546,3 +1546,253 @@ button {
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
+
+/* Attachments waiting to be sent. */
+.draft-tray {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 10px 12px 0;
+}
+
+.draft {
+  position: relative;
+  flex: none;
+  width: 72px;
+  height: 72px;
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--hover);
+}
+
+.draft-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.draft-file {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  width: 120px;
+  padding: 6px;
+  font-size: 11px;
+  line-height: 14px;
+  text-align: center;
+}
+
+.draft-name {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.draft-size {
+  color: var(--muted);
+}
+
+.draft-remove {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.6);
+  color: #ffffff;
+}
+
+.draft-remove .icon {
+  width: 14px;
+  height: 14px;
+}
+
+.composer .icon-button {
+  align-self: center;
+  padding: 0;
+  background: transparent;
+  color: var(--icon);
+}
+
+.chat {
+  position: relative;
+}
+
+.chat.dropping::after {
+  content: 'Drop to attach';
+  position: absolute;
+  inset: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px dashed var(--accent);
+  border-radius: 12px;
+  background: rgba(44, 88, 195, 0.12);
+  color: var(--accent);
+  font-weight: 600;
+  pointer-events: none;
+}
+
+/* Forward dialog. */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.modal-backdrop[hidden] {
+  display: none;
+}
+
+.modal {
+  display: flex;
+  flex-direction: column;
+  width: min(420px, calc(100vw - 32px));
+  max-height: calc(100vh - 48px);
+  border-radius: 14px;
+  background: var(--panel);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
+}
+
+.modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 12px 8px 16px;
+  font-weight: 600;
+}
+
+#forward-search {
+  margin: 0 12px 8px;
+  padding: 6px 12px;
+  border: none;
+  border-radius: 8px;
+  background: var(--hover);
+  color: var(--text);
+  font: inherit;
+}
+
+.forward-list {
+  flex: 1;
+  margin: 0;
+  padding: 0 8px;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.forward-list li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.forward-list li:hover {
+  background: var(--hover);
+}
+
+.forward-list li.checked {
+  background: var(--selected);
+}
+
+.forward-list .title {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.modal-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px 12px 16px;
+  border-top: 1px solid var(--border);
+}
+
+.modal-foot button {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 18px;
+  background: var(--accent);
+  color: var(--accent-text);
+  font: inherit;
+}
+
+.modal-foot button:disabled {
+  opacity: 0.5;
+}
+
+/* Narrow windows (Rambox's usual size): photos-only chat list, as Signal's. */
+#search-open {
+  display: none;
+}
+
+.layout {
+  position: relative;
+}
+
+@media (max-width: 760px) {
+  .sidebar {
+    width: 76px;
+    min-width: 76px;
+  }
+
+  .sidebar:not(.expanded) .row-text,
+  .sidebar:not(.expanded) .filters,
+  .sidebar:not(.expanded) #search,
+  .sidebar:not(.expanded) .section-head,
+  .sidebar:not(.expanded) .list-empty {
+    display: none;
+  }
+
+  .sidebar:not(.expanded) .search-row {
+    flex-direction: column;
+  }
+
+  .sidebar:not(.expanded) #search-open {
+    display: inline-flex;
+  }
+
+  .sidebar:not(.expanded) .sidebar-head {
+    padding: 12px 0 4px;
+  }
+
+  .sidebar:not(.expanded) .conversations li {
+    position: relative;
+    justify-content: center;
+    padding: 6px 0;
+  }
+
+  .sidebar:not(.expanded) .conversations .badge {
+    position: absolute;
+    top: 2px;
+    right: 6px;
+  }
+
+  .sidebar.expanded {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 20;
+    width: min(320px, 100%);
+    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.35);
+  }
+}

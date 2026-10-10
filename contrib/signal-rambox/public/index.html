@@ -28,6 +28,13 @@
             <button
               type="button"
               class="icon-button"
+              id="search-open"
+              title="Search chats"
+              aria-label="Search chats"
+            ></button>
+            <button
+              type="button"
+              class="icon-button"
               id="filter-unread"
               title="Filter by unread"
               aria-label="Filter by unread"
@@ -64,7 +71,16 @@
             aria-label="Cancel reply"
           ></button>
         </div>
+        <div class="draft-tray" id="draft-tray" hidden></div>
         <form class="composer" id="composer" hidden>
+          <button
+            type="button"
+            class="icon-button"
+            id="attach"
+            title="Add attachment"
+            aria-label="Add attachment"
+          ></button>
+          <input id="attach-input" type="file" multiple hidden />
           <textarea
             id="compose"
             rows="1"
@@ -78,6 +94,32 @@
     <div class="popover" id="reaction-picker" role="menu" hidden></div>
     <div class="popover menu" id="more-menu" role="menu" hidden></div>
     <div class="toast" id="toast" role="status" hidden></div>
+    <div class="modal-backdrop" id="forward" hidden>
+      <div class="modal" role="dialog" aria-labelledby="forward-title">
+        <div class="modal-head">
+          <span id="forward-title">Forward message</span>
+          <button
+            type="button"
+            class="icon-button"
+            id="forward-close"
+            title="Close"
+            aria-label="Close"
+          ></button>
+        </div>
+        <input
+          id="forward-search"
+          type="search"
+          placeholder="Search chats"
+          autocomplete="off"
+          spellcheck="false"
+        />
+        <ul class="forward-list" id="forward-list"></ul>
+        <div class="modal-foot">
+          <span id="forward-count" class="sub"></span>
+          <button type="button" id="forward-send" disabled>Forward</button>
+        </div>
+      </div>
+    </div>
     <div class="lightbox" id="lightbox" hidden>
       <div class="lightbox-bar">
         <a

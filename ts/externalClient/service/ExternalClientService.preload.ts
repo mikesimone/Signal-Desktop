@@ -26,6 +26,11 @@ import {
   react,
   readAttachment,
 } from './ExternalClientExtras.preload.ts';
+import {
+  appendUpload,
+  beginUpload,
+  forwardMessage,
+} from './ExternalClientOutgoing.preload.ts';
 import { markRead, sendText } from './ExternalClientSend.preload.ts';
 import {
   getDtoContext,
@@ -276,6 +281,24 @@ async function dispatch(
       }
       const params = safeParseUnknown(SERVICE_PARAM_SCHEMAS[method], rawParams);
       return params.success ? deleteMessage(params.data) : invalid;
+    }
+    case Method.AttachmentsUploadBegin: {
+      if (!window.ConversationController.isInitialFetchComplete()) {
+        return notReady;
+      }
+      const params = safeParseUnknown(SERVICE_PARAM_SCHEMAS[method], rawParams);
+      return params.success ? beginUpload(params.data) : invalid;
+    }
+    case Method.AttachmentsUploadChunk: {
+      const params = safeParseUnknown(SERVICE_PARAM_SCHEMAS[method], rawParams);
+      return params.success ? appendUpload(params.data) : invalid;
+    }
+    case Method.MessagesForward: {
+      if (!window.ConversationController.isInitialFetchComplete()) {
+        return notReady;
+      }
+      const params = safeParseUnknown(SERVICE_PARAM_SCHEMAS[method], rawParams);
+      return params.success ? forwardMessage(params.data) : invalid;
     }
     default:
       throw new Error(`Unhandled external client method ${method}`);

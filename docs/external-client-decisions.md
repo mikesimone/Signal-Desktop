@@ -308,3 +308,23 @@ delete paths.
 
 WHY: Mike asked for Signal's pinned order, Note to Self in search, link
 preview cards, and every Signal Desktop feature (2026-10-10).
+
+## F4. Fork only: sending attachments, and forwarding without limits
+
+DECISION: `attachments.uploadBegin` / `attachments.uploadChunk` take a file
+in order, in chunks of at most 512 KB, into memory in Signal's renderer
+(unsent uploads expire after 10 minutes; all of them together are capped at
+512 MB). `messages.sendText` takes `attachmentUploadIds`; the body is then
+the caption and may be empty. Signal processes each file exactly as its
+composer does (`processAttachment`, draft, `enqueueMessageForSend` with the
+user's media-quality setting), and refuses a file over its own size limit
+for that type (`attachmentTooLarge`). `messages.forward` forwards a message
+as Signal's Forward does (`maybeForwardMessages`) to any number of chats
+(up to 5000 per call) and returns a result per chat; each chat is refused
+on its own for the same reasons sending would be, so the safety-number
+dialog never opens (D11). All of these use the `messages.send`
+capability. Renderer calls for sending and forwarding may take up to 120 s.
+
+WHY: Mike pastes images into chats all day; and Signal's five-chat forward
+limit is why his Signal-Forwarder exists, so this one has no limit and lists
+every chat by most recent activity (2026-10-10).

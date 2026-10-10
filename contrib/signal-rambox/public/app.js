@@ -67,6 +67,11 @@ const SEND_ERRORS = {
   untrustedIdentity:
     "This person's safety number changed. Open the chat in Signal to review it.",
   tooLong: 'That message is too long.',
+  attachmentTooLarge: 'That file is too large for Signal.',
+  notForwardable: "Signal can't forward this message.",
+  notDownloaded:
+    'Signal is still downloading this message. Try again in a moment.',
+  notFound: 'That chat is gone.',
 };
 
 const STATUS_TEXT = {
@@ -129,6 +134,11 @@ const ICONS = {
   trash: 'M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6',
   download: 'M12 4v11M7 10l5 5 5-5M5 20h14',
   filter: 'M4 7h16M7 12h10M10 17h4',
+  attach:
+    'M20 11.5 12.4 19a5 5 0 0 1-7-7l7.8-7.8a3.3 3.3 0 0 1 4.7 4.7l-7.8 7.8a1.7 1.7 0 0 1-2.4-2.4L15 6.9',
+  forward: 'M14 5l6 6-6 6M20 11H10a6 6 0 0 0-6 6v2',
+  search: 'M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14ZM16 16l4.5 4.5',
+  file: 'M6 3h8l4 4v14H6zM14 3v4h4',
 };
 
 function icon(name) {
@@ -343,6 +353,7 @@ function conversationRow(c) {
   }
   const li = el('li');
   li.dataset.id = c.id;
+  li.title = displayTitle(c);
   li.setAttribute('role', 'option');
   li.setAttribute('aria-selected', String(c.id === selectedId));
   li.className = [unread ? 'unread' : '', c.muted ? 'muted' : ''].join(' ');
@@ -426,14 +437,15 @@ function renderConversations() {
   const list = sortedConversations();
   const searching = $('search').value.trim() !== '';
   const pinned = list.filter(c => c.pinned);
+  const others = list.filter(c => !c.pinned);
   const rows =
     searching || pinned.length === 0
       ? list.map(conversationRow)
       : [
           sectionHead('Pinned'),
           ...pinned.map(conversationRow),
-          sectionHead('Chats'),
-          ...list.filter(c => !c.pinned).map(conversationRow),
+          ...(others.length > 0 ? [sectionHead('Chats')] : []),
+          ...others.map(conversationRow),
         ];
   if (rows.length === 0 && bridgeState === 'ready') {
     rows.push(
@@ -1226,6 +1238,8 @@ async function selectConversation(id) {
   selectedId = id;
   messages = new Map();
   nextCursor = null;
+  collapseSidebar();
+  renderDrafts();
   clearExpiryTimers();
   closePopovers();
   cancelReply();
@@ -1391,6 +1405,9 @@ function openMoreMenu(m, anchor) {
   }
   if (canReplyTo(m)) {
     add('reply', 'Reply', () => startReply(m));
+  }
+  if (canForward(m)) {
+    add('forward', 'Forward', () => openForward(m));
   }
   if (m.canEdit) {
     add('edit', 'Edit', () => startEdit(m));
@@ -1611,7 +1628,9 @@ function connectEvents() {
 async function sendCurrent() {
   const box = $('compose');
   const body = box.value;
-  if (!selectedId || body.trim() === '') {
+  const conversationId = selectedId;
+  const files = editing ? [] : draftsFor(conversationId);
+  if (!conversationId || (body.trim() === '' && files.length === 0)) {
     return;
   }
   $('send').disabled = true;
@@ -1624,11 +1643,20 @@ async function sendCurrent() {
       autosize();
       return;
     }
+    const attachmentUploadIds = [];
+    for (const [i, draft] of files.entries()) {
+      $('send').textContent =
+        files.length > 1 ? `${i + 1}/${files.length}` : '…';
+      // oxlint-disable-next-line no-await-in-loop
+      attachmentUploadIds.push(await uploadFile(draft.file));
+    }
     const { message } = await api('api/send', {
-      conversationId: selectedId,
-      body,
+      conversationId,
+      body: files.length > 0 ? body.trim() : body,
       ...(replyTo ? { quoteMessageId: replyTo.id } : {}),
+      ...(attachmentUploadIds.length > 0 ? { attachmentUploadIds } : {}),
     });
+    clearDrafts(conversationId);
     box.value = '';
     autosize();
     cancelReply();
@@ -1641,9 +1669,291 @@ async function sendCurrent() {
     );
   } finally {
     $('send').disabled = false;
+    $('send').textContent = 'Send';
     box.focus();
   }
 }
+
+// --- attachments to send ------------------------------------------------------
+
+// conversationId -> [{ file, url }], kept per chat as Signal does.
+const drafts = new Map();
+const MAX_DRAFTS = 32;
+
+function draftsFor(conversationId) {
+  return drafts.get(conversationId) ?? [];
+}
+
+function addDrafts(fileList) {
+  if (!selectedId) {
+    return;
+  }
+  const list = [...draftsFor(selectedId)];
+  for (const file of fileList) {
+    if (list.length >= MAX_DRAFTS) {
+      toast(`Up to ${MAX_DRAFTS} attachments at a time.`);
+      break;
+    }
+    const url = file.type.startsWith('image/')
+      ? URL.createObjectURL(file)
+      : null;
+    list.push({ file, url });
+  }
+  drafts.set(selectedId, list);
+  renderDrafts();
+  $('compose').focus();
+}
+
+function removeDraft(conversationId, draft) {
+  if (draft.url) {
+    URL.revokeObjectURL(draft.url);
+  }
+  drafts.set(
+    conversationId,
+    draftsFor(conversationId).filter(d => d !== draft)
+  );
+  renderDrafts();
+}
+
+function clearDrafts(conversationId) {
+  for (const draft of draftsFor(conversationId)) {
+    if (draft.url) {
+      URL.revokeObjectURL(draft.url);
+    }
+  }
+  drafts.delete(conversationId);
+  renderDrafts();
+}
+
+function renderDrafts() {
+  const tray = $('draft-tray');
+  const list = selectedId ? draftsFor(selectedId) : [];
+  tray.hidden = list.length === 0;
+  const conversationId = selectedId;
+  tray.replaceChildren(
+    ...list.map(draft => {
+      const tile = el('span', 'draft');
+      if (draft.url) {
+        const img = el('img', 'draft-image');
+        img.alt = '';
+        img.src = draft.url;
+        tile.append(img);
+      } else {
+        tile.classList.add('draft-file');
+        tile.append(
+          icon('file'),
+          el('span', 'draft-name', draft.file.name || 'File'),
+          el('span', 'draft-size', formatSize(draft.file.size))
+        );
+      }
+      const remove = el('button', 'draft-remove');
+      remove.type = 'button';
+      remove.title = 'Remove attachment';
+      remove.setAttribute('aria-label', 'Remove attachment');
+      remove.append(icon('close'));
+      remove.addEventListener('click', () =>
+        removeDraft(conversationId, draft)
+      );
+      tile.append(remove);
+      return tile;
+    })
+  );
+}
+
+async function uploadFile(file) {
+  const params = new URLSearchParams({
+    contentType: file.type || 'application/octet-stream',
+    ...(file.name ? { name: file.name } : {}),
+  });
+  const res = await fetch(`api/upload?${params}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/octet-stream' },
+    body: file,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const error = new Error(data.error?.message ?? `HTTP ${res.status}`);
+    error.code = data.error?.code;
+    error.reason = data.error?.reason;
+    throw error;
+  }
+  return data.uploadId;
+}
+
+// Files from the clipboard: screenshots, copied images, copied files.
+$('compose').addEventListener('paste', e => {
+  const files = [...(e.clipboardData?.files ?? [])];
+  if (files.length > 0 && !editing) {
+    e.preventDefault();
+    addDrafts(files);
+  }
+});
+$('attach').append(icon('attach'));
+$('attach').addEventListener('click', () => $('attach-input').click());
+$('attach-input').addEventListener('change', () => {
+  addDrafts([...$('attach-input').files]);
+  $('attach-input').value = '';
+});
+$('chat').addEventListener('dragover', e => {
+  if (selectedId && e.dataTransfer?.types.includes('Files')) {
+    e.preventDefault();
+    $('chat').classList.add('dropping');
+  }
+});
+$('chat').addEventListener('dragleave', e => {
+  if (e.target === $('chat') || !$('chat').contains(e.relatedTarget)) {
+    $('chat').classList.remove('dropping');
+  }
+});
+$('chat').addEventListener('drop', e => {
+  $('chat').classList.remove('dropping');
+  if (selectedId && e.dataTransfer?.files.length) {
+    e.preventDefault();
+    addDrafts([...e.dataTransfer.files]);
+  }
+});
+
+// --- forward -----------------------------------------------------------------
+
+// Unlike Signal: any number of chats, and every chat, most recent first.
+let forwarding = null;
+const forwardSelected = new Set();
+
+function canForward(m) {
+  return (
+    (m.kind === 'text' || m.kind === 'sticker') &&
+    (Boolean(m.body) || m.attachments.length > 0 || Boolean(m.sticker))
+  );
+}
+
+function forwardCandidates() {
+  const query = $('forward-search').value.trim().toLowerCase();
+  return [...conversations.values()]
+    .filter(c => !c.blocked)
+    .filter(
+      c =>
+        !query ||
+        displayTitle(c).toLowerCase().includes(query) ||
+        c.title.toLowerCase().includes(query)
+    )
+    .sort((a, b) => (b.lastActivityAt ?? 0) - (a.lastActivityAt ?? 0));
+}
+
+function renderForwardList() {
+  $('forward-list').replaceChildren(
+    ...forwardCandidates().map(c => {
+      const li = el('li');
+      const box = el('input');
+      box.type = 'checkbox';
+      box.checked = forwardSelected.has(c.id);
+      li.append(
+        box,
+        conversationAvatar(c, 36),
+        el('span', 'title', displayTitle(c))
+      );
+      li.classList.toggle('checked', box.checked);
+      li.addEventListener('click', e => {
+        if (e.target !== box) {
+          box.checked = !box.checked;
+        }
+        if (box.checked) {
+          forwardSelected.add(c.id);
+        } else {
+          forwardSelected.delete(c.id);
+        }
+        li.classList.toggle('checked', box.checked);
+        renderForwardCount();
+      });
+      return li;
+    })
+  );
+  renderForwardCount();
+}
+
+function renderForwardCount() {
+  const n = forwardSelected.size;
+  $('forward-count').textContent =
+    n === 0 ? 'Pick chats' : `${n} chat${n === 1 ? '' : 's'} selected`;
+  $('forward-send').disabled = n === 0;
+  $('forward-send').textContent = n > 1 ? `Forward to ${n} chats` : 'Forward';
+}
+
+function openForward(m) {
+  forwarding = m;
+  forwardSelected.clear();
+  $('forward-search').value = '';
+  renderForwardList();
+  $('forward').hidden = false;
+  $('forward-search').focus();
+}
+
+function closeForward() {
+  forwarding = null;
+  $('forward').hidden = true;
+}
+
+async function sendForward() {
+  if (!forwarding || forwardSelected.size === 0) {
+    return;
+  }
+  const conversationIds = [...forwardSelected];
+  $('forward-send').disabled = true;
+  try {
+    const { results } = await api('api/forward', {
+      messageId: forwarding.id,
+      conversationIds,
+    });
+    const failed = results.filter(r => !r.ok);
+    closeForward();
+    if (failed.length === 0) {
+      toast(
+        `Forwarded to ${results.length} chat${results.length === 1 ? '' : 's'}.`
+      );
+    } else {
+      const names = failed
+        .map(r => {
+          const c = conversations.get(r.conversationId);
+          const why = SEND_ERRORS[r.reason] ?? r.reason ?? 'refused';
+          return `${c ? displayTitle(c) : 'A chat'}: ${why}`;
+        })
+        .join('\n');
+      window.alert(
+        `Forwarded to ${results.length - failed.length} of ${results.length} chats. Not sent:\n${names}`
+      );
+    }
+  } catch (error) {
+    $('forward-send').disabled = false;
+    toast(
+      SEND_ERRORS[error.reason] ??
+        `Not forwarded (${error.code ?? error.message}).`
+    );
+  }
+}
+
+$('forward-close').append(icon('close'));
+$('forward-close').addEventListener('click', closeForward);
+$('forward').addEventListener('click', e => {
+  if (e.target === $('forward')) {
+    closeForward();
+  }
+});
+$('forward-search').addEventListener('input', renderForwardList);
+$('forward-send').addEventListener('click', sendForward);
+
+// --- narrow windows ------------------------------------------------------------
+
+// Below the breakpoint the chat list shows photos only, as Signal's does;
+// search opens it full width over the chat.
+function collapseSidebar() {
+  document.querySelector('.sidebar').classList.remove('expanded');
+}
+
+$('chat').addEventListener('pointerdown', collapseSidebar);
+$('search-open').append(icon('search'));
+$('search-open').addEventListener('click', () => {
+  document.querySelector('.sidebar').classList.add('expanded');
+  $('search').focus();
+});
 
 function autosize() {
   const box = $('compose');
@@ -1692,6 +2002,8 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Escape') {
     closePopovers();
     closeLightbox();
+    closeForward();
+    collapseSidebar();
   }
 });
 $('messages').addEventListener('scroll', closePopovers, { passive: true });

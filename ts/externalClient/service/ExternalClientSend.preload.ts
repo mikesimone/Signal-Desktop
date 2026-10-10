@@ -31,6 +31,11 @@ import {
   getListedConversation,
   loadMessage,
 } from './serviceHelpers.preload.ts';
+import {
+  areUploadsComplete,
+  shouldSendHighQualityImages,
+  takeUploads,
+} from './ExternalClientOutgoing.preload.ts';
 
 // Sending and marking read for external clients. Sends take Signal's own
 // path (enqueueMessageForSend), but where the composer would show a modal or
@@ -119,6 +124,7 @@ export async function sendText({
   conversationId,
   body,
   quoteMessageId,
+  attachmentUploadIds,
 }: MessagesSendTextParamsType): Promise<ServiceResultType> {
   const model = getListedConversation(conversationId);
   if (!model) {
@@ -142,21 +148,41 @@ export async function sendText({
     }
   }
 
+  // Fork addition: attachments, from finished uploads.
+  if (attachmentUploadIds && !areUploadsComplete(attachmentUploadIds)) {
+    return { ok: false, code: ErrorCode.InvalidArgument };
+  }
+
   const reason = await getSendBlockReason(model, body);
   if (reason) {
     log.info(`sendText: refused (${reason})`);
     return { ok: false, code: ErrorCode.PreconditionFailed, reason };
   }
 
-  const sent = await model.enqueueMessageForSend(
-    {
-      body,
-      attachments: [],
-      quote: quoted ? await makeQuote(quoted) : undefined,
-    },
-    // The user may have a draft in Signal; leave it alone.
-    { dontClearDraft: true }
-  );
+  const prepared = attachmentUploadIds
+    ? await takeUploads(attachmentUploadIds)
+    : undefined;
+  if (attachmentUploadIds && !prepared) {
+    return { ok: false, code: ErrorCode.InvalidArgument };
+  }
+
+  let sent: MessageAttributesType | undefined;
+  try {
+    sent = await model.enqueueMessageForSend(
+      {
+        body,
+        attachments: prepared?.attachments ?? [],
+        quote: quoted ? await makeQuote(quoted) : undefined,
+      },
+      {
+        // The user may have a draft in Signal; leave it alone.
+        dontClearDraft: true,
+        ...(prepared ? { sendHQImages: shouldSendHighQualityImages() } : {}),
+      }
+    );
+  } finally {
+    prepared?.cleanup();
+  }
   if (!sent) {
     return {
       ok: false,

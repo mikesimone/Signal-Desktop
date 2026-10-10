@@ -47,7 +47,13 @@ function http(port, { method = 'GET', path, headers = {}, body }) {
         port,
         method,
         path,
-        headers: { host: `127.0.0.1:${port}`, ...headers },
+        headers: {
+          host: `127.0.0.1:${port}`,
+          ...(Buffer.isBuffer(body)
+            ? { 'content-length': String(body.length) }
+            : {}),
+          ...headers,
+        },
       },
       res => {
         const chunks = [];
@@ -60,7 +66,11 @@ function http(port, { method = 'GET', path, headers = {}, body }) {
     );
     req.on('error', reject);
     if (body !== undefined) {
-      req.write(typeof body === 'string' ? body : JSON.stringify(body));
+      req.write(
+        typeof body === 'string' || Buffer.isBuffer(body)
+          ? body
+          : JSON.stringify(body)
+      );
     }
     req.end();
   });
@@ -486,6 +496,72 @@ describe('signal-rambox', () => {
         { messageId: 'm1', forEveryone: forEveryone === true }
       );
     }
+  });
+
+  it('uploads a file in chunks and sends it', async () => {
+    const bytes = Buffer.alloc(1_200_000, 7);
+    const res = await http(port, {
+      method: 'POST',
+      path: `/${helper.token}/api/upload?contentType=image%2Fpng&name=shot.png`,
+      headers: { 'Content-Type': 'application/octet-stream' },
+      body: bytes,
+    });
+    assert.equal(res.status, 200);
+    const { uploadId } = JSON.parse(res.text);
+    const upload = bridge.uploads.get(uploadId);
+    assert.equal(upload.size, bytes.length);
+    assert.equal(upload.fileName, 'shot.png');
+    assert.ok(Buffer.concat(upload.bytes).equals(bytes));
+    assert.ok(upload.bytes.every(chunk => chunk.length <= 512 * 1024));
+
+    const sent = await http(port, {
+      method: 'POST',
+      path: `/${helper.token}/api/send`,
+      headers: json,
+      body: { conversationId: 'c1', body: '', attachmentUploadIds: [uploadId] },
+    });
+    assert.equal(sent.status, 200);
+    assert.deepEqual(
+      bridge.calls.findLast(c => c.method === 'messages.sendText').params,
+      { conversationId: 'c1', body: '', attachmentUploadIds: [uploadId] }
+    );
+  });
+
+  it('takes uploads only as application/octet-stream', async () => {
+    const res = await http(port, {
+      method: 'POST',
+      path: `/${helper.token}/api/upload?contentType=image%2Fpng`,
+      headers: { 'Content-Type': 'text/plain' },
+      body: Buffer.from('x'),
+    });
+    assert.equal(res.status, 415);
+    const elsewhere = await http(port, {
+      method: 'POST',
+      path: `/${helper.token}/api/send`,
+      headers: { 'Content-Type': 'application/octet-stream' },
+      body: Buffer.from('{}'),
+    });
+    assert.equal(elsewhere.status, 415);
+  });
+
+  it('forwards to any number of chats and reports each', async () => {
+    const ids = Array.from({ length: 40 }, (_, i) => `c${i}`);
+    bridge.sendRefusals.set('c3', 'blocked');
+    const res = await http(port, {
+      method: 'POST',
+      path: `/${helper.token}/api/forward`,
+      headers: json,
+      body: { messageId: 'm1', conversationIds: ids },
+    });
+    bridge.sendRefusals.delete('c3');
+    assert.equal(res.status, 200);
+    const { results } = JSON.parse(res.text);
+    assert.equal(results.length, 40);
+    assert.deepEqual(results[3], {
+      conversationId: 'c3',
+      ok: false,
+      reason: 'blocked',
+    });
   });
 
   it('marks read', async () => {

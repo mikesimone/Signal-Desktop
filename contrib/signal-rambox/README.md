@@ -18,19 +18,25 @@ label, as Signal does. The page uses Signal's own emoji and Inter fonts.
 The chat list has Signal's Pinned and Chats sections in Signal's pin order,
 preview lines, the All chats / 1:1 chats / Groups tabs and the unread filter
 button. Messages show text formatting, mentions, links and link preview
-cards, and can be edited and deleted from the message's menu.
+cards, and can be edited, deleted and forwarded from the message's menu.
+Forward lists every chat, most recently used first, and takes as many as
+you pick (Signal stops at five). Photos and files are sent by pasting into
+the message box, dropping them on the chat, or the paperclip button; the
+text becomes their caption. In a narrow window the chat list shows photos
+only, as Signal's does.
 
 Not here yet (being added on the fork, aiming at everything Signal Desktop
-does): sending attachments (including paste), forwarding (with no limit on
-recipients, unlike Signal), contact cards, polls, typing indicators, stories
-and calls.
+does): contact cards, polls, typing indicators, voice notes, stories and
+calls.
 
 Photos, member labels, reactions and replies use fork-only bridge additions
 (`conversations.getAvatar`, `messages.react`, `reactions.getPreferred`,
 `quoteMessageId` on `messages.sendText`, author details on messages, and
 `attachments.getThumbnail`, `attachments.read`, `attachments.download`,
-`messages.edit`, `messages.delete`, and pin order, formatting and link
-previews on the DTOs),
+`messages.edit`, `messages.delete`, `attachments.uploadBegin`,
+`attachments.uploadChunk`, `messages.forward`, `attachmentUploadIds` on
+`messages.sendText`, and pin order, formatting and link previews on the
+DTOs),
 not part of the upstream proposal. Against a Signal without them the helper
 asks only for what Signal offers and the rest of the page still works.
 
