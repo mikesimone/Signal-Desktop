@@ -62,4 +62,9 @@ jobs:
             /opt/signal-rambox/signal-rambox.mjs --config /tmp/c --url || fail=1
           check desktop docker run --rm --entrypoint /opt/Signal/signal-desktop \
             signal-headless --version || fail=1
+          check desktop-seccomp docker run --rm \
+            --security-opt seccomp=contrib/signal-headless/seccomp.json \
+            --entrypoint /opt/Signal/signal-desktop \
+            signal-headless --version || fail=1
+          sysctl kernel.apparmor_restrict_unprivileged_userns || true
           exit "${fail:-0}"
