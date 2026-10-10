@@ -27,16 +27,19 @@ jobs:
 
       - name: Build
         run: |
-          set -o pipefail
+          rc=0
           docker build --progress=plain -f contrib/signal-headless/Dockerfile \
-            -t signal-headless . 2>&1 | tee build.log || {
-            # Surface the failure as annotations, which can be read without
-            # downloading the full log.
-            grep -E 'ERROR|ERR!|error|Error' build.log | tail -n 9 |
-              while IFS= read -r line; do echo "::error::${line:0:900}"; done
-            echo "::error::$(tail -n 5 build.log | tr '\n' ' ' | cut -c1-900)"
-            exit 1
-          }
+            -t signal-headless . > build.log 2>&1 || rc=$?
+          if [ "$rc" != 0 ]; then
+            # Annotations can be read without downloading the full log.
+            grep -E 'ERROR|ERR!|[Ee]rror|Trace|signal [0-9]|core dumped' build.log |
+              tail -n 8 | while IFS= read -r line; do
+                echo "::error::${line:0:900}"
+              done
+            echo "::error::exit $rc; tail: $(tail -n 6 build.log | tr '\n' ' ' | cut -c1-900)"
+          fi
+          tail -n 200 build.log
+          exit "$rc"
         shell: bash
         env:
           DOCKER_BUILDKIT: '1'
