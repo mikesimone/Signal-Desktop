@@ -14,10 +14,11 @@ FROM node:24.21.0-bookworm AS build
 RUN apt-get update \
   && apt-get install -y --no-install-recommends python3 make g++ patch \
   && rm -rf /var/lib/apt/lists/*
-RUN corepack enable
-
 WORKDIR /src
 COPY . .
+
+# The pnpm version Signal pins (devEngines; corepack does not read it).
+RUN npm install -g "pnpm@$(node -p "require('./package.json').devEngines.packageManager.version")"
 
 # Fork-only changes the upstream PR does not carry.
 RUN for p in contrib/signal-headless/patches/*.patch; do patch -p1 < "$p"; done
