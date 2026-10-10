@@ -12,7 +12,7 @@
 FROM node:24.21.0-bookworm AS build
 
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends python3 make g++ patch \
+  && apt-get install -y --no-install-recommends python3 make g++ patch libpulse0 \
   && rm -rf /var/lib/apt/lists/*
 WORKDIR /src
 COPY . .
