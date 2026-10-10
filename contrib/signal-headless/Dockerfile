@@ -24,7 +24,9 @@ RUN npm install -g "pnpm@$(node -p "require('./package.json').devEngines.package
 RUN for p in contrib/signal-headless/patches/*.patch; do patch -p1 < "$p"; done
 
 RUN pnpm install --frozen-lockfile
-RUN pnpm run generate
+# The build's 90-day expiry counts from SOURCE_DATE_EPOCH, which upstream
+# takes from git; the image has no .git, so count from the build instead.
+RUN SOURCE_DATE_EPOCH="$(date +%s)" pnpm run generate
 RUN pnpm run build:release --linux dir --publish=never
 
 FROM debian:bookworm-slim
