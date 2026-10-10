@@ -24,6 +24,7 @@ import {
   getAvatar,
   getEmojiCatalog,
   getPreferredReactions,
+  markEmojiUsed,
   react,
   readAttachment,
 } from './ExternalClientExtras.preload.ts';
@@ -247,6 +248,10 @@ async function dispatch(
     case Method.EmojiGetCatalog: {
       const params = safeParseUnknown(SERVICE_PARAM_SCHEMAS[method], rawParams);
       return params.success ? getEmojiCatalog() : invalid;
+    }
+    case Method.EmojiMarkUsed: {
+      const params = safeParseUnknown(SERVICE_PARAM_SCHEMAS[method], rawParams);
+      return params.success ? markEmojiUsed(params.data) : invalid;
     }
     case Method.ReactionsGetPreferred: {
       const params = safeParseUnknown(SERVICE_PARAM_SCHEMAS[method], rawParams);

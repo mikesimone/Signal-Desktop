@@ -340,7 +340,9 @@ DECISION: `emoji.getCatalog` (capability `messages.react`) returns Signal's
 picker categories in Signal's order with short names and the user's skin
 tone applied; `reactions.getPreferred` also returns Signal's recently used
 emoji (`recent`). A reaction outside the quick-reaction bar is recorded as
-used, as Signal's picker does, so the two clients share one history.
+used, as Signal's picker does, and `emoji.markUsed` records an emoji
+picked for the composer. Signal keeps this list per device and does not
+sync it, so a fresh install starts empty.
 
 WHY: Mike wants the ⋯ after the quick reactions and the recently used list,
 as in Signal (2026-10-10).

@@ -123,6 +123,7 @@ export const Method = {
   AttachmentsUploadChunk: 'attachments.uploadChunk',
   MessagesForward: 'messages.forward',
   EmojiGetCatalog: 'emoji.getCatalog',
+  EmojiMarkUsed: 'emoji.markUsed',
 } as const;
 export type MethodType = (typeof Method)[keyof typeof Method];
 
@@ -146,6 +147,7 @@ export const SERVICE_METHOD_CAPABILITIES = {
   [Method.AttachmentsUploadChunk]: Capability.MessagesSend,
   [Method.MessagesForward]: Capability.MessagesSend,
   [Method.EmojiGetCatalog]: Capability.MessagesReact,
+  [Method.EmojiMarkUsed]: Capability.MessagesReact,
 } as const satisfies Partial<Record<MethodType, CapabilityType>>;
 export type ServiceMethodType = keyof typeof SERVICE_METHOD_CAPABILITIES;
 
@@ -476,6 +478,13 @@ export type EmojiCatalogCategoryDTO = Readonly<{
   emoji: ReadonlyArray<readonly [string, string]>;
 }>;
 
+// Fork addition: what Signal's picker does when the user picks an emoji
+// for the composer: it moves to the front of the recently used list.
+export const emojiMarkUsedParamsSchema = z
+  .object({ emoji: z.string().min(1).max(64) })
+  .strict();
+export type EmojiMarkUsedParamsType = z.infer<typeof emojiMarkUsedParamsSchema>;
+
 export type EmojiGetCatalogResultType = Readonly<{
   categories: ReadonlyArray<EmojiCatalogCategoryDTO>;
 }>;
@@ -682,6 +691,7 @@ export const SERVICE_PARAM_SCHEMAS = {
   [Method.AttachmentsUploadChunk]: attachmentsUploadChunkParamsSchema,
   [Method.MessagesForward]: messagesForwardParamsSchema,
   [Method.EmojiGetCatalog]: emojiGetCatalogParamsSchema,
+  [Method.EmojiMarkUsed]: emojiMarkUsedParamsSchema,
 } as const satisfies Record<ServiceMethodType, z.ZodType>;
 
 export type ConversationsListParamsType = z.infer<

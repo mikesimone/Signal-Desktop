@@ -411,6 +411,14 @@ describe('signal-rambox', () => {
     bridge.recentEmoji = ['😂'];
     const bar = await http(port, { path: `/${helper.token}/api/reactions` });
     assert.deepEqual(JSON.parse(bar.text).recent, ['😂']);
+    const used = await http(port, {
+      method: 'POST',
+      path: `/${helper.token}/api/emojiUsed`,
+      headers: json,
+      body: { emoji: '🦃' },
+    });
+    assert.equal(used.status, 200);
+    assert.deepEqual(bridge.recentEmoji, ['🦃', '😂']);
   });
 
   it("serves Signal's emoji font", async () => {

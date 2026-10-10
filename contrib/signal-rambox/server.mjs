@@ -441,6 +441,11 @@ export function createWebServer({
       sendJson(res, 200, await bridge.call('reactions.getPreferred', {}));
       return;
     }
+    if (req.method === 'POST' && route === 'api/emojiUsed') {
+      const { emoji } = await readJson(req);
+      sendJson(res, 200, await bridge.call('emoji.markUsed', { emoji }));
+      return;
+    }
     if (req.method === 'GET' && route === 'api/emoji') {
       if (!bridge.capabilities.includes('messages.react')) {
         sendJson(res, 404, { error: { code: 'NOT_FOUND' } });

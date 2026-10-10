@@ -1576,6 +1576,8 @@ function insertEmoji(e) {
   box.focus();
   box.setSelectionRange(at, at);
   autosize();
+  // Into Signal's recently used list, as its own picker does.
+  api('api/emojiUsed', { emoji: e }).catch(() => {});
 }
 
 async function sendReaction(m, emoji, remove) {

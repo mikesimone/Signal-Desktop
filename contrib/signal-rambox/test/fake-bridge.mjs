@@ -399,6 +399,13 @@ export class FakeBridge {
           recent: this.recentEmoji,
         });
         return;
+      case 'emoji.markUsed':
+        this.recentEmoji = [
+          params.emoji,
+          ...this.recentEmoji.filter(e => e !== params.emoji),
+        ];
+        this.#reply(session, id, {});
+        return;
       case 'emoji.getCatalog':
         this.#reply(session, id, { categories: this.emojiCatalog });
         return;

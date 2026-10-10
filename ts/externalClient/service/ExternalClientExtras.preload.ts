@@ -30,6 +30,7 @@ import type {
   ConversationsGetAvatarParamsType,
   ConversationsGetAvatarResultType,
   EmojiGetCatalogResultType,
+  EmojiMarkUsedParamsType,
   MessagesDeleteParamsType,
   MessagesEditParamsType,
   MessagesReactParamsType,
@@ -343,6 +344,19 @@ export function getPreferredReactions(): ServiceResultType {
     recent: state.emojis.recentEmojis.map(parent => withSkinTone(parent)),
   };
   return { ok: true, value };
+}
+
+export function markEmojiUsed({
+  emoji,
+}: EmojiMarkUsedParamsType): ServiceResultType {
+  if (!Emoji.isEmoji(emoji)) {
+    return { ok: false, code: ErrorCode.InvalidArgument };
+  }
+  const variant: Emoji.Variant = Emoji.isSkinToneVariant(emoji)
+    ? emoji
+    : Emoji.getDefaultVariant(Emoji.getParent(emoji));
+  window.reduxActions.emojis.onUseEmoji({ emoji: variant });
+  return { ok: true, value: {} };
 }
 
 // Signal's full emoji picker: its categories and order, its short names.
