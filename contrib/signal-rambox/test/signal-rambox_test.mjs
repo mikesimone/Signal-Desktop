@@ -6,7 +6,7 @@
 
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { request } from 'node:http';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -98,10 +98,8 @@ async function startHelper({ socketPath, port, extraArgs = [] }) {
   child.stderr.on('data', d => {
     output += d;
   });
-  const url = await waitFor(
-    () => output.match(/custom app: (https?:\/\/\S+)/)?.[1]
-  );
-  const token = new URL(url).pathname.split('/')[1];
+  await waitFor(() => /serving https?:\/\//.test(output));
+  const token = readFileSync(join(config, 'token'), 'utf8').trim();
   return {
     child,
     token,
@@ -438,11 +436,9 @@ describe('signal-rambox behind a reverse proxy', () => {
     rmSync(dir, { recursive: true, force: true });
   });
 
-  it('prints the proxy URL for Rambox', () => {
-    assert.match(
-      helper.output(),
-      new RegExp(`custom app: ${origin}/${helper.token}/`)
-    );
+  it('logs the proxy name but never the token', () => {
+    assert.match(helper.output(), new RegExp(`serving ${origin}/ `));
+    assert.ok(!helper.output().includes(helper.token));
   });
 
   it('accepts requests for the proxy name', async () => {

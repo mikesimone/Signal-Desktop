@@ -60,7 +60,9 @@ it; on a computer shared with untrusted users, don't run this.
    ```
 
    Signal shows an approval dialog for "Rambox (signal-rambox)". Allow it.
-   The helper prints the URL to use, or get it any time with `--url`.
+   In a terminal the helper prints the URL to use; get it any time with
+   `--url`. It never writes the token to a log (a container or service log
+   shows only the address without it).
 
 4. In Rambox: **Add app > Add Custom App**, name it Signal, paste the URL,
    and turn on notifications and "Display in tab" for the unread badge.

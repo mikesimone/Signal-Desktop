@@ -5,7 +5,8 @@
 // signal-rambox: shows Signal Desktop inside Rambox (or any app that hosts web
 // pages) through Signal's external-client bridge. No dependencies; Node 20+.
 //
-//   node signal-rambox.mjs            start; prints the URL to add to Rambox
+//   node signal-rambox.mjs            start; in a terminal, prints the URL
+//                                     to add to Rambox
 //   node signal-rambox.mjs --url      print the URL and exit
 //
 // Options:
@@ -158,7 +159,13 @@ try {
 
 log(`endpoint: ${endpoint}`);
 log(`client key: ${bridge.publicKey}`);
-log(`add this URL to Rambox as a custom app: ${url}`);
+// The token is a secret, so it never goes to a log: only an interactive
+// terminal sees the full URL. Elsewhere (a container, a service) use --url.
+if (process.stdout.isTTY) {
+  log(`add this URL to Rambox as a custom app: ${url}`);
+} else {
+  log(`serving ${args.origins[0] ?? origins[0]}/ (run with --url for the address)`);
+}
 bridge.start();
 
 async function shutdown() {
