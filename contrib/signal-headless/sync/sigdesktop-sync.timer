@@ -1,4 +1,4 @@
-# Installed to /etc/systemd/system/ on Six; see sigdesktop-sync.sh.
+# Install to /etc/systemd/system/; see sigdesktop-sync.sh.
 [Unit]
 Description=Hourly upstream sync for the headless Signal Desktop
 

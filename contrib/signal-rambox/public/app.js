@@ -616,12 +616,71 @@ function renderReactions(m) {
       .filter(r => r.emoji === emoji)
       .map(r => (r.fromMe ? 'You' : nameOf(r.authorConversationId)))
       .join(', ');
-    if (mine && canReact()) {
-      chip.addEventListener('click', () => sendReaction(m, emoji, true));
-    }
+    chip.addEventListener('click', e => {
+      e.stopPropagation();
+      openReactionViewer(m, box, emoji);
+    });
     box.append(chip);
   }
   return box;
+}
+
+// As Signal's reaction viewer: an All tab and one per emoji, then who
+// reacted. Our own row takes the reaction back, as picking it again would.
+function openReactionViewer(m, anchor, selected) {
+  closePopovers();
+  const viewer = $('reaction-viewer');
+  const counts = new Map();
+  for (const r of m.reactions) {
+    counts.set(r.emoji, (counts.get(r.emoji) ?? 0) + 1);
+  }
+  const tabs = el('div', 'viewer-tabs');
+  const list = el('div', 'viewer-list');
+  const show = emoji => {
+    for (const tab of tabs.children) {
+      tab.classList.toggle('active', tab.dataset.emoji === (emoji ?? ''));
+    }
+    list.replaceChildren(
+      ...m.reactions
+        .filter(r => emoji === null || r.emoji === emoji)
+        .toSorted((a, b) => Number(b.fromMe) - Number(a.fromMe))
+        .map(r => {
+          const id = r.authorConversationId;
+          const row = el('div', 'viewer-row');
+          const who = authorOf(id) ?? { title: nameOf(id) };
+          const name = el('span', 'viewer-name', r.fromMe ? 'You' : nameOf(id));
+          row.append(avatar(id, who, 32), name, el('span', 'emoji', r.emoji));
+          if (r.fromMe && canReact()) {
+            row.classList.add('mine');
+            name.append(el('span', 'sub', 'Click to remove'));
+            row.addEventListener('click', e => {
+              e.stopPropagation();
+              closePopovers();
+              sendReaction(m, r.emoji, true);
+            });
+          }
+          return row;
+        })
+    );
+  };
+  const tab = (emoji, label) => {
+    const button = el('button', 'viewer-tab');
+    button.type = 'button';
+    button.dataset.emoji = emoji ?? '';
+    button.append(...label);
+    button.addEventListener('click', e => {
+      e.stopPropagation();
+      show(emoji);
+    });
+    tabs.append(button);
+  };
+  tab(null, [el('span', '', `All ${m.reactions.length}`)]);
+  for (const [emoji, count] of counts) {
+    tab(emoji, [el('span', 'emoji', emoji), el('span', '', String(count))]);
+  }
+  viewer.replaceChildren(tabs, list);
+  show(counts.size > 1 ? selected : null);
+  placePopover(viewer, anchor);
 }
 
 function canReact() {
@@ -1344,6 +1403,7 @@ function closePopovers() {
   $('reaction-picker').hidden = true;
   $('more-menu').hidden = true;
   $('emoji-picker').hidden = true;
+  $('reaction-viewer').hidden = true;
 }
 
 // anchor: an element, or a rect taken before its element was hidden.

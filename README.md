@@ -3,6 +3,20 @@
 
 # Signal Desktop
 
+> **This fork: Signal in a browser tab (Rambox, Ferdium, any web view).**
+> It adds a local API to Signal Desktop that only apps you approve inside
+> Signal can use, plus a web chat page that does what Signal Desktop does:
+> photos, files, paste-to-send, reactions (with who reacted), replies,
+> edits, polls, the full emoji picker, unread filter, and forwarding or
+> sending polls to any number of chats. Signal keeps every key; the page
+> never sees one.
+>
+> - Run it on a server in Docker: [contrib/signal-headless](contrib/signal-headless)
+> - Run it next to Signal on your own PC: [contrib/signal-rambox](contrib/signal-rambox)
+> - Security design: [docs/external-client-threat-model.md](docs/external-client-threat-model.md)
+>
+> Not affiliated with Signal. Everything below is Signal's own README.
+
 Signal Desktop links with Signal on [Android](https://github.com/signalapp/Signal-Android) or [iOS](https://github.com/signalapp/Signal-iOS) and lets you message from your Windows, macOS, and Linux computers.
 
 [Install the production version](https://signal.org/download/) or help us out by [installing the beta version](https://support.signal.org/hc/articles/360007318471-Signal-Beta).

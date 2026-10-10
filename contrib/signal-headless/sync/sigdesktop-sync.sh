@@ -2,10 +2,17 @@
 # Copyright 2026 Mike Simone
 # SPDX-License-Identifier: AGPL-3.0-only
 
-# Hourly upstream sync for the headless Signal Desktop on Six
-# (sigdesktop.mikesimone.net). Run by sigdesktop-sync.timer as msimone, from
-# an installed copy (/usr/local/bin/sigdesktop-sync), never from the working
+# Hourly upstream sync for a headless Signal Desktop built from your fork.
+# Run by sigdesktop-sync.timer as the user who owns the clone, from an
+# installed copy (/usr/local/bin/sigdesktop-sync), never from the working
 # tree, because the run itself merges into that tree.
+#
+# Settings come from /etc/sigdesktop-sync.env (see sigdesktop-sync.env.example):
+#   SYNC_REPO    the fork clone the container is built from
+#   SYNC_FORK    your fork on GitHub, owner/name
+#   SYNC_SITE    the chat page's public base URL, e.g. https://signal.example.net
+#   SYNC_NOTIFY  optional: a command run with the report as its one argument
+#                (Slack, email, ...); without it the report only goes to the log
 #
 # This script only collects what changed since the last run:
 #   - new commits on signalapp/Signal-Desktop main (Signal merges internally
@@ -14,33 +21,40 @@
 #   - PRs merged into either repository,
 # and hands that list to one `claude -p` run in the fork clone. Claude does
 # the merge, adapts contrib/signal-headless, rebuilds, verifies, pushes and
-# writes the report that goes to Mike's Slack DM. Nothing watches this run.
+# writes the report handed to SYNC_NOTIFY. Nothing watches this run.
 #
 # State: ~/.local/state/sigdesktop-sync (last upstream SHA, known tags, last
 # run time, one log per Claude run). The first run only records a baseline.
 set -euo pipefail
 
-REPO=/home/msimone/Signal-Desktop
+CONFIG=${SIGDESKTOP_SYNC_CONFIG:-/etc/sigdesktop-sync.env}
+# shellcheck source=/dev/null
+[[ -f "$CONFIG" ]] && . "$CONFIG"
+: "${SYNC_REPO:?set SYNC_REPO in $CONFIG}"
+: "${SYNC_FORK:?set SYNC_FORK in $CONFIG}"
+: "${SYNC_SITE:?set SYNC_SITE in $CONFIG}"
+SYNC_SITE=${SYNC_SITE%/}
+REPO=$SYNC_REPO
 UPSTREAM=signalapp/Signal-Desktop
-FORK=mikesimone/Signal-Desktop
+FORK=$SYNC_FORK
 STATE="${XDG_STATE_HOME:-$HOME/.local/state}/sigdesktop-sync"
-CLAUDE="$HOME/.local/bin/claude"
-NOTIFY=/home/msimone/noc-in-a-box/slack-notify.sh
-SIGNAL_API_URL=http://127.0.0.1:8080
-SIGNAL_NUMBER=+17028798487
+CLAUDE=${SYNC_CLAUDE:-$HOME/.local/bin/claude}
 
 log() { echo "$(date -u +%FT%TZ) [sigdesktop-sync] $*"; }
 
-# Slack first, Signal note-to-self only if Slack fails (Mike, 2026-10-02).
 notify() {
-  "$NOTIFY" six "$1" && return 0
-  curl -fsS -X POST "$SIGNAL_API_URL/v2/send" -H 'Content-Type: application/json' \
-    -d "{\"message\":$(printf '%s' "$1" | jq -Rs .),\"number\":\"$SIGNAL_NUMBER\",\"account\":\"$SIGNAL_NUMBER\",\"noteToSelf\":true}" \
-    >/dev/null || log "WARNING: could not notify"
+  if [[ -n "${SYNC_NOTIFY:-}" ]]; then
+    $SYNC_NOTIFY "$1" && return 0
+    log "WARNING: could not notify"
+  fi
+  printf '%s\n' "$1"
 }
 
 # The chat page URL carries the access token; never let it reach a report.
-redact() { sed -E 's#(sigdesktop\.mikesimone\.net|127\.0\.0\.1:8083|localhost:8083)/[A-Za-z0-9_-]{8,}#\1/<token>#g'; }
+site_host=$(printf '%s' "$SYNC_SITE" | sed -E 's#^[a-z]+://##; s#/.*##')
+redact() {
+  sed -E "s#(${site_host//./\\.}|127\\.0\\.0\\.1:8083|localhost:8083)/[A-Za-z0-9_-]{8,}#\\1/<token>#g"
+}
 
 mkdir -p "$STATE/runs"
 exec 9>"$STATE/lock"
@@ -101,10 +115,10 @@ ${merged_prs:-(none)}
 EOF
 )
 
-prompt=$(cat <<'EOF'
-You are the unattended hourly sync for the headless Signal Desktop on Six
-(sigdesktop.mikesimone.net). You are in /home/msimone/Signal-Desktop, a clone
-of mikesimone/Signal-Desktop (main), with upstream = signalapp/Signal-Desktop
+prompt=$(cat <<EOF
+You are the unattended hourly sync for a headless Signal Desktop served at
+$SYNC_SITE. You are in $REPO, a clone
+of $FORK (main), with upstream = $UPSTREAM
 (fetched, push disabled). Nobody is watching: work it through on your own and
 end with the report. The changes since the last run are listed at the end.
 
@@ -129,24 +143,24 @@ Read contrib/signal-headless/README.md and Dockerfile first.
 4. docker compose up -d, then check, within about 10 minutes:
    - docker compose logs shows "loaded N conversations" and "bridge: ready"
      after the restart;
-   - with the token from `docker compose exec signal-desktop screen.sh url`,
-     curl https://sigdesktop.mikesimone.net/<token>/api/state returns 200,
-     and https://sigdesktop.mikesimone.net/api/state returns 404.
+   - with the token from \`docker compose exec signal-desktop screen.sh url\`,
+     curl $SYNC_SITE/<token>/api/state returns 200,
+     and $SYNC_SITE/api/state returns 404.
    If Signal or the bridge doesn't come up, roll back:
    docker tag signal-headless:previous signal-headless:latest &&
    docker compose up -d --no-build, confirm the old one is healthy again,
    do not push, and report FAILED.
    If the bridge reports keyMismatch or awaitingApproval, don't delete or
-   approve anything: report it, Mike handles pairing.
+   approve anything: report it, the owner handles pairing.
 5. Only when healthy: git push origin main. Then
    docker image prune -f to free the old layers (disk on / is tight).
 
-Rules: don't touch the signal-forwarder stack, signal-cli-api, nginx,
-certbot, DNS or anything outside this repository and its container. Don't
+Rules: don't touch nginx, certbot, DNS, other containers or anything
+outside this repository and its container. Don't
 add --no-sandbox-style flags beyond what the Dockerfile already has. Never
 print the access token or the full chat URL anywhere, including the report.
 
-Your final message is the report sent to Mike's Slack DM. Start it with
+Your final message is the report sent to the owner. Start it with
 "OK:", "FAILED:" or "NEEDS MIKE:", then at most 8 short lines: the upstream
 range and version merged, what you changed in contrib/signal-headless and
 why, build and health results, and the pushed commit.
@@ -176,7 +190,7 @@ set -e
 
 report=$(redact <"$run_log" | tail -c 3000)
 if [[ $rc -ne 0 || -z "$report" ]]; then
-  report="FAILED: claude -p exited $rc. Log on Six: $run_log
+  report="FAILED: claude -p exited $rc. Log: $run_log
 $report"
 fi
 notify "sigdesktop sync

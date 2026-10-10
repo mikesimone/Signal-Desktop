@@ -1,16 +1,17 @@
-# Installed to /etc/systemd/system/ on Six; see sigdesktop-sync.sh.
+# Install to /etc/systemd/system/; see sigdesktop-sync.sh. Replace the
+# user, group and paths with the account that owns the fork clone.
 [Unit]
-Description=Merge upstream Signal Desktop into the fork and redeploy sigdesktop (via claude -p)
+Description=Merge upstream Signal Desktop into the fork and redeploy the headless container (via claude -p)
 Wants=network-online.target
 After=network-online.target docker.service
 
 [Service]
 Type=oneshot
-User=msimone
-Group=msimone
-Environment=HOME=/home/msimone
-Environment=PATH=/home/msimone/.local/bin:/usr/local/bin:/usr/bin:/bin
-WorkingDirectory=/home/msimone/Signal-Desktop
+User=signal
+Group=signal
+Environment=HOME=/home/signal
+Environment=PATH=/home/signal/.local/bin:/usr/local/bin:/usr/bin:/bin
+WorkingDirectory=/home/signal/Signal-Desktop
 ExecStart=/usr/local/bin/sigdesktop-sync
 # A merge plus a full Signal build can take a while.
 TimeoutStartSec=3h
