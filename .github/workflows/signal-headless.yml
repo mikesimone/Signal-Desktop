@@ -60,11 +60,17 @@ jobs:
           }
           check helper docker run --rm --entrypoint node signal-headless \
             /opt/signal-rambox/signal-rambox.mjs --config /tmp/c --url || fail=1
-          check desktop docker run --rm --entrypoint /opt/Signal/signal-desktop \
-            signal-headless --version || fail=1
-          check desktop-seccomp docker run --rm \
+          docker run -d --name smoke --shm-size 1g \
             --security-opt seccomp=contrib/signal-headless/seccomp.json \
-            --entrypoint /opt/Signal/signal-desktop \
-            signal-headless --version || fail=1
-          sysctl kernel.apparmor_restrict_unprivileged_userns || true
+            --tmpfs /data:uid=1000,gid=1000 signal-headless
+          sleep 60
+          check running docker inspect -f '{{.State.Status}}' smoke || fail=1
+          check socket docker exec smoke sh -c \
+            'ls /data/.config/Signal/external-client/' || fail=1
+          check link-qr docker exec smoke bash -c \
+            'import -window root /tmp/s.png && zbarimg -q --raw /tmp/s.png | cut -c1-12' || fail=1
+          docker logs smoke > smoke.log 2>&1 || true
+          grep -E 'FATAL|ERROR|Error' smoke.log | tail -n 20 | while IFS= read -r line; do
+            echo "::warning title=smoke log::$line"
+          done
           exit "${fail:-0}"
