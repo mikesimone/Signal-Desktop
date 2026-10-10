@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { createLogger } from '../../logging/log.std.ts';
+import type { MessageAttributesType } from '../../model-types.d.ts';
 import type { ConversationModel } from '../../models/conversations.preload.ts';
 import { isMissingRequiredProfileSharing } from '../../state/selectors/conversations.dom.ts';
 import { ToastType } from '../../types/Toast.dom.tsx';
@@ -14,6 +15,7 @@ import { isConversationSMSOnly } from '../../util/isConversationSMSOnly.std.ts';
 import { isConversationEverUnregistered } from '../../util/isConversationUnregistered.dom.ts';
 import { isSignalConversation } from '../../util/isSignalConversation.dom.ts';
 import { shouldShowInvalidMessageToast } from '../../util/shouldShowInvalidMessageToast.preload.ts';
+import { makeQuote } from '../../util/makeQuote.preload.ts';
 import { isDirectConversation } from '../../util/whatTypeOfConversation.dom.ts';
 import type { ServiceResultType } from '../hostTypes.std.ts';
 import { toMessageDTO } from '../messageDto.std.ts';
@@ -56,7 +58,7 @@ function reasonForToast(toastType: ToastType): SendBlockReasonType {
 
 // The same conditions under which Signal's composer refuses to send or is
 // replaced by another panel (CompositionArea), in the same order.
-async function getSendBlockReason(
+export async function getSendBlockReason(
   model: ConversationModel,
   body: string
 ): Promise<SendBlockReasonType | undefined> {
@@ -116,10 +118,28 @@ async function getSendBlockReason(
 export async function sendText({
   conversationId,
   body,
+  quoteMessageId,
 }: MessagesSendTextParamsType): Promise<ServiceResultType> {
   const model = getListedConversation(conversationId);
   if (!model) {
     return { ok: false, code: ErrorCode.NotFound };
+  }
+
+  // Fork addition: replies. The quoted message must be one the client could
+  // read in this conversation, as the timeline's Reply would offer it.
+  let quoted: MessageAttributesType | undefined;
+  if (quoteMessageId !== undefined) {
+    quoted = await loadMessage(quoteMessageId);
+    const quotedDto = quoted ? toMessageDTO(quoted, getDtoContext()) : null;
+    if (
+      !quoted ||
+      quoted.conversationId !== conversationId ||
+      !quotedDto ||
+      quotedDto.kind === 'deleted' ||
+      quotedDto.kind === 'unsupported'
+    ) {
+      return { ok: false, code: ErrorCode.InvalidArgument };
+    }
   }
 
   const reason = await getSendBlockReason(model, body);
@@ -129,7 +149,11 @@ export async function sendText({
   }
 
   const sent = await model.enqueueMessageForSend(
-    { body, attachments: [] },
+    {
+      body,
+      attachments: [],
+      quote: quoted ? await makeQuote(quoted) : undefined,
+    },
     // The user may have a draft in Signal; leave it alone.
     { dontClearDraft: true }
   );

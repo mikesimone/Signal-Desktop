@@ -1,18 +1,61 @@
+/* Looks modeled on Signal Desktop's own stylesheets. */
+
+@font-face {
+  font-family: 'Inter';
+  src: url('fonts/Inter-Regular.woff2') format('woff2');
+  font-weight: 400;
+  /* Like Signal: leave WHITE LARGE SQUARE to the emoji font. */
+  unicode-range: U+0-2B1B, U+2B1D-10FFFF;
+}
+@font-face {
+  font-family: 'Inter';
+  src: url('fonts/Inter-Medium.woff2') format('woff2');
+  font-weight: 500;
+  unicode-range: U+0-2B1B, U+2B1D-10FFFF;
+}
+@font-face {
+  font-family: 'Inter';
+  src: url('fonts/Inter-SemiBold.woff2') format('woff2');
+  font-weight: 600 700;
+  unicode-range: U+0-2B1B, U+2B1D-10FFFF;
+}
+/* Signal's emoji: the large set (every emoji, sharp at any size) when the
+   helper has it, else the small set Signal ships. */
+@font-face {
+  font-family: 'Signal Emoji Large';
+  src: url('fonts/emoji-large.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Signal Emoji Small';
+  src: url('fonts/emoji.woff2') format('woff2');
+}
+
 :root {
   color-scheme: light dark;
+  --font:
+    'Inter', 'Signal Emoji Large', 'Signal Emoji Small', system-ui,
+    -apple-system, 'Segoe UI', sans-serif;
   --bg: #ffffff;
   --panel: #f6f6f6;
-  --border: #e3e3e3;
-  --text: #1b1b1b;
-  --muted: #6b6b6b;
-  --accent: #3a76f0;
+  --border: #e9e9e9;
+  --text: #121212;
+  --muted: #5e5e5e;
+  --accent: #2c58c3;
   --accent-text: #ffffff;
   --bubble-in: #e9e9e9;
-  --bubble-out: #3a76f0;
+  --bubble-out: #2c58c3;
   --bubble-out-text: #ffffff;
-  --selected: #dedede;
+  --quote-in: rgba(255, 255, 255, 0.6);
+  --quote-out: rgba(255, 255, 255, 0.24);
+  --hover: #ececec;
+  --selected: #e2e2e2;
   --error: #c0392b;
-  --badge: #3a76f0;
+  --badge: #2c58c3;
+  --popover: #ffffff;
+  --shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+  --reaction: #e9e9e9;
+  --reaction-mine: #c6d4ff;
+  --icon: #5e5e5e;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -21,11 +64,19 @@
     --panel: #1b1b1b;
     --border: #2e2e2e;
     --text: #e9e9e9;
-    --muted: #9a9a9a;
-    --bubble-in: #2c2c2c;
-    --bubble-out: #2c6bed;
-    --selected: #303030;
+    --muted: #a9a9a9;
+    --bubble-in: #3b3b3b;
+    --bubble-out: #2c58c3;
+    --quote-in: rgba(0, 0, 0, 0.24);
+    --quote-out: rgba(0, 0, 0, 0.2);
+    --hover: #262626;
+    --selected: #2e2e2e;
     --error: #ff6b5b;
+    --popover: #2e2e2e;
+    --shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+    --reaction: #3b3b3b;
+    --reaction-mine: #4f5c86;
+    --icon: #b9b9b9;
   }
 }
 
@@ -46,18 +97,47 @@ body {
 body {
   background: var(--bg);
   color: var(--text);
-  font:
-    14px/1.4 system-ui,
-    -apple-system,
-    'Segoe UI',
-    sans-serif;
+  font: 14px/20px var(--font);
   display: flex;
   flex-direction: column;
 }
 
 button {
   font: inherit;
+  color: inherit;
   cursor: pointer;
+}
+
+.emoji,
+.pill-emoji {
+  font-family: 'Signal Emoji Large', 'Signal Emoji Small', var(--font);
+}
+
+.icon {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--icon);
+}
+
+.icon-button:hover {
+  background: var(--hover);
 }
 
 .banner {
@@ -84,9 +164,70 @@ button {
   min-height: 0;
 }
 
+/* --- avatars --- */
+
+.avatar {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  overflow: hidden;
+  font-weight: 500;
+  user-select: none;
+}
+
+.avatar {
+  position: relative;
+}
+
+.avatar .photo {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+}
+
+.avatar .photo.loaded {
+  opacity: 1;
+}
+
+.av-48 {
+  width: 48px;
+  height: 48px;
+  font-size: 18px;
+}
+
+.av-48 .icon {
+  width: 26px;
+  height: 26px;
+}
+
+.av-36 {
+  width: 36px;
+  height: 36px;
+  font-size: 14px;
+}
+
+.av-28 {
+  width: 28px;
+  height: 28px;
+  font-size: 11px;
+}
+
+.av-28 .icon,
+.av-36 .icon {
+  width: 18px;
+  height: 18px;
+}
+
+/* --- chat list --- */
+
 .sidebar {
-  width: 300px;
-  min-width: 220px;
+  width: 320px;
+  min-width: 240px;
   display: flex;
   flex-direction: column;
   border-right: 1px solid var(--border);
@@ -94,22 +235,23 @@ button {
 }
 
 .sidebar-head {
-  padding: 10px;
+  padding: 12px;
 }
 
 #search {
   width: 100%;
-  padding: 6px 10px;
-  border-radius: 16px;
-  border: 1px solid var(--border);
-  background: var(--bg);
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: none;
+  background: var(--hover);
   color: var(--text);
+  font: inherit;
 }
 
 .conversations {
   list-style: none;
   margin: 0;
-  padding: 0;
+  padding: 0 8px 8px;
   overflow-y: auto;
   flex: 1;
 }
@@ -117,17 +259,29 @@ button {
 .conversations li {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 9px 12px;
+  gap: 12px;
+  padding: 8px 10px;
+  border-radius: 10px;
   cursor: pointer;
 }
 
 .conversations li:hover {
-  background: var(--selected);
+  background: var(--hover);
 }
 
 .conversations li[aria-selected='true'] {
   background: var(--selected);
+}
+
+.row-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.row-top {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
 }
 
 .conversations .title {
@@ -135,10 +289,17 @@ button {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-weight: 500;
+}
+
+.conversations .time {
+  flex: none;
+  font-size: 12px;
+  color: var(--muted);
 }
 
 .conversations .unread .title {
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .conversations .muted .title {
@@ -147,17 +308,21 @@ button {
 
 .badge {
   min-width: 20px;
+  height: 20px;
   padding: 0 6px;
   border-radius: 10px;
   background: var(--badge);
   color: var(--accent-text);
   font-size: 12px;
+  line-height: 20px;
   text-align: center;
 }
 
 .muted .badge {
   background: var(--muted);
 }
+
+/* --- chat --- */
 
 .chat {
   flex: 1;
@@ -172,18 +337,30 @@ button {
 }
 
 .chat-head {
-  padding: 12px 16px;
+  padding: 10px 16px;
   border-bottom: 1px solid var(--border);
-  font-weight: 600;
   display: flex;
-  gap: 8px;
-  align-items: baseline;
+  gap: 12px;
+  align-items: center;
+}
+
+.chat-head-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+#chat-title {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .chat-head .sub {
-  font-weight: 400;
   color: var(--muted);
   font-size: 12px;
+  line-height: 16px;
 }
 
 .messages {
@@ -206,76 +383,329 @@ button {
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
 }
 
 .msg {
-  max-width: 72%;
-  padding: 6px 10px;
-  border-radius: 14px;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  margin-top: 10px;
 }
 
-.msg.in {
-  align-self: flex-start;
-  background: var(--bubble-in);
+.msg.run + .msg {
+  margin-top: 2px;
 }
 
 .msg.out {
-  align-self: flex-end;
+  justify-content: flex-end;
+}
+
+.avatar-spacer {
+  flex: none;
+  width: 28px;
+}
+
+.column {
+  display: flex;
+  flex-direction: column;
+  max-width: min(72%, 620px);
+  min-width: 0;
+}
+
+.msg.out .column {
+  align-items: flex-end;
+}
+
+.bubble-line {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+}
+
+.msg.out .bubble-line {
+  flex-direction: row-reverse;
+}
+
+.bubble {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 7px 12px 6px;
+  border-radius: 18px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  background: var(--bubble-in);
+}
+
+.msg.in.run .bubble {
+  border-bottom-left-radius: 4px;
+}
+
+.msg.out.run .bubble {
+  border-bottom-right-radius: 4px;
+}
+
+.msg.out .bubble {
   background: var(--bubble-out);
   color: var(--bubble-out-text);
 }
 
-.msg .author {
-  display: block;
-  font-size: 12px;
+.bubble.jumbo {
+  background: transparent !important;
+  color: var(--text) !important;
+  padding: 0;
+}
+
+.bubble.jumbo .body {
+  font-family: 'Signal Emoji Large', 'Signal Emoji Small', var(--font);
+  font-size: 48px;
+  line-height: 56px;
+}
+
+.bubble.jumbo .meta {
+  color: var(--muted);
+}
+
+.author,
+.quote-author {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.author {
+  margin-bottom: 2px;
+}
+
+.author .name,
+.quote-author .name {
   font-weight: 600;
-  color: var(--accent);
+  font-size: 13px;
+  color: var(--name, var(--accent));
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.msg .meta {
-  display: block;
-  font-size: 11px;
-  opacity: 0.75;
-  text-align: right;
+.msg.out .quote-author .name {
+  color: inherit;
 }
 
-.msg .note {
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  max-width: 180px;
+  padding: 0 6px;
+  border-radius: 9px;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--pill, var(--muted));
+  background: var(--pill-bg, var(--hover));
+}
+
+.pill-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.quote {
+  display: flex;
+  flex-direction: column;
+  margin: 2px -6px 6px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  border-left: 4px solid var(--name, currentColor);
+  background: var(--quote-in);
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.msg.out .quote {
+  background: var(--quote-out);
+  border-left-color: currentColor;
+}
+
+.quote-text {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.body.note {
   font-style: italic;
   opacity: 0.8;
 }
 
-.msg .quote {
-  display: block;
-  border-left: 3px solid currentColor;
-  padding-left: 6px;
-  margin-bottom: 4px;
-  opacity: 0.8;
-  font-size: 13px;
+.meta {
+  align-self: flex-end;
+  margin-top: 2px;
+  font-size: 11px;
+  line-height: 14px;
+  opacity: 0.75;
 }
 
-.msg .reactions {
-  display: block;
+/* Hover actions, beside the bubble like Signal's. */
+.actions {
+  display: flex;
+  flex: none;
+  visibility: hidden;
+}
+
+.msg.out .actions {
+  flex-direction: row-reverse;
+}
+
+.msg:hover .actions,
+.actions:focus-within {
+  visibility: visible;
+}
+
+.reactions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  margin-top: -6px;
+  padding: 0 8px;
+  position: relative;
+}
+
+.reaction {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 6px;
+  border: 2px solid var(--bg);
+  border-radius: 12px;
+  background: var(--reaction);
   font-size: 13px;
+  line-height: 18px;
+  cursor: default;
+}
+
+.reaction.mine {
+  background: var(--reaction-mine);
+  cursor: pointer;
+}
+
+.reaction .count {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+/* --- popovers --- */
+
+.popover {
+  position: fixed;
+  z-index: 10;
+  display: flex;
+  gap: 2px;
+  padding: 6px;
+  border-radius: 28px;
+  background: var(--popover);
+  box-shadow: var(--shadow);
+}
+
+.pick {
+  width: 40px;
+  height: 40px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  font-size: 26px;
+  line-height: 40px;
+  padding: 0;
+  transition: transform 0.1s;
+}
+
+.pick:hover {
+  transform: scale(1.2);
+}
+
+.pick.mine {
+  background: var(--selected);
+}
+
+.menu {
+  flex-direction: column;
+  min-width: 180px;
+  border-radius: 10px;
+}
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  text-align: left;
+}
+
+.menu-item:hover {
+  background: var(--hover);
+}
+
+.menu-empty {
+  padding: 6px 10px;
+  color: var(--muted);
+}
+
+.toast {
+  position: fixed;
+  bottom: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 8px 16px;
+  border-radius: 8px;
+  background: #3b3b3b;
+  color: #ffffff;
+  box-shadow: var(--shadow);
+  z-index: 20;
+}
+
+/* --- composer --- */
+
+.reply-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 12px;
+  padding: 8px 0 0;
+}
+
+.reply-quote {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border-left: 4px solid var(--name, var(--accent));
+  background: var(--hover);
+  font-size: 13px;
+  line-height: 18px;
 }
 
 .composer {
   display: flex;
   gap: 8px;
   padding: 10px 12px;
-  border-top: 1px solid var(--border);
 }
 
 .composer textarea {
   flex: 1;
   resize: none;
   max-height: 160px;
-  padding: 8px 12px;
+  padding: 8px 14px;
   border-radius: 18px;
-  border: 1px solid var(--border);
-  background: var(--bg);
+  border: none;
+  background: var(--hover);
   color: var(--text);
   font: inherit;
 }
@@ -296,4 +726,419 @@ button {
 .send-error {
   padding: 0 16px 10px;
   color: var(--error);
+}
+
+/* Signal's avatar colors (ts/axo/AxoTokens.std.ts). */
+.ac-A100 {
+  background: #e3e3fe;
+  color: #3838f5;
+}
+.ac-A110 {
+  background: #dde7fc;
+  color: #1251d3;
+}
+.ac-A120 {
+  background: #d8e8f0;
+  color: #086da0;
+}
+.ac-A130 {
+  background: #cde4cd;
+  color: #067906;
+}
+.ac-A140 {
+  background: #eae0fd;
+  color: #661aff;
+}
+.ac-A150 {
+  background: #f5e3fe;
+  color: #9f00f0;
+}
+.ac-A160 {
+  background: #f6d8ec;
+  color: #b8057c;
+}
+.ac-A170 {
+  background: #f5d7d7;
+  color: #be0404;
+}
+.ac-A180 {
+  background: #fef5d0;
+  color: #836b01;
+}
+.ac-A190 {
+  background: #eae6d5;
+  color: #7d6f40;
+}
+.ac-A200 {
+  background: #d2d2dc;
+  color: #4f4f6d;
+}
+.ac-A210 {
+  background: #d7d7d9;
+  color: #5c5c5c;
+}
+
+/* Signal's contact name colors (stylesheets/components/ContactName.scss). */
+.nc-000 {
+  --name: #d00b0b;
+  --pill: #920808;
+  --pill-bg: rgba(208, 11, 11, 0.14);
+}
+.nc-010 {
+  --name: #c13215;
+  --pill: #87230f;
+  --pill-bg: rgba(193, 50, 21, 0.14);
+}
+.nc-020 {
+  --name: #b34209;
+  --pill: #7d2e06;
+  --pill-bg: rgba(179, 66, 9, 0.14);
+}
+.nc-030 {
+  --name: #9c5711;
+  --pill: #6d3d0c;
+  --pill-bg: rgba(156, 87, 17, 0.14);
+}
+.nc-040 {
+  --name: #866118;
+  --pill: #5e4411;
+  --pill-bg: rgba(134, 97, 24, 0.14);
+}
+.nc-050 {
+  --name: #76681e;
+  --pill: #534915;
+  --pill-bg: rgba(118, 104, 30, 0.14);
+}
+.nc-060 {
+  --name: #6b6b24;
+  --pill: #4b4b19;
+  --pill-bg: rgba(107, 107, 36, 0.14);
+}
+.nc-070 {
+  --name: #5e6e0c;
+  --pill: #424d08;
+  --pill-bg: rgba(94, 110, 12, 0.14);
+}
+.nc-080 {
+  --name: #4b7000;
+  --pill: #344e00;
+  --pill-bg: rgba(75, 112, 0, 0.14);
+}
+.nc-090 {
+  --name: #3d7406;
+  --pill: #2b5104;
+  --pill-bg: rgba(61, 116, 6, 0.14);
+}
+.nc-100 {
+  --name: #2d7906;
+  --pill: #1f5504;
+  --pill-bg: rgba(45, 121, 6, 0.14);
+}
+.nc-110 {
+  --name: #2d761e;
+  --pill: #1f5315;
+  --pill-bg: rgba(45, 118, 30, 0.14);
+}
+.nc-120 {
+  --name: #067906;
+  --pill: #045504;
+  --pill-bg: rgba(6, 121, 6, 0.14);
+}
+.nc-130 {
+  --name: #32763e;
+  --pill: #23532b;
+  --pill-bg: rgba(50, 118, 62, 0.14);
+}
+.nc-140 {
+  --name: #06792d;
+  --pill: #04551f;
+  --pill-bg: rgba(6, 121, 45, 0.14);
+}
+.nc-150 {
+  --name: #007a3d;
+  --pill: #00552b;
+  --pill-bg: rgba(0, 122, 61, 0.14);
+}
+.nc-160 {
+  --name: #067953;
+  --pill: #04553a;
+  --pill-bg: rgba(6, 121, 83, 0.14);
+}
+.nc-170 {
+  --name: #067462;
+  --pill: #045145;
+  --pill-bg: rgba(6, 116, 98, 0.14);
+}
+.nc-180 {
+  --name: #007575;
+  --pill: #005252;
+  --pill-bg: rgba(0, 117, 117, 0.14);
+}
+.nc-190 {
+  --name: #077288;
+  --pill: #05505f;
+  --pill-bg: rgba(7, 114, 136, 0.14);
+}
+.nc-200 {
+  --name: #006da3;
+  --pill: #004c72;
+  --pill-bg: rgba(0, 109, 163, 0.14);
+}
+.nc-210 {
+  --name: #5b6976;
+  --pill: #404a53;
+  --pill-bg: rgba(91, 105, 118, 0.14);
+}
+.nc-220 {
+  --name: #2662d9;
+  --pill: #1b4598;
+  --pill-bg: rgba(38, 98, 217, 0.14);
+}
+.nc-230 {
+  --name: #2e51ff;
+  --pill: #2039b2;
+  --pill-bg: rgba(46, 81, 255, 0.14);
+}
+.nc-240 {
+  --name: #5151f6;
+  --pill: #3939ac;
+  --pill-bg: rgba(81, 81, 246, 0.14);
+}
+.nc-250 {
+  --name: #6447f5;
+  --pill: #4632ac;
+  --pill-bg: rgba(100, 71, 245, 0.14);
+}
+.nc-260 {
+  --name: #7a3df5;
+  --pill: #552bac;
+  --pill-bg: rgba(122, 61, 245, 0.14);
+}
+.nc-270 {
+  --name: #8f2af4;
+  --pill: #641dab;
+  --pill-bg: rgba(143, 42, 244, 0.14);
+}
+.nc-280 {
+  --name: #a20ced;
+  --pill: #7108a6;
+  --pill-bg: rgba(162, 12, 237, 0.14);
+}
+.nc-290 {
+  --name: #af0bd0;
+  --pill: #7a0892;
+  --pill-bg: rgba(175, 11, 208, 0.14);
+}
+.nc-300 {
+  --name: #b814b8;
+  --pill: #810e81;
+  --pill-bg: rgba(184, 20, 184, 0.14);
+}
+.nc-310 {
+  --name: #c20aa3;
+  --pill: #880772;
+  --pill-bg: rgba(194, 10, 163, 0.14);
+}
+.nc-320 {
+  --name: #c70a88;
+  --pill: #8b075f;
+  --pill-bg: rgba(199, 10, 136, 0.14);
+}
+.nc-330 {
+  --name: #cc0066;
+  --pill: #8f0047;
+  --pill-bg: rgba(204, 0, 102, 0.14);
+}
+.nc-340 {
+  --name: #d00b4d;
+  --pill: #920836;
+  --pill-bg: rgba(208, 11, 77, 0.14);
+}
+.nc-350 {
+  --name: #d00b2c;
+  --pill: #92081f;
+  --pill-bg: rgba(208, 11, 44, 0.14);
+}
+
+@media (prefers-color-scheme: dark) {
+  .nc-000 {
+    --name: #ff7070;
+    --pill: #ff9e9e;
+    --pill-bg: rgba(255, 112, 112, 0.32);
+  }
+  .nc-010 {
+    --name: #ff6f52;
+    --pill: #ff9d89;
+    --pill-bg: rgba(255, 111, 82, 0.32);
+  }
+  .nc-020 {
+    --name: #f57a3d;
+    --pill: #f8a57b;
+    --pill-bg: rgba(245, 122, 61, 0.32);
+  }
+  .nc-030 {
+    --name: #d5920b;
+    --pill: #e2b559;
+    --pill-bg: rgba(213, 146, 11, 0.32);
+  }
+  .nc-040 {
+    --name: #d68f00;
+    --pill: #e3b352;
+    --pill-bg: rgba(214, 143, 0, 0.32);
+  }
+  .nc-050 {
+    --name: #b89b0a;
+    --pill: #cfbb58;
+    --pill-bg: rgba(184, 155, 10, 0.32);
+  }
+  .nc-060 {
+    --name: #a4a437;
+    --pill: #c1c177;
+    --pill-bg: rgba(164, 164, 55, 0.32);
+  }
+  .nc-070 {
+    --name: #8faa09;
+    --pill: #b3c558;
+    --pill-bg: rgba(143, 170, 9, 0.32);
+  }
+  .nc-080 {
+    --name: #74ad00;
+    --pill: #a0c752;
+    --pill-bg: rgba(116, 173, 0, 0.32);
+  }
+  .nc-090 {
+    --name: #5eb309;
+    --pill: #92cb58;
+    --pill-bg: rgba(94, 179, 9, 0.32);
+  }
+  .nc-100 {
+    --name: #42b309;
+    --pill: #7ecb58;
+    --pill-bg: rgba(66, 179, 9, 0.32);
+  }
+  .nc-110 {
+    --name: #43b42d;
+    --pill: #7fcc70;
+    --pill-bg: rgba(67, 180, 45, 0.32);
+  }
+  .nc-120 {
+    --name: #0ab80a;
+    --pill: #58cf58;
+    --pill-bg: rgba(10, 184, 10, 0.32);
+  }
+  .nc-130 {
+    --name: #4baf5c;
+    --pill: #85c990;
+    --pill-bg: rgba(75, 175, 92, 0.32);
+  }
+  .nc-140 {
+    --name: #0ab844;
+    --pill: #58cf80;
+    --pill-bg: rgba(10, 184, 68, 0.32);
+  }
+  .nc-150 {
+    --name: #00b85c;
+    --pill: #52cf90;
+    --pill-bg: rgba(0, 184, 92, 0.32);
+  }
+  .nc-160 {
+    --name: #00b87a;
+    --pill: #52cfa5;
+    --pill-bg: rgba(0, 184, 122, 0.32);
+  }
+  .nc-170 {
+    --name: #09b397;
+    --pill: #58cbb8;
+    --pill-bg: rgba(9, 179, 151, 0.32);
+  }
+  .nc-180 {
+    --name: #00b2b2;
+    --pill: #52cbcb;
+    --pill-bg: rgba(0, 178, 178, 0.32);
+  }
+  .nc-190 {
+    --name: #00aed1;
+    --pill: #52c8e0;
+    --pill-bg: rgba(0, 174, 209, 0.32);
+  }
+  .nc-200 {
+    --name: #00a7fa;
+    --pill: #52c3fc;
+    --pill-bg: rgba(0, 167, 250, 0.32);
+  }
+  .nc-210 {
+    --name: #8ba1b6;
+    --pill: #b0bfcd;
+    --pill-bg: rgba(139, 161, 182, 0.32);
+  }
+  .nc-220 {
+    --name: #7da1e8;
+    --pill: #a7bfef;
+    --pill-bg: rgba(125, 161, 232, 0.32);
+  }
+  .nc-230 {
+    --name: #8599ff;
+    --pill: #acbaff;
+    --pill-bg: rgba(133, 153, 255, 0.32);
+  }
+  .nc-240 {
+    --name: #9494ff;
+    --pill: #b6b6ff;
+    --pill-bg: rgba(148, 148, 255, 0.32);
+  }
+  .nc-250 {
+    --name: #a18ff9;
+    --pill: #bfb3fb;
+    --pill-bg: rgba(161, 143, 249, 0.32);
+  }
+  .nc-260 {
+    --name: #af8af9;
+    --pill: #c9affb;
+    --pill-bg: rgba(175, 138, 249, 0.32);
+  }
+  .nc-270 {
+    --name: #bf80ff;
+    --pill: #d3a9ff;
+    --pill-bg: rgba(191, 128, 255, 0.32);
+  }
+  .nc-280 {
+    --name: #cf7cf8;
+    --pill: #dea6fa;
+    --pill-bg: rgba(207, 124, 248, 0.32);
+  }
+  .nc-290 {
+    --name: #e06ef7;
+    --pill: #ea9cfa;
+    --pill-bg: rgba(224, 110, 247, 0.32);
+  }
+  .nc-300 {
+    --name: #f65af6;
+    --pill: #f98ff9;
+    --pill-bg: rgba(246, 90, 246, 0.32);
+  }
+  .nc-310 {
+    --name: #f75fdd;
+    --pill: #fa92e8;
+    --pill-bg: rgba(247, 95, 221, 0.32);
+  }
+  .nc-320 {
+    --name: #f76ec9;
+    --pill: #fa9cda;
+    --pill-bg: rgba(247, 110, 201, 0.32);
+  }
+  .nc-330 {
+    --name: #f76eb2;
+    --pill: #fa9ccb;
+    --pill-bg: rgba(247, 110, 178, 0.32);
+  }
+  .nc-340 {
+    --name: #ff6b9c;
+    --pill: #ff9abc;
+    --pill-bg: rgba(255, 107, 156, 0.32);
+  }
+  .nc-350 {
+    --name: #f77389;
+    --pill: #faa0af;
+    --pill-bg: rgba(247, 115, 137, 0.32);
+  }
 }

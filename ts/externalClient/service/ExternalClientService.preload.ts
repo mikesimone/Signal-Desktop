@@ -16,6 +16,11 @@ import {
   isListedConversation,
   toConversationDTO,
 } from '../conversationDto.std.ts';
+import {
+  getAvatar,
+  getPreferredReactions,
+  react,
+} from './ExternalClientExtras.preload.ts';
 import { markRead, sendText } from './ExternalClientSend.preload.ts';
 import {
   getDtoContext,
@@ -207,6 +212,24 @@ async function dispatch(
       }
       const params = safeParseUnknown(SERVICE_PARAM_SCHEMAS[method], rawParams);
       return params.success ? markRead(params.data) : invalid;
+    }
+    case Method.ConversationsGetAvatar: {
+      if (!window.ConversationController.isInitialFetchComplete()) {
+        return notReady;
+      }
+      const params = safeParseUnknown(SERVICE_PARAM_SCHEMAS[method], rawParams);
+      return params.success ? getAvatar(params.data) : invalid;
+    }
+    case Method.MessagesReact: {
+      if (!window.ConversationController.isInitialFetchComplete()) {
+        return notReady;
+      }
+      const params = safeParseUnknown(SERVICE_PARAM_SCHEMAS[method], rawParams);
+      return params.success ? react(params.data) : invalid;
+    }
+    case Method.ReactionsGetPreferred: {
+      const params = safeParseUnknown(SERVICE_PARAM_SCHEMAS[method], rawParams);
+      return params.success ? getPreferredReactions() : invalid;
     }
     default:
       throw new Error(`Unhandled external client method ${method}`);

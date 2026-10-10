@@ -27,7 +27,34 @@ export type ConversationSourceType = Pick<
   | 'isMe'
   | 'acceptedMessageRequest'
   | 'membersCount'
+  | 'avatarUrl'
+  | 'avatarHash'
+  | 'color'
 >;
+
+// A polynomial string hash, as hex. Turns internal values into an opaque
+// version string.
+function opaqueVersion(input: string): string {
+  const modulus = 4_294_967_291;
+  let hash = 0;
+  for (let i = 0; i < input.length; i += 1) {
+    hash = (hash * 131 + input.charCodeAt(i)) % modulus;
+  }
+  return hash.toString(16).padStart(8, '0');
+}
+
+// Null when there is no photo. The local URL changes whenever the photo
+// file does; it is hashed so that no path reaches clients.
+export function getAvatarVersion(
+  conversation: Pick<ConversationSourceType, 'avatarUrl' | 'avatarHash'>
+): string | null {
+  if (!conversation.avatarUrl) {
+    return null;
+  }
+  return opaqueVersion(
+    `${conversation.avatarUrl}\0${conversation.avatarHash ?? ''}`
+  );
+}
 
 // Same rule as the left pane (_getLeftPaneLists): a conversation is listed
 // when it is pinned or has had activity.
@@ -63,5 +90,7 @@ export function toConversationDTO(
       conversation.type === 'group'
         ? (conversation.membersCount ?? null)
         : null,
+    avatarColor: conversation.color ?? null,
+    avatarVersion: getAvatarVersion(conversation),
   };
 }

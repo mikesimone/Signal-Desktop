@@ -4558,6 +4558,10 @@
     "messageformat": "Mark your messages as read, which may send read receipts",
     "description": "Permission shown in the local app access dialog"
   },
+  "icu:ExternalClientCapability__messages-react": {
+    "messageformat": "React to messages as you",
+    "description": "Permission shown in the local app access dialog"
+  },
   "icu:ExternalClientCapability__notifications-manage": {
     "messageformat": "Show message notifications instead of Signal while it is connected",
     "description": "Permission shown in the local app access dialog"

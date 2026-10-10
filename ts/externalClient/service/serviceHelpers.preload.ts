@@ -7,10 +7,14 @@ import type {
   MessageAttributesType,
 } from '../../model-types.d.ts';
 import { DataReader } from '../../sql/Client.preload.ts';
+import { getContactNameColorSelector } from '../../state/selectors/conversations.dom.ts';
 import { getMessagePropStatus } from '../../state/selectors/message.preload.ts';
-import { isListedConversation } from '../conversationDto.std.ts';
+import {
+  getAvatarVersion,
+  isListedConversation,
+} from '../conversationDto.std.ts';
 import type { MessageDtoContextType } from '../messageDto.std.ts';
-import type { MessageSendStatusType } from '../protocol.std.ts';
+import type { AuthorDTO, MessageSendStatusType } from '../protocol.std.ts';
 import { MessageSendStatus } from '../protocol.std.ts';
 
 // Lookups shared by the renderer service modules.
@@ -39,10 +43,63 @@ const SEND_STATUS: Record<LastMessageStatus, MessageSendStatusType> = {
   viewed: MessageSendStatus.Viewed,
 };
 
+// Fork addition: how Signal shows a message's author in a conversation.
+function makeGetAuthor(): MessageDtoContextType['getAuthor'] {
+  const controller = window.ConversationController;
+  const cache = new Map<string, AuthorDTO | null>();
+  let nameColorFor: ReturnType<typeof getContactNameColorSelector> | undefined;
+
+  return (authorConversationId, conversationId, serviceId) => {
+    const key = `${authorConversationId}:${conversationId}`;
+    const cached = cache.get(key);
+    if (cached !== undefined) {
+      return cached;
+    }
+    const authorModel = controller.get(authorConversationId);
+    const conversationModel = controller.get(conversationId);
+    if (!authorModel || authorModel.id !== authorConversationId) {
+      cache.set(key, null);
+      return null;
+    }
+    const author = authorModel.format();
+    const conversation = conversationModel?.format();
+    const isGroupChat = conversation?.type === 'group';
+
+    let nameColor: string | null = null;
+    let label: AuthorDTO['label'] = null;
+    if (isGroupChat && conversation) {
+      nameColorFor ??= getContactNameColorSelector(
+        window.reduxStore.getState()
+      );
+      nameColor = nameColorFor(conversation.id, authorConversationId);
+      const membership = serviceId
+        ? conversation.memberships?.find(m => m.aci === serviceId)
+        : undefined;
+      if (membership?.labelString) {
+        label = {
+          text: membership.labelString,
+          emoji: membership.labelEmoji ?? null,
+        };
+      }
+    }
+
+    const value: AuthorDTO = {
+      title: author.title,
+      avatarColor: author.color ?? null,
+      avatarVersion: getAvatarVersion(author),
+      nameColor,
+      label,
+    };
+    cache.set(key, value);
+    return value;
+  };
+}
+
 export function getDtoContext(): MessageDtoContextType {
   const controller = window.ConversationController;
   const ourConversationId = controller.getOurConversationId();
   return {
+    getAuthor: makeGetAuthor(),
     resolveConversationId: serviceId => controller.get(serviceId)?.id ?? null,
     ourConversationId: ourConversationId ?? null,
     now: Date.now(),

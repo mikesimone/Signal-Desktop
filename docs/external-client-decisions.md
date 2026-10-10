@@ -253,3 +253,24 @@ confirmation. Remove revokes the grant and disconnects the app.
 
 WHY: the user must be able to turn the bridge on without developer flags,
 see what they approved and take it back.
+
+## F1. Fork only: photos, author details, reactions and replies
+
+Not part of the upstream proposal (PR #8054); on the fork's main only, on
+the assumption that upstream never takes them (Mike, 2026-10-10).
+
+DECISION: `conversations.getAvatar` returns a conversation's photo, decoded
+inside Signal and re-encoded at 128 px, under `conversations.read`; it also
+accepts direct conversations that are not listed, because group senders
+usually have none. `ConversationDTO` gains `avatarColor` and an opaque
+`avatarVersion` (a hash of the local URL, never the path or key).
+`MessageDTO` and `QuoteDTO` gain `author` (title, avatar, and in groups the
+member's name color and label); `ReactionDTO` gains `fromMe`.
+`messages.react` (capability `messages.react`) reacts as Signal's reaction
+bar does and is refused wherever sending would be (D11), since a reaction
+would otherwise accept a message request. `reactions.getPreferred` returns
+the user's quick-reaction bar. `messages.sendText` takes an optional
+`quoteMessageId` in the same conversation.
+
+WHY: Mike uses the Rambox page instead of Signal's window, so it has to
+look and act like Signal; the goal is every Signal Desktop feature.

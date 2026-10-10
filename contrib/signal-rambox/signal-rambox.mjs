@@ -33,10 +33,17 @@ import {
   defaultUserData,
   endpointFor,
 } from './bridge.mjs';
+import { largeEmojiFontLoader } from './fonts.mjs';
 import { allowedOrigins, createWebServer } from './server.mjs';
 import { Store } from './store.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
+
+// Signal's fonts (emoji and Inter): a copy next to the helper (the container
+// image has one), else the Signal Desktop checkout this helper lives in.
+const FONT_DIR = [join(HERE, 'fonts'), join(HERE, '..', '..', 'fonts')].find(
+  dir => existsSync(join(dir, 'emoji.woff2'))
+);
 
 function parseArgs(argv) {
   const out = { port: 47830, bind: '127.0.0.1', origins: [], printUrl: false };
@@ -128,6 +135,7 @@ const bridge = new Bridge({
     web.broadcast('state', { state: store.state });
   },
   async onReady() {
+    web.forgetCachedState();
     await store.load(bridge);
     store.state = BridgeState.Ready;
     log(`loaded ${store.snapshot().conversations.length} conversations`);
@@ -145,6 +153,12 @@ web = createWebServer({
   origins,
   token,
   publicDir: join(HERE, 'public'),
+  fontDir: FONT_DIR,
+  getLargeEmojiFont: largeEmojiFontLoader({
+    userData: args.userData || (args.endpoint ? undefined : defaultUserData()),
+    cacheFile: join(configDir, 'emoji-large.woff2'),
+    log,
+  }),
   store,
   bridge,
   log,
@@ -158,13 +172,18 @@ try {
 }
 
 log(`endpoint: ${endpoint}`);
+if (!FONT_DIR) {
+  log("Signal's fonts not found; the page falls back to system emoji");
+}
 log(`client key: ${bridge.publicKey}`);
 // The token is a secret, so it never goes to a log: only an interactive
 // terminal sees the full URL. Elsewhere (a container, a service) use --url.
 if (process.stdout.isTTY) {
   log(`add this URL to Rambox as a custom app: ${url}`);
 } else {
-  log(`serving ${args.origins[0] ?? origins[0]}/ (run with --url for the address)`);
+  log(
+    `serving ${args.origins[0] ?? origins[0]}/ (run with --url for the address)`
+  );
 }
 bridge.start();
 

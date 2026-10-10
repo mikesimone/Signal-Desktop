@@ -34,6 +34,8 @@ export const CAPABILITIES = [
   'messages.send',
   'messages.markRead',
   'notifications.manage',
+  // Fork-only (Better Signal): reactions.
+  'messages.react',
 ];
 
 export const BridgeState = {
@@ -151,6 +153,7 @@ export class Bridge {
   #nextRetryMs = 5000;
   #wantNotifications = false;
   #notificationsHeld = false;
+  #capabilities = [];
 
   // onEvent({ event, seq, data }), onState(state), onReady()
   constructor({
@@ -180,6 +183,11 @@ export class Bridge {
     return this.#key.publicKey;
   }
 
+  // What Signal granted this app on the current connection.
+  get capabilities() {
+    return this.#capabilities;
+  }
+
   start() {
     this.#stopped = false;
     this.#connect();
@@ -190,7 +198,7 @@ export class Bridge {
     clearTimeout(this.#retryTimer);
     if (this.#socket && this.#state === BridgeState.Ready) {
       await Promise.race([
-        this.call('session.disconnect'),
+        this.call('session.disconnect').catch(() => {}),
         new Promise(resolve => setTimeout(resolve, 1000)),
       ]);
     }
@@ -376,13 +384,18 @@ export class Bridge {
 
     // Signal answers at once if this key already holds every capability;
     // otherwise it shows its approval dialog and answers when the user does.
+    // Ask only for what this Signal build offers, so a Signal without the
+    // fork's additions still works for everything else.
+    const offered = hello.capabilities ?? CAPABILITIES;
+    const wanted = CAPABILITIES.filter(c => offered.includes(c));
     this.#setState(BridgeState.AwaitingApproval);
     const granted = await this.call('authorization.request', {
       publicKey: this.#key.publicKey,
       signature,
       displayName: this.#displayName,
-      capabilities: CAPABILITIES,
+      capabilities: wanted,
     });
+    this.#capabilities = granted.capabilities;
     if (!this.#key.serverPublicKey) {
       this.#key.serverPublicKey = hello.server.publicKey;
       saveKey(this.#keyFile, this.#key);

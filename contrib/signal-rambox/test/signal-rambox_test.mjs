@@ -166,6 +166,11 @@ describe('signal-rambox', () => {
     bridge.conversations = [alice, group];
     bridge.messages.set(alice.id, [makeMessage(alice.id, { body: 'hi' })]);
     bridge.sendRefusals.set(group.id, 'announcementOnly');
+    bridge.avatars.set(alice.id, {
+      avatarVersion: 'v1',
+      contentType: 'image/png',
+      data: Buffer.from('fake png').toString('base64'),
+    });
     await bridge.listen(socketPath);
     helper = await startHelper({ socketPath, port });
     await waitFor(() => /loaded 2 conversations/.test(helper.output()));
@@ -182,6 +187,7 @@ describe('signal-rambox', () => {
     assert.deepEqual(req.params.capabilities.sort(), [
       'conversations.read',
       'messages.markRead',
+      'messages.react',
       'messages.read',
       'messages.send',
       'notifications.manage',
@@ -313,6 +319,76 @@ describe('signal-rambox', () => {
     });
     assert.equal(refused.status, 400);
     assert.equal(JSON.parse(refused.text).error.reason, 'announcementOnly');
+  });
+
+  it('replies with a quote', async () => {
+    const res = await http(port, {
+      method: 'POST',
+      path: `/${helper.token}/api/send`,
+      headers: json,
+      body: { conversationId: alice.id, body: 'yes', quoteMessageId: 'q1' },
+    });
+    assert.equal(res.status, 200);
+    const call = bridge.calls.findLast(c => c.method === 'messages.sendText');
+    assert.deepEqual(call.params, {
+      conversationId: alice.id,
+      body: 'yes',
+      quoteMessageId: 'q1',
+    });
+  });
+
+  it('reports what Signal granted', async () => {
+    const res = await http(port, { path: `/${helper.token}/api/state` });
+    assert.ok(JSON.parse(res.text).capabilities.includes('messages.react'));
+  });
+
+  it('serves photos, cached, and 404 without one', async () => {
+    const path = `/${helper.token}/api/avatar?conversationId=${alice.id}&v=v1`;
+    const first = await http(port, { path });
+    assert.equal(first.status, 200);
+    assert.equal(first.headers['content-type'], 'image/png');
+    assert.equal(first.text, 'fake png');
+    assert.match(first.headers['cache-control'], /immutable/);
+    await http(port, { path });
+    assert.equal(
+      bridge.calls.filter(c => c.method === 'conversations.getAvatar').length,
+      1
+    );
+    const none = await http(port, {
+      path: `/${helper.token}/api/avatar?conversationId=${group.id}&v=x`,
+    });
+    assert.equal(none.status, 404);
+    const unauthorized = await http(port, {
+      path: `/wrong/api/avatar?conversationId=${alice.id}&v=v1`,
+    });
+    assert.equal(unauthorized.status, 404);
+  });
+
+  it('reacts, and serves the quick-reaction bar', async () => {
+    const bar = await http(port, { path: `/${helper.token}/api/reactions` });
+    assert.deepEqual(JSON.parse(bar.text).emoji[0], '🔥');
+    const res = await http(port, {
+      method: 'POST',
+      path: `/${helper.token}/api/react`,
+      headers: json,
+      body: { messageId: 'm1', emoji: '👍', remove: true },
+    });
+    assert.equal(res.status, 200);
+    const call = bridge.calls.findLast(c => c.method === 'messages.react');
+    assert.deepEqual(call.params, {
+      messageId: 'm1',
+      emoji: '👍',
+      remove: true,
+    });
+  });
+
+  it("serves Signal's emoji font", async () => {
+    const res = await http(port, {
+      path: `/${helper.token}/fonts/emoji.woff2`,
+    });
+    assert.equal(res.status, 200);
+    assert.equal(res.headers['content-type'], 'font/woff2');
+    assert.match(res.headers['content-security-policy'], /font-src 'self'/);
   });
 
   it('marks read', async () => {

@@ -20,6 +20,23 @@ import { join } from 'node:path';
 
 const MAX_BODY_BYTES = 128 * 1024;
 const MAX_EVENT_STREAMS = 8;
+// Signal answers at most 16 requests at once per app; leave room for the
+// page's own calls while a chat list full of photos loads.
+const MAX_AVATAR_CALLS = 4;
+const MAX_CACHED_AVATARS = 2000;
+
+// Signal's own fonts: its emoji set and Inter. Served from fontDir, which
+// holds Signal's fonts/ folder layout (the repository's, or a copy).
+const FONT_FILES = {
+  'fonts/emoji.woff2': 'emoji.woff2',
+  'fonts/Inter-Regular.woff2': 'inter-v3.19/Inter-Regular.woff2',
+  'fonts/Inter-Medium.woff2': 'inter-v3.19/Inter-Medium.woff2',
+  'fonts/Inter-SemiBold.woff2': 'inter-v3.19/Inter-SemiBold.woff2',
+};
+
+// Signal's quick-reaction defaults, for a Signal that cannot report the
+// user's own.
+const DEFAULT_REACTIONS = ['❤️', '👍', '👎', '😂', '😮', '😢'];
 
 const STATIC_FILES = {
   '': ['index.html', 'text/html; charset=utf-8'],
@@ -32,7 +49,7 @@ const SECURITY_HEADERS = {
   'Cache-Control': 'no-store',
   'Content-Security-Policy':
     "default-src 'none'; script-src 'self'; style-src 'self'; " +
-    "img-src 'self'; connect-src 'self'; base-uri 'none'; " +
+    "img-src 'self'; font-src 'self'; connect-src 'self'; base-uri 'none'; " +
     "form-action 'none'; frame-ancestors 'none'",
   'Referrer-Policy': 'no-referrer',
   'X-Content-Type-Options': 'nosniff',
@@ -125,11 +142,69 @@ export function createWebServer({
   origins = allowedOrigins(port),
   token,
   publicDir,
+  fontDir,
+  getLargeEmojiFont = async () => null,
   store,
   bridge,
   log,
 }) {
   const streams = new Set();
+  // conversationId -> { avatarVersion, contentType, bytes }
+  const avatars = new Map();
+  const avatarLoads = new Map();
+  let avatarCalls = 0;
+  const avatarQueue = [];
+  let preferredReactions = null;
+
+  async function withAvatarSlot(task) {
+    if (avatarCalls >= MAX_AVATAR_CALLS) {
+      await new Promise(resolve => avatarQueue.push(resolve));
+    }
+    avatarCalls += 1;
+    try {
+      return await task();
+    } finally {
+      avatarCalls -= 1;
+      avatarQueue.shift()?.();
+    }
+  }
+
+  // Resolves to the photo, or null when there is none.
+  function loadAvatar(conversationId, version) {
+    const cached = avatars.get(conversationId);
+    if (cached && (!version || cached.avatarVersion === version)) {
+      return Promise.resolve(cached);
+    }
+    const key = `${conversationId}:${version}`;
+    let loading = avatarLoads.get(key);
+    if (!loading) {
+      loading = withAvatarSlot(() =>
+        bridge.call('conversations.getAvatar', { conversationId })
+      )
+        .then(result => {
+          const entry = {
+            avatarVersion: result.avatarVersion,
+            contentType: result.contentType,
+            bytes: Buffer.from(result.data, 'base64'),
+          };
+          avatars.delete(conversationId);
+          avatars.set(conversationId, entry);
+          if (avatars.size > MAX_CACHED_AVATARS) {
+            avatars.delete(avatars.keys().next().value);
+          }
+          return entry;
+        })
+        .catch(error => {
+          if (error.code === 'NOT_FOUND') {
+            return null;
+          }
+          throw error;
+        })
+        .finally(() => avatarLoads.delete(key));
+      avatarLoads.set(key, loading);
+    }
+    return loading;
+  }
 
   function broadcast(type, data) {
     const payload = `event: ${type}\ndata: ${JSON.stringify(data)}\n\n`;
@@ -144,7 +219,49 @@ export function createWebServer({
 
   async function handleApi(req, res, route, url) {
     if (req.method === 'GET' && route === 'api/state') {
-      sendJson(res, 200, store.snapshot());
+      sendJson(res, 200, {
+        ...store.snapshot(),
+        capabilities: bridge.capabilities,
+      });
+      return;
+    }
+    if (req.method === 'GET' && route === 'api/avatar') {
+      const conversationId = url.searchParams.get('conversationId');
+      const version = url.searchParams.get('v') ?? '';
+      const avatar = await loadAvatar(conversationId, version);
+      if (!avatar) {
+        sendJson(res, 404, { error: { code: 'NOT_FOUND' } });
+        return;
+      }
+      // The URL names the version, so a matching photo never changes.
+      const immutable = version !== '' && avatar.avatarVersion === version;
+      res.writeHead(200, {
+        ...SECURITY_HEADERS,
+        'Content-Type': avatar.contentType,
+        ...(immutable
+          ? { 'Cache-Control': 'private, max-age=604800, immutable' }
+          : {}),
+      });
+      res.end(avatar.bytes);
+      return;
+    }
+    if (req.method === 'GET' && route === 'api/reactions') {
+      if (!bridge.capabilities.includes('messages.react')) {
+        sendJson(res, 200, { emoji: DEFAULT_REACTIONS });
+        return;
+      }
+      preferredReactions ??= await bridge.call('reactions.getPreferred', {});
+      sendJson(res, 200, preferredReactions);
+      return;
+    }
+    if (req.method === 'POST' && route === 'api/react') {
+      const { messageId, emoji, remove } = await readJson(req);
+      const result = await bridge.call('messages.react', {
+        messageId,
+        emoji,
+        ...(remove ? { remove: true } : {}),
+      });
+      sendJson(res, 200, result);
       return;
     }
     if (req.method === 'GET' && route === 'api/messages') {
@@ -159,10 +276,11 @@ export function createWebServer({
       return;
     }
     if (req.method === 'POST' && route === 'api/send') {
-      const { conversationId, body } = await readJson(req);
+      const { conversationId, body, quoteMessageId } = await readJson(req);
       const result = await bridge.call('messages.sendText', {
         conversationId,
         body,
+        ...(quoteMessageId ? { quoteMessageId } : {}),
       });
       sendJson(res, 200, result);
       return;
@@ -238,6 +356,30 @@ export function createWebServer({
       res.end();
       return;
     }
+    if (req.method === 'GET' && route === 'fonts/emoji-large.woff2') {
+      const bytes = await getLargeEmojiFont();
+      if (!bytes) {
+        send(res, 404, 'text/plain; charset=utf-8', 'not found');
+        return;
+      }
+      res.writeHead(200, {
+        ...SECURITY_HEADERS,
+        'Content-Type': 'font/woff2',
+        'Cache-Control': 'private, max-age=604800',
+      });
+      res.end(bytes);
+      return;
+    }
+    const font = FONT_FILES[route];
+    if (req.method === 'GET' && font && fontDir) {
+      res.writeHead(200, {
+        ...SECURITY_HEADERS,
+        'Content-Type': 'font/woff2',
+        'Cache-Control': 'private, max-age=604800',
+      });
+      res.end(readFileSync(join(fontDir, font)));
+      return;
+    }
     const entry = STATIC_FILES[route];
     if (req.method !== 'GET' || !entry) {
       send(res, 404, 'text/plain; charset=utf-8', 'not found');
@@ -250,6 +392,10 @@ export function createWebServer({
   return {
     server,
     broadcast,
+    // A new connection may come with a different Signal or settings.
+    forgetCachedState() {
+      preferredReactions = null;
+    },
     get streamCount() {
       return streams.size;
     },

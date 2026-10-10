@@ -6,6 +6,7 @@ import type { MessageAttributesType } from '../model-types.d.ts';
 import { BodyRange } from '../types/BodyRange.std.ts';
 import type {
   AttachmentMetadataDTO,
+  AuthorDTO,
   MentionDTO,
   MessageDTO,
   MessageKindType,
@@ -56,6 +57,14 @@ export type MessageDtoContextType = Readonly<{
   now: number;
   // Signal's own status for an outgoing message, as the timeline shows it.
   getSendStatus: (message: MessageSourceType) => MessageSendStatusType | null;
+  // How Signal shows this author in this conversation (name, photo, and in
+  // groups their name color and member label). `serviceId` is the author's,
+  // to find their group membership. Must not create conversations.
+  getAuthor: (
+    authorConversationId: string,
+    conversationId: string,
+    serviceId: string | undefined
+  ) => AuthorDTO | null;
 }>;
 
 function getMessageExpiresAt(
@@ -97,13 +106,17 @@ function toMentions(
 
 // `fromId` is already a conversation id. Reactions being removed have no
 // emoji and are left out.
-function toReactions(message: MessageSourceType): Array<ReactionDTO> {
+function toReactions(
+  message: MessageSourceType,
+  context: MessageDtoContextType
+): Array<ReactionDTO> {
   return (message.reactions ?? [])
     .filter(reaction => reaction.emoji)
     .toSorted((a, b) => a.timestamp - b.timestamp)
     .map(reaction => ({
       emoji: reaction.emoji ?? '',
       authorConversationId: reaction.fromId,
+      fromMe: reaction.fromId === context.ourConversationId,
     }));
 }
 
@@ -127,9 +140,17 @@ function toQuote(
   if (!quote) {
     return null;
   }
+  const authorConversationId = quote.authorAci
+    ? context.resolveConversationId(quote.authorAci)
+    : null;
   return {
-    authorConversationId: quote.authorAci
-      ? context.resolveConversationId(quote.authorAci)
+    authorConversationId,
+    author: authorConversationId
+      ? context.getAuthor(
+          authorConversationId,
+          message.conversationId,
+          quote.authorAci
+        )
       : null,
     sentAt: quote.id,
     // A quote of a view-once message must not reveal it.
@@ -162,11 +183,19 @@ export function toMessageDTO(
     Boolean(message.isErased);
 
   let authorConversationId: string | null;
+  let author: AuthorDTO | null = null;
   if (type === 'outgoing') {
     authorConversationId = context.ourConversationId;
   } else {
     authorConversationId = message.sourceServiceId
       ? context.resolveConversationId(message.sourceServiceId)
+      : null;
+    author = authorConversationId
+      ? context.getAuthor(
+          authorConversationId,
+          message.conversationId,
+          message.sourceServiceId
+        )
       : null;
   }
 
@@ -176,6 +205,7 @@ export function toMessageDTO(
     direction: type,
     kind,
     authorConversationId,
+    author,
     sentAt: message.sent_at,
     receivedAt: message.received_at_ms ?? null,
     body: hidden ? null : (message.body ?? null),
@@ -187,6 +217,6 @@ export function toMessageDTO(
     expiresAt,
     read: type === 'incoming' ? message.readStatus !== ReadStatus.Unread : null,
     sendStatus: type === 'outgoing' ? context.getSendStatus(message) : null,
-    reactions: hidden ? [] : toReactions(message),
+    reactions: hidden ? [] : toReactions(message, context),
   };
 }

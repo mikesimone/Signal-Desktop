@@ -57,6 +57,7 @@ export const IMPLEMENTED_CAPABILITIES: ReadonlyArray<CapabilityType> = [
   Capability.MessagesRead,
   Capability.MessagesSend,
   Capability.MessagesMarkRead,
+  Capability.MessagesReact,
   Capability.NotificationsManage,
 ];
 
@@ -108,6 +109,10 @@ export const Method = {
   MessagesSendText: 'messages.sendText',
   MessagesMarkRead: 'messages.markRead',
   NotificationsSetHandled: 'notifications.setHandled',
+  // Fork additions (not in the upstream proposal).
+  ConversationsGetAvatar: 'conversations.getAvatar',
+  MessagesReact: 'messages.react',
+  ReactionsGetPreferred: 'reactions.getPreferred',
 } as const;
 export type MethodType = (typeof Method)[keyof typeof Method];
 
@@ -119,6 +124,9 @@ export const SERVICE_METHOD_CAPABILITIES = {
   [Method.MessagesGet]: Capability.MessagesRead,
   [Method.MessagesSendText]: Capability.MessagesSend,
   [Method.MessagesMarkRead]: Capability.MessagesMarkRead,
+  [Method.ConversationsGetAvatar]: Capability.ConversationsRead,
+  [Method.MessagesReact]: Capability.MessagesReact,
+  [Method.ReactionsGetPreferred]: Capability.MessagesReact,
 } as const satisfies Partial<Record<MethodType, CapabilityType>>;
 export type ServiceMethodType = keyof typeof SERVICE_METHOD_CAPABILITIES;
 
@@ -358,6 +366,9 @@ export const messagesSendTextParamsSchema = z
   .object({
     conversationId: conversationIdSchema,
     body: z.string().min(1).max(MAX_SEND_BODY_LENGTH),
+    // Reply to this message (it must be in the same conversation), quoting
+    // it as Signal's own reply does.
+    quoteMessageId: messageIdSchema.optional(),
   })
   .strict();
 export type MessagesSendTextParamsType = z.infer<
@@ -380,6 +391,45 @@ export const messagesMarkReadParamsSchema = z
 export type MessagesMarkReadParamsType = z.infer<
   typeof messagesMarkReadParamsSchema
 >;
+
+export const conversationsGetAvatarParamsSchema = z
+  .object({
+    conversationId: conversationIdSchema,
+  })
+  .strict();
+export type ConversationsGetAvatarParamsType = z.infer<
+  typeof conversationsGetAvatarParamsSchema
+>;
+
+// Avatars are decoded inside Signal and re-encoded at this size, so no
+// file, path or key crosses the bridge, and frames stay small.
+export const AVATAR_SIZE_PX = 128;
+
+export type ConversationsGetAvatarResultType = Readonly<{
+  // Matches the conversation's or author's `avatarVersion`.
+  avatarVersion: string;
+  contentType: 'image/webp' | 'image/png';
+  // Base64 (standard alphabet, padded).
+  data: string;
+}>;
+
+export const messagesReactParamsSchema = z
+  .object({
+    messageId: messageIdSchema,
+    // One emoji, as Signal's reaction picker sends it.
+    emoji: z.string().min(1).max(32),
+    // True removes this emoji, if it is the user's current reaction.
+    remove: z.boolean().optional(),
+  })
+  .strict();
+export type MessagesReactParamsType = z.infer<typeof messagesReactParamsSchema>;
+
+export const reactionsGetPreferredParamsSchema = z.object({}).strict();
+
+export type ReactionsGetPreferredResultType = Readonly<{
+  // The user's quick-reaction bar, in order, with their skin tone applied.
+  emoji: ReadonlyArray<string>;
+}>;
 
 export const notificationsSetHandledParamsSchema = z
   .object({
@@ -414,6 +464,9 @@ export const SERVICE_PARAM_SCHEMAS = {
   [Method.MessagesGet]: messagesGetParamsSchema,
   [Method.MessagesSendText]: messagesSendTextParamsSchema,
   [Method.MessagesMarkRead]: messagesMarkReadParamsSchema,
+  [Method.ConversationsGetAvatar]: conversationsGetAvatarParamsSchema,
+  [Method.MessagesReact]: messagesReactParamsSchema,
+  [Method.ReactionsGetPreferred]: reactionsGetPreferredParamsSchema,
 } as const satisfies Record<ServiceMethodType, z.ZodType>;
 
 export type ConversationsListParamsType = z.infer<
@@ -440,6 +493,12 @@ export type ConversationDTO = Readonly<{
   noteToSelf: boolean;
   messageRequestPending: boolean;
   memberCount: number | null;
+  // Signal's avatar color (A100...A210), used for initials when there is no
+  // photo.
+  avatarColor: string | null;
+  // Changes whenever the photo does; null when there is none. Fetch the
+  // photo with conversations.getAvatar.
+  avatarVersion: string | null;
 }>;
 
 export type ConversationsListResultType = Readonly<{
@@ -479,8 +538,27 @@ export type AttachmentMetadataDTO = Readonly<{
   height: number | null;
 }>;
 
+// Who wrote a message, as Signal shows it in that conversation.
+export type MemberLabelDTO = Readonly<{
+  text: string;
+  emoji: string | null;
+}>;
+
+export type AuthorDTO = Readonly<{
+  title: string;
+  avatarColor: string | null;
+  // As in ConversationDTO; pass authorConversationId to
+  // conversations.getAvatar.
+  avatarVersion: string | null;
+  // Groups only: Signal's color for this member's name ('000'...'350').
+  nameColor: string | null;
+  // Groups only: the label this member set for themselves in the group.
+  label: MemberLabelDTO | null;
+}>;
+
 export type QuoteDTO = Readonly<{
   authorConversationId: string | null;
+  author: AuthorDTO | null;
   sentAt: number | null;
   text: string | null;
 }>;
@@ -488,6 +566,7 @@ export type QuoteDTO = Readonly<{
 export type ReactionDTO = Readonly<{
   emoji: string;
   authorConversationId: string;
+  fromMe: boolean;
 }>;
 
 // Outgoing messages only. `paused` means Signal needs the user to complete a
@@ -514,6 +593,7 @@ export type MessageDTO = Readonly<{
   direction: 'incoming' | 'outgoing';
   kind: MessageKindType;
   authorConversationId: string | null;
+  author: AuthorDTO | null;
   sentAt: number;
   receivedAt: number | null;
   body: string | null;

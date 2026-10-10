@@ -30,14 +30,28 @@
       <section class="chat" id="chat">
         <div class="empty" id="empty">Pick a chat on the left.</div>
         <header class="chat-head" id="chat-head" hidden>
-          <span id="chat-title"></span>
-          <span id="chat-sub" class="sub"></span>
+          <span id="chat-avatar"></span>
+          <span class="chat-head-text">
+            <span id="chat-title"></span>
+            <span id="chat-sub" class="sub"></span>
+          </span>
         </header>
         <div class="messages" id="messages" hidden>
           <button id="older" class="older" type="button" hidden>
             Load older messages
           </button>
           <ol id="message-list"></ol>
+        </div>
+        <div class="send-error" id="send-error" hidden></div>
+        <div class="reply-bar" id="reply-bar" hidden>
+          <div class="reply-quote" id="reply-quote"></div>
+          <button
+            type="button"
+            class="icon-button"
+            id="reply-cancel"
+            title="Cancel reply"
+            aria-label="Cancel reply"
+          ></button>
         </div>
         <form class="composer" id="composer" hidden>
           <textarea
@@ -48,8 +62,10 @@
           ></textarea>
           <button type="submit" id="send">Send</button>
         </form>
-        <div class="send-error" id="send-error" hidden></div>
       </section>
     </main>
+    <div class="popover" id="reaction-picker" role="menu" hidden></div>
+    <div class="popover menu" id="more-menu" role="menu" hidden></div>
+    <div class="toast" id="toast" role="status" hidden></div>
   </body>
 </html>

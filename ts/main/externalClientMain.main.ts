@@ -406,6 +406,8 @@ function getCapabilityLabel(
       return i18n('icu:ExternalClientCapability__messages-send');
     case Capability.MessagesMarkRead:
       return i18n('icu:ExternalClientCapability__messages-mark-read');
+    case Capability.MessagesReact:
+      return i18n('icu:ExternalClientCapability__messages-react');
     case Capability.NotificationsManage:
       return i18n('icu:ExternalClientCapability__notifications-manage');
     default:

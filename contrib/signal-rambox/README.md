@@ -6,12 +6,22 @@ client bridge, signalapp/Signal-Desktop#8054).
 
 Signal Desktop keeps running, minimized to the tray, and stays the real
 client: it holds the keys, sends and receives. This helper is an approved
-companion app. It shows your chats, lets you read and send text messages,
-marks chats read when you look at them, and while its page is open, takes
-over message notifications so you get them from Rambox instead of Signal.
+companion app. It shows your chats with their photos, lets you read and send
+text messages, reply with a quote, react with your quick-reaction bar and
+copy text, marks chats read when you look at them, and while its page is
+open, takes over message notifications so you get them from Rambox instead
+of Signal. Group chats show each sender's photo, name color and member
+label, as Signal does. The page uses Signal's own emoji and Inter fonts.
 
-Not here (yet): attachments, reactions, typing indicators, calls, editing
-and deleting. Messages that need them say "open Signal".
+Not here yet (being added on the fork, aiming at everything Signal Desktop
+does): attachments, stickers, typing indicators, editing, deleting,
+forwarding and calls. Messages that need them say "open Signal".
+
+Photos, member labels, reactions and replies use fork-only bridge additions
+(`conversations.getAvatar`, `messages.react`, `reactions.getPreferred`,
+`quoteMessageId` on `messages.sendText`, and author details on messages),
+not part of the upstream proposal. Against a Signal without them the helper
+asks only for what Signal offers and the rest of the page still works.
 
 ## How it works
 
@@ -25,8 +35,9 @@ pipe or Unix socket, so this helper sits in between:
 
 - It connects to Signal as an approved app (Ed25519 key, Signal's key pinned
   after the first approval) and asks for only `conversations.read`,
-  `messages.read`, `messages.send`, `messages.markRead` and
-  `notifications.manage`.
+  `messages.read`, `messages.send`, `messages.markRead`, `messages.react`
+  and `notifications.manage`. Adding a capability makes Signal ask for
+  approval once more.
 - It serves a chat page on **127.0.0.1 only**. Everything it serves lives
   under a random secret token, so the URL you give Rambox is the only way in.
 - Rambox shows the unread badge from the page title (`(3) Signal`), and turns
@@ -45,7 +56,17 @@ port on 127.0.0.1. So every request must:
   only send after a CORS preflight that this helper never answers.
 
 The page has a strict Content Security Policy and never inserts text from
-Signal as HTML. The token and key live in a folder only your account can
+Signal as HTML. Photos are decoded inside Signal and handed over as small
+re-encoded images; no file path or key leaves Signal.
+
+### Fonts
+
+The page loads Signal's fonts from the helper: Inter and the small emoji
+font from Signal's `fonts/` folder (next to the helper in the container
+image, else the Signal Desktop checkout the helper sits in), and the large
+emoji font (every emoji, about 9 MB) from Signal's own downloaded copy in
+its profile, or, failing that, downloaded once from Signal's update server,
+checked against Signal's digest and kept in the config folder. The token and key live in a folder only your account can
 read. Another account on the same computer that learned the token could use
 it; on a computer shared with untrusted users, don't run this.
 

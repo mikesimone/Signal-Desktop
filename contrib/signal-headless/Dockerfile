@@ -51,8 +51,12 @@ COPY --from=build /usr/local/bin/node /usr/local/bin/node
 
 COPY contrib/signal-rambox/bridge.mjs contrib/signal-rambox/server.mjs \
   contrib/signal-rambox/store.mjs contrib/signal-rambox/signal-rambox.mjs \
+  contrib/signal-rambox/fonts.mjs \
   /opt/signal-rambox/
 COPY contrib/signal-rambox/public /opt/signal-rambox/public
+# Signal's own emoji and Inter fonts for the page.
+COPY fonts/emoji.woff2 /opt/signal-rambox/fonts/emoji.woff2
+COPY fonts/inter-v3.19 /opt/signal-rambox/fonts/inter-v3.19
 COPY contrib/signal-headless/entrypoint.sh contrib/signal-headless/screen.sh \
   /usr/local/bin/
 

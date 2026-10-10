@@ -10,13 +10,34 @@
 const $ = id => document.getElementById(id);
 
 const conversations = new Map();
+// conversationId -> AuthorDTO, from messages (group members usually have no
+// listed conversation of their own).
+const authors = new Map();
+let capabilities = [];
 let selectedId = null;
 let messages = new Map();
 let nextCursor = null;
 let bridgeState = 'offline';
 let helperConnected = false;
 let markReadInFlight = false;
+let replyTo = null;
+let preferredReactions = null;
 const expiryTimers = new Map();
+
+const AVATAR_COLORS = [
+  'A100',
+  'A110',
+  'A120',
+  'A130',
+  'A140',
+  'A150',
+  'A160',
+  'A170',
+  'A180',
+  'A190',
+  'A200',
+  'A210',
+];
 
 const BANNERS = {
   offline:
@@ -77,6 +98,115 @@ async function api(path, body) {
   return data;
 }
 
+function el(tag, className, text) {
+  const node = document.createElement(tag);
+  if (className) {
+    node.className = className;
+  }
+  if (text !== undefined) {
+    node.textContent = text;
+  }
+  return node;
+}
+
+// --- icons (built as DOM; the CSP allows no inline markup) ----------------
+
+const SVG_NS = 'http://www.w3.org/2000/svg';
+const ICONS = {
+  react:
+    'M12 21.5a9.5 9.5 0 1 1 9.5-9.5M8.5 14.5s1.3 2 3.5 2 3.5-2 3.5-2M9 9.5h.01M15 9.5h.01M19 15v6M16 18h6',
+  reply: 'M10 5 4 11l6 6M4 11h10a6 6 0 0 1 6 6v2',
+  more: 'M5 12h.01M12 12h.01M19 12h.01',
+  close: 'M6 6l12 12M18 6 6 18',
+  copy: 'M9 9h10v12H9zM5 15V3h10',
+  group:
+    'M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7ZM2.5 20c.5-3.5 3.2-5.5 6.5-5.5s6 2 6.5 5.5M16 4.3a3.5 3.5 0 0 1 0 6.4M18 14.8c2 .7 3.2 2.5 3.5 5.2',
+  note: 'M6 3h9l4 4v14H6zM9 12h7M9 16h7',
+};
+
+function icon(name) {
+  const svg = document.createElementNS(SVG_NS, 'svg');
+  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('class', 'icon');
+  svg.setAttribute('aria-hidden', 'true');
+  const path = document.createElementNS(SVG_NS, 'path');
+  path.setAttribute('d', ICONS[name]);
+  svg.append(path);
+  return svg;
+}
+
+// --- avatars -------------------------------------------------------------
+
+function initials(title) {
+  const words = title
+    .replace(/[^\p{L}\p{N}\s]/gu, '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  if (words.length === 0) {
+    return '';
+  }
+  const first = [...words[0]][0] ?? '';
+  const last = words.length > 1 ? ([...words.at(-1)][0] ?? '') : '';
+  return (first + last).toUpperCase();
+}
+
+function colorFor(id, avatarColor) {
+  if (AVATAR_COLORS.includes(avatarColor)) {
+    return avatarColor;
+  }
+  let hash = 0;
+  for (const ch of id) {
+    hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
+  }
+  return AVATAR_COLORS[hash % AVATAR_COLORS.length];
+}
+
+// who: { title, avatarColor, avatarVersion }; kind: 'direct' | 'group' | 'me'
+function avatar(id, who, size, kind = 'direct') {
+  const box = el(
+    'span',
+    `avatar av-${size} ac-${colorFor(id, who.avatarColor)}`
+  );
+  const fallback = () => {
+    if (kind === 'group') {
+      box.append(icon('group'));
+    } else if (kind === 'me') {
+      box.append(icon('note'));
+    } else {
+      const text = initials(who.title);
+      box.append(text ? el('span', 'initials', text) : icon('group'));
+    }
+  };
+  fallback();
+  if (who.avatarVersion) {
+    // In the DOM from the start so lazy loading can see it; shown over the
+    // initials once loaded.
+    const img = el('img', 'photo');
+    img.alt = '';
+    img.loading = 'lazy';
+    img.decoding = 'async';
+    img.addEventListener('load', () => img.classList.add('loaded'));
+    img.addEventListener('error', () => img.remove());
+    box.append(img);
+    const params = new URLSearchParams({
+      conversationId: id,
+      v: who.avatarVersion,
+    });
+    img.src = `api/avatar?${params}`;
+  }
+  return box;
+}
+
+function conversationAvatar(c, size) {
+  return avatar(
+    c.id,
+    c,
+    size,
+    c.noteToSelf ? 'me' : c.type === 'group' ? 'group' : 'direct'
+  );
+}
+
 // --- banner and title ------------------------------------------------------
 
 function renderBanner() {
@@ -113,6 +243,10 @@ function renderTitle() {
 
 // --- conversation list -----------------------------------------------------
 
+function displayTitle(c) {
+  return c.noteToSelf ? 'Note to Self' : c.title;
+}
+
 function sortedConversations() {
   const query = $('search').value.trim().toLowerCase();
   return [...conversations.values()]
@@ -124,35 +258,96 @@ function sortedConversations() {
     );
 }
 
+function shortTime(ms) {
+  if (!ms) {
+    return '';
+  }
+  const minutes = Math.floor((Date.now() - ms) / 60_000);
+  if (minutes < 1) {
+    return 'Now';
+  }
+  if (minutes < 60) {
+    return `${minutes}m`;
+  }
+  const d = new Date(ms);
+  if (d.toDateString() === new Date().toDateString()) {
+    return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  }
+  if (Date.now() - ms < 6 * 24 * 3600_000) {
+    return d.toLocaleDateString([], { weekday: 'short' });
+  }
+  return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+}
+
+// Rows are kept per conversation so photos are not reloaded on every update.
+const rowCache = new Map();
+
+function conversationRow(c) {
+  const unread = c.unreadCount > 0 || c.markedUnread;
+  const key = JSON.stringify([
+    c.title,
+    c.avatarVersion,
+    c.avatarColor,
+    c.unreadCount,
+    c.markedUnread,
+    c.muted,
+    c.lastActivityAt,
+    c.id === selectedId,
+    shortTime(c.lastActivityAt),
+  ]);
+  const cached = rowCache.get(c.id);
+  if (cached && cached.key === key) {
+    return cached.li;
+  }
+  const li = el('li');
+  li.setAttribute('role', 'option');
+  li.setAttribute('aria-selected', String(c.id === selectedId));
+  li.className = [unread ? 'unread' : '', c.muted ? 'muted' : ''].join(' ');
+  const text = el('span', 'row-text');
+  const top = el('span', 'row-top');
+  top.append(
+    el('span', 'title', displayTitle(c)),
+    el('span', 'time', shortTime(c.lastActivityAt))
+  );
+  text.append(top);
+  li.append(conversationAvatar(c, 48), text);
+  if (unread) {
+    li.append(
+      el('span', 'badge', c.unreadCount > 0 ? String(c.unreadCount) : '')
+    );
+  }
+  li.addEventListener('click', () => selectConversation(c.id));
+  rowCache.set(c.id, { key, li });
+  return li;
+}
+
 function renderConversations() {
-  const list = $('conversations');
-  const items = sortedConversations().map(c => {
-    const li = document.createElement('li');
-    li.setAttribute('role', 'option');
-    li.setAttribute('aria-selected', String(c.id === selectedId));
-    const unread = c.unreadCount > 0 || c.markedUnread;
-    li.className = [unread ? 'unread' : '', c.muted ? 'muted' : ''].join(' ');
-    const title = document.createElement('span');
-    title.className = 'title';
-    title.textContent = c.noteToSelf ? 'Note to Self' : c.title;
-    li.append(title);
-    if (unread) {
-      const badge = document.createElement('span');
-      badge.className = 'badge';
-      badge.textContent = c.unreadCount > 0 ? String(c.unreadCount) : '';
-      li.append(badge);
-    }
-    li.addEventListener('click', () => selectConversation(c.id));
-    return li;
-  });
-  list.replaceChildren(...items);
+  $('conversations').replaceChildren(
+    ...sortedConversations().map(conversationRow)
+  );
 }
 
 // --- messages --------------------------------------------------------------
 
+function authorOf(conversationId) {
+  if (!conversationId) {
+    return null;
+  }
+  const c = conversations.get(conversationId);
+  return authors.get(conversationId) ?? c ?? null;
+}
+
 function nameOf(conversationId) {
-  const c = conversationId ? conversations.get(conversationId) : undefined;
-  return c ? c.title : 'Someone';
+  return authorOf(conversationId)?.title ?? 'Someone';
+}
+
+function rememberAuthors(m) {
+  if (m.authorConversationId && m.author) {
+    authors.set(m.authorConversationId, m.author);
+  }
+  if (m.quote?.authorConversationId && m.quote.author) {
+    authors.set(m.quote.authorConversationId, m.quote.author);
+  }
 }
 
 function describeAttachments(attachments) {
@@ -203,25 +398,165 @@ function formatTime(ms) {
       });
 }
 
-function renderMessage(m) {
-  const li = document.createElement('li');
-  li.className = `msg ${m.direction === 'outgoing' ? 'out' : 'in'}`;
+// Signal shows short emoji-only messages large and without a bubble.
+const segmenter = new Intl.Segmenter();
+function isJumbo(body) {
+  if (
+    !body ||
+    body.length > 40 ||
+    !/^[\p{Extended_Pictographic}\p{Emoji_Component}‍️\s]+$/u.test(body)
+  ) {
+    return false;
+  }
+  const graphemes = [...segmenter.segment(body.trim())].filter(
+    s => s.segment.trim() !== ''
+  );
+  return (
+    graphemes.length > 0 &&
+    graphemes.length <= 3 &&
+    graphemes.every(s => /\p{Extended_Pictographic}/u.test(s.segment))
+  );
+}
+
+function nameLine(name, author, className) {
+  const line = el('span', className);
+  if (author?.nameColor) {
+    line.classList.add(`nc-${author.nameColor}`);
+  }
+  line.append(el('span', 'name', name));
+  if (author?.label) {
+    const pill = el('span', 'pill');
+    if (author.label.emoji) {
+      pill.append(el('span', 'pill-emoji', author.label.emoji));
+    }
+    pill.append(el('span', 'pill-text', author.label.text));
+    line.append(pill);
+  }
+  return line;
+}
+
+function renderQuote(quote) {
+  const box = el('span', 'quote');
+  const author = quote.author ?? authorOf(quote.authorConversationId);
+  if (author?.nameColor) {
+    box.classList.add(`nc-${author.nameColor}`);
+  }
+  box.append(
+    nameLine(nameOf(quote.authorConversationId), author, 'quote-author'),
+    el('span', 'quote-text', quote.text ?? 'Attachment')
+  );
+  return box;
+}
+
+function renderReactions(m) {
+  const counts = new Map();
+  for (const r of m.reactions) {
+    const entry = counts.get(r.emoji) ?? { count: 0, mine: false };
+    entry.count += 1;
+    entry.mine ||= r.fromMe;
+    counts.set(r.emoji, entry);
+  }
+  const box = el('span', 'reactions');
+  for (const [emoji, { count, mine }] of counts) {
+    const chip = el('button', `reaction${mine ? ' mine' : ''}`);
+    chip.type = 'button';
+    chip.append(el('span', 'emoji', emoji));
+    if (count > 1) {
+      chip.append(el('span', 'count', String(count)));
+    }
+    chip.title = m.reactions
+      .filter(r => r.emoji === emoji)
+      .map(r => (r.fromMe ? 'You' : nameOf(r.authorConversationId)))
+      .join(', ');
+    if (mine && canReact()) {
+      chip.addEventListener('click', () => sendReaction(m, emoji, true));
+    }
+    box.append(chip);
+  }
+  return box;
+}
+
+function canReact() {
+  return capabilities.includes('messages.react');
+}
+
+function canReplyTo(m) {
+  return m.kind !== 'deleted' && m.kind !== 'unsupported';
+}
+
+function actionButton(name, label, onClick) {
+  const button = el('button', 'icon-button');
+  button.type = 'button';
+  button.title = label;
+  button.setAttribute('aria-label', label);
+  button.append(icon(name));
+  button.addEventListener('click', e => {
+    e.stopPropagation();
+    onClick(button);
+  });
+  return button;
+}
+
+function renderActions(m) {
+  const actions = el('span', 'actions');
+  if (canReact() && canReplyTo(m)) {
+    actions.append(
+      actionButton('react', 'React', button => openReactionPicker(m, button))
+    );
+  }
+  if (canReplyTo(m)) {
+    actions.append(actionButton('reply', 'Reply', () => startReply(m)));
+  }
+  actions.append(
+    actionButton('more', 'More actions', button => openMoreMenu(m, button))
+  );
+  return actions;
+}
+
+// prev/next: the neighboring messages, to group runs by the same author.
+function renderMessage(m, prev, next) {
+  const outgoing = m.direction === 'outgoing';
   const conversation = conversations.get(m.conversationId);
-  if (m.direction === 'incoming' && conversation?.type === 'group') {
-    const author = document.createElement('span');
-    author.className = 'author';
-    author.textContent = nameOf(m.authorConversationId);
-    li.append(author);
+  const isGroupChat = conversation?.type === 'group';
+  const sameAuthor = other =>
+    other &&
+    other.direction === m.direction &&
+    other.authorConversationId === m.authorConversationId &&
+    Math.abs(other.sentAt - m.sentAt) < 10 * 60_000;
+  const firstOfRun = !sameAuthor(prev);
+  const lastOfRun = !sameAuthor(next);
+
+  const li = el('li', `msg ${outgoing ? 'out' : 'in'}`);
+  if (!lastOfRun) {
+    li.classList.add('run');
+  }
+  li.dataset.id = m.id;
+
+  if (!outgoing && isGroupChat) {
+    li.classList.add('with-avatar');
+    if (lastOfRun && m.authorConversationId) {
+      const who = authorOf(m.authorConversationId) ?? { title: 'Someone' };
+      li.append(avatar(m.authorConversationId, who, 28));
+    } else {
+      li.append(el('span', 'avatar-spacer'));
+    }
+  }
+
+  const column = el('span', 'column');
+  const jumbo =
+    m.kind === 'text' &&
+    !m.quote &&
+    m.attachments.length === 0 &&
+    isJumbo(m.body);
+  const bubble = el('span', `bubble${jumbo ? ' jumbo' : ''}`);
+
+  if (!outgoing && isGroupChat && firstOfRun) {
+    bubble.append(nameLine(nameOf(m.authorConversationId), m.author, 'author'));
   }
   if (m.quote) {
-    const quote = document.createElement('span');
-    quote.className = 'quote';
-    quote.textContent = `${nameOf(m.quote.authorConversationId)}: ${
-      m.quote.text ?? 'Attachment'
-    }`;
-    li.append(quote);
+    bubble.append(renderQuote(m.quote));
   }
-  const body = document.createElement('span');
+  const body = el('span', 'body');
   if (m.kind === 'text') {
     const parts = [];
     if (m.body) {
@@ -234,27 +569,29 @@ function renderMessage(m) {
     }
     body.textContent = parts.join('\n');
   } else {
-    body.className = 'note';
+    body.classList.add('note');
     body.textContent = summarize(m);
   }
-  li.append(body);
-  if (m.reactions.length > 0) {
-    const reactions = document.createElement('span');
-    reactions.className = 'reactions';
-    reactions.textContent = m.reactions.map(r => r.emoji).join(' ');
-    li.append(reactions);
-  }
-  const meta = document.createElement('span');
-  meta.className = 'meta';
+  bubble.append(body);
+
+  const meta = el('span', 'meta');
   const bits = [formatTime(m.sentAt)];
   if (m.edited) {
-    bits.push('edited');
+    bits.push('Edited');
   }
   if (m.sendStatus) {
     bits.push(STATUS_TEXT[m.sendStatus] ?? m.sendStatus);
   }
   meta.textContent = bits.join(' · ');
-  li.append(meta);
+  bubble.append(meta);
+
+  const line = el('span', 'bubble-line');
+  line.append(bubble, renderActions(m));
+  column.append(line);
+  if (m.reactions.length > 0) {
+    column.append(renderReactions(m));
+  }
+  li.append(column);
   return li;
 }
 
@@ -266,7 +603,10 @@ function renderMessages({ keepBottom = true } = {}) {
   const box = $('messages');
   const atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 40;
   const previousHeight = box.scrollHeight;
-  $('message-list').replaceChildren(...sortedMessages().map(renderMessage));
+  const list = sortedMessages();
+  $('message-list').replaceChildren(
+    ...list.map((m, i) => renderMessage(m, list[i - 1], list[i + 1]))
+  );
   $('older').hidden = !nextCursor;
   if (keepBottom && atBottom) {
     box.scrollTop = box.scrollHeight;
@@ -296,6 +636,7 @@ function scheduleExpiry(m) {
 }
 
 function putMessage(m) {
+  rememberAuthors(m);
   if (m.expiresAt !== null && m.expiresAt <= Date.now()) {
     messages.delete(m.id);
     return;
@@ -330,11 +671,8 @@ async function loadMessages({ older = false } = {}) {
 
 function renderChatHeader() {
   const c = conversations.get(selectedId);
-  $('chat-title').textContent = c
-    ? c.noteToSelf
-      ? 'Note to Self'
-      : c.title
-    : '';
+  $('chat-title').textContent = c ? displayTitle(c) : '';
+  $('chat-avatar').replaceChildren(...(c ? [conversationAvatar(c, 36)] : []));
   const sub = [];
   if (c?.type === 'group' && c.memberCount) {
     sub.push(`${c.memberCount} members`);
@@ -353,6 +691,8 @@ async function selectConversation(id) {
   messages = new Map();
   nextCursor = null;
   clearExpiryTimers();
+  closePopovers();
+  cancelReply();
   $('send-error').hidden = true;
   $('empty').hidden = true;
   $('chat-head').hidden = false;
@@ -365,9 +705,7 @@ async function selectConversation(id) {
     await loadMessages();
     $('messages').scrollTop = $('messages').scrollHeight;
   } catch (error) {
-    $('send-error').hidden = false;
-    $('send-error').textContent =
-      `Couldn't load messages (${error.code ?? error.message}).`;
+    showError(`Couldn't load messages (${error.code ?? error.message}).`);
   }
   $('compose').focus();
   maybeMarkRead();
@@ -402,6 +740,155 @@ async function maybeMarkRead() {
   }
 }
 
+function showError(text) {
+  $('send-error').hidden = false;
+  $('send-error').textContent = text;
+}
+
+let toastTimer;
+function toast(text) {
+  const box = $('toast');
+  box.textContent = text;
+  box.hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => {
+    box.hidden = true;
+  }, 2000);
+}
+
+// --- message actions ---------------------------------------------------------
+
+function closePopovers() {
+  $('reaction-picker').hidden = true;
+  $('more-menu').hidden = true;
+}
+
+function placePopover(popover, anchor) {
+  popover.hidden = false;
+  const a = anchor.getBoundingClientRect();
+  const p = popover.getBoundingClientRect();
+  const left = Math.min(
+    Math.max(8, a.left + a.width / 2 - p.width / 2),
+    window.innerWidth - p.width - 8
+  );
+  const above = a.top - p.height - 6;
+  const top = above >= 8 ? above : a.bottom + 6;
+  popover.style.left = `${left}px`;
+  popover.style.top = `${top}px`;
+}
+
+async function getPreferredReactions() {
+  if (!preferredReactions) {
+    try {
+      preferredReactions = (await api('api/reactions')).emoji;
+    } catch {
+      return ['❤️', '👍', '👎', '😂', '😮', '😢'];
+    }
+  }
+  return preferredReactions;
+}
+
+async function openReactionPicker(m, anchor) {
+  closePopovers();
+  const picker = $('reaction-picker');
+  const mine = m.reactions.find(r => r.fromMe)?.emoji;
+  const emoji = await getPreferredReactions();
+  picker.replaceChildren(
+    ...emoji.map(e => {
+      const button = el('button', `pick${e === mine ? ' mine' : ''}`);
+      button.type = 'button';
+      button.append(el('span', 'emoji', e));
+      button.title = e === mine ? 'Remove reaction' : `React ${e}`;
+      button.addEventListener('click', ev => {
+        ev.stopPropagation();
+        closePopovers();
+        sendReaction(m, e, e === mine);
+      });
+      return button;
+    })
+  );
+  placePopover(picker, anchor);
+}
+
+async function sendReaction(m, emoji, remove) {
+  try {
+    await api('api/react', { messageId: m.id, emoji, remove });
+  } catch (error) {
+    toast(
+      SEND_ERRORS[error.reason] ??
+        `Couldn't react (${error.code ?? error.message}).`
+    );
+  }
+}
+
+async function copyText(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch {
+    const area = el('textarea');
+    area.value = text;
+    document.body.append(area);
+    area.select();
+    document.execCommand('copy');
+    area.remove();
+  }
+  toast('Copied');
+}
+
+function openMoreMenu(m, anchor) {
+  closePopovers();
+  const menu = $('more-menu');
+  const items = [];
+  const add = (iconName, label, action) => {
+    const item = el('button', 'menu-item');
+    item.type = 'button';
+    item.append(icon(iconName), el('span', '', label));
+    item.addEventListener('click', ev => {
+      ev.stopPropagation();
+      closePopovers();
+      action();
+    });
+    items.push(item);
+  };
+  if (m.kind === 'text' && m.body) {
+    add('copy', 'Copy text', () => copyText(m.body));
+  }
+  if (canReplyTo(m)) {
+    add('reply', 'Reply', () => startReply(m));
+  }
+  if (items.length === 0) {
+    items.push(el('span', 'menu-empty', 'Nothing to do here'));
+  }
+  menu.replaceChildren(...items);
+  placePopover(menu, anchor);
+}
+
+function startReply(m) {
+  replyTo = m;
+  const quote = $('reply-quote');
+  const name =
+    m.direction === 'outgoing' ? 'You' : nameOf(m.authorConversationId);
+  quote.replaceChildren(
+    nameLine(
+      name,
+      m.direction === 'outgoing' ? null : m.author,
+      'quote-author'
+    ),
+    el('span', 'quote-text', summarize(m))
+  );
+  quote.className = 'reply-quote';
+  if (m.direction !== 'outgoing' && m.author?.nameColor) {
+    quote.classList.add(`nc-${m.author.nameColor}`);
+  }
+  $('reply-bar').hidden = false;
+  $('compose').focus();
+}
+
+function cancelReply() {
+  replyTo = null;
+  $('reply-bar').hidden = true;
+}
+
 // --- notifications -----------------------------------------------------------
 
 function notify(m) {
@@ -419,10 +906,12 @@ function notify(m) {
     const text = summarize(m);
     const body =
       c.type === 'group' ? `${nameOf(m.authorConversationId)}: ${text}` : text;
-    const n = new Notification(c.noteToSelf ? 'Note to Self' : c.title, {
+    const n = new Notification(displayTitle(c), {
       body: body.length > 200 ? `${body.slice(0, 199)}…` : body,
       tag: m.conversationId,
-      icon: 'icon.svg',
+      icon: c.avatarVersion
+        ? `api/avatar?${new URLSearchParams({ conversationId: c.id, v: c.avatarVersion })}`
+        : 'icon.svg',
     });
     n.addEventListener('click', () => {
       window.focus();
@@ -445,7 +934,10 @@ function notify(m) {
 async function loadState() {
   const state = await api('api/state');
   bridgeState = state.state;
+  capabilities = state.capabilities ?? [];
+  preferredReactions = null;
   conversations.clear();
+  rowCache.clear();
   for (const c of state.conversations) {
     conversations.set(c.id, c);
   }
@@ -454,6 +946,7 @@ async function loadState() {
   renderConversations();
   if (selectedId && !conversations.has(selectedId)) {
     selectedId = null;
+    cancelReply();
     $('empty').hidden = false;
     $('chat-head').hidden = true;
     $('messages').hidden = true;
@@ -496,10 +989,12 @@ function connectEvents() {
   });
   on('conversation.removed', ({ conversationId }) => {
     conversations.delete(conversationId);
+    rowCache.delete(conversationId);
     renderConversations();
     renderTitle();
   });
   on('message.added', m => {
+    rememberAuthors(m);
     if (m.conversationId === selectedId) {
       putMessage(m);
       renderMessages();
@@ -539,16 +1034,18 @@ async function sendCurrent() {
     const { message } = await api('api/send', {
       conversationId: selectedId,
       body,
+      ...(replyTo ? { quoteMessageId: replyTo.id } : {}),
     });
     box.value = '';
     autosize();
+    cancelReply();
     putMessage(message);
     renderMessages();
     $('messages').scrollTop = $('messages').scrollHeight;
   } catch (error) {
-    $('send-error').hidden = false;
-    $('send-error').textContent =
-      SEND_ERRORS[error.reason] ?? `Not sent (${error.code ?? error.message}).`;
+    showError(
+      SEND_ERRORS[error.reason] ?? `Not sent (${error.code ?? error.message}).`
+    );
   } finally {
     $('send').disabled = false;
     box.focus();
@@ -569,6 +1066,8 @@ $('compose').addEventListener('keydown', e => {
   if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
     e.preventDefault();
     sendCurrent();
+  } else if (e.key === 'Escape' && replyTo) {
+    cancelReply();
   }
 });
 $('compose').addEventListener('input', autosize);
@@ -577,8 +1076,27 @@ $('search').addEventListener('input', renderConversations);
 $('banner-action').addEventListener('click', () =>
   api('api/retry', {}).catch(() => {})
 );
+$('reply-cancel').append(icon('close'));
+$('reply-cancel').addEventListener('click', cancelReply);
+document.addEventListener('click', e => {
+  if (!e.target.closest?.('.popover')) {
+    closePopovers();
+  }
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    closePopovers();
+  }
+});
+$('messages').addEventListener('scroll', closePopovers, { passive: true });
 window.addEventListener('focus', maybeMarkRead);
 document.addEventListener('visibilitychange', maybeMarkRead);
+// Relative times in the list ("5m") move on.
+setInterval(() => {
+  if (conversations.size > 0) {
+    renderConversations();
+  }
+}, 60_000);
 
 renderBanner();
 connectEvents();

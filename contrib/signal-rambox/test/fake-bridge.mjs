@@ -52,6 +52,8 @@ export function makeConversation(overrides = {}) {
     noteToSelf: false,
     messageRequestPending: false,
     memberCount: null,
+    avatarColor: 'A120',
+    avatarVersion: null,
     ...overrides,
   };
 }
@@ -63,6 +65,13 @@ export function makeMessage(conversationId, overrides = {}) {
     direction: 'incoming',
     kind: 'text',
     authorConversationId: conversationId,
+    author: {
+      title: 'Alice',
+      avatarColor: 'A120',
+      avatarVersion: null,
+      nameColor: null,
+      label: null,
+    },
     sentAt: Date.now(),
     receivedAt: Date.now(),
     body: 'hello',
@@ -92,6 +101,18 @@ export class FakeBridge {
   notificationsHandled = false;
   // conversationId -> reason, for messages.sendText refusals
   sendRefusals = new Map();
+  // What hello advertises.
+  offered = [
+    'conversations.read',
+    'messages.read',
+    'messages.send',
+    'messages.markRead',
+    'messages.react',
+    'notifications.manage',
+  ];
+  // conversationId -> { avatarVersion, contentType, data }
+  avatars = new Map();
+  reactionEmoji = ['🔥', '👍', '👎', '😂', '😮', '😢'];
 
   get publicKey() {
     return this.#keys.publicKey.export({ format: 'jwk' }).x;
@@ -187,7 +208,7 @@ export class FakeBridge {
           protocolVersion: 1,
           sessionId: session.sessionId,
           signalVersion: 'fake',
-          capabilities: [],
+          capabilities: this.offered,
           challenge: session.challenge.toString('base64url'),
           server: {
             publicKey: this.publicKey,
@@ -268,8 +289,21 @@ export class FakeBridge {
         return;
       }
       case 'messages.markRead':
+      case 'messages.react':
         this.#reply(session, id, {});
         return;
+      case 'reactions.getPreferred':
+        this.#reply(session, id, { emoji: this.reactionEmoji });
+        return;
+      case 'conversations.getAvatar': {
+        const avatar = this.avatars.get(params.conversationId);
+        if (avatar) {
+          this.#reply(session, id, avatar);
+        } else {
+          this.#error(session, id, 'NOT_FOUND');
+        }
+        return;
+      }
       case 'session.disconnect':
         this.#reply(session, id, {});
         session.socket.end();

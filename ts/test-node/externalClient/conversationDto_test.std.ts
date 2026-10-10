@@ -51,7 +51,27 @@ describe('externalClient/conversationDto', () => {
       noteToSelf: false,
       messageRequestPending: false,
       memberCount: null,
+      avatarColor: null,
+      avatarVersion: null,
     });
+  });
+
+  it('gives an opaque avatar version that follows the photo', () => {
+    const withPhoto = {
+      ...base,
+      color: 'A120',
+      avatarUrl: 'attachment://v2/ab/abcdef?key=secret',
+      avatarHash: 'hash-1',
+    } as const;
+    const dto = toConversationDTO(withPhoto);
+    assert.strictEqual(dto.avatarColor, 'A120');
+    assert.match(dto.avatarVersion ?? '', /^[0-9a-f]{8}$/);
+    assert.notInclude(JSON.stringify(dto), 'secret');
+    assert.notInclude(JSON.stringify(dto), 'attachment');
+    assert.notStrictEqual(
+      toConversationDTO({ ...withPhoto, avatarHash: 'hash-2' }).avatarVersion,
+      dto.avatarVersion
+    );
   });
 
   it('maps group and state fields', () => {

@@ -24,6 +24,13 @@ const context: MessageDtoContextType = {
   ourConversationId: 'conv-me',
   now: 1_000_000,
   getSendStatus: () => 'delivered',
+  getAuthor: (authorConversationId, conversationId, serviceId) => ({
+    title: `${authorConversationId} in ${conversationId}`,
+    avatarColor: 'A100',
+    avatarVersion: null,
+    nameColor: null,
+    label: serviceId === BOB_ACI ? { text: 'Bobby', emoji: null } : null,
+  }),
 };
 
 const incoming: MessageSourceType = {
@@ -51,6 +58,13 @@ describe('externalClient/messageDto', () => {
       direction: 'incoming',
       kind: MessageKind.Text,
       authorConversationId: 'conv-alice',
+      author: {
+        title: 'conv-alice in conv-alice',
+        avatarColor: 'A100',
+        avatarVersion: null,
+        nameColor: null,
+        label: null,
+      },
       sentAt: 500,
       receivedAt: 600,
       body: 'hello',
@@ -104,8 +118,8 @@ describe('externalClient/messageDto', () => {
       context
     );
     assert.deepEqual(dto?.reactions, [
-      { emoji: '👍', authorConversationId: 'conv-me' },
-      { emoji: '😂', authorConversationId: 'conv-bob' },
+      { emoji: '👍', authorConversationId: 'conv-me', fromMe: true },
+      { emoji: '😂', authorConversationId: 'conv-bob', fromMe: false },
     ]);
   });
 
@@ -218,6 +232,13 @@ describe('externalClient/messageDto', () => {
     ]);
     assert.deepEqual(dto?.quote, {
       authorConversationId: 'conv-bob',
+      author: {
+        title: 'conv-bob in conv-alice',
+        avatarColor: 'A100',
+        avatarVersion: null,
+        nameColor: null,
+        label: { text: 'Bobby', emoji: null },
+      },
       sentAt: 42,
       text: 'earlier',
     });
