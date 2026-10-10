@@ -45,6 +45,9 @@ ARG SIGNAL_UID=1000
 RUN useradd --uid "$SIGNAL_UID" --create-home --home-dir /data signal
 
 COPY --from=build /src/release/linux-unpacked /opt/Signal
+# Node for the helper. Electron's own Node mode (ELECTRON_RUN_AS_NODE)
+# crashed with SIGTRAP in the container.
+COPY --from=build /usr/local/bin/node /usr/local/bin/node
 # Chromium's setuid sandbox helper, as the .deb's postinst sets it up.
 RUN chown root:root /opt/Signal/chrome-sandbox \
   && chmod 4755 /opt/Signal/chrome-sandbox

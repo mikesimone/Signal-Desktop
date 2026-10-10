@@ -46,6 +46,7 @@ jobs:
 
       - name: Check the image
         run: |
-          docker run --rm --entrypoint /opt/Signal/signal-desktop \
-            -e ELECTRON_RUN_AS_NODE=1 signal-headless \
+          docker run --rm --entrypoint node signal-headless \
             /opt/signal-rambox/signal-rambox.mjs --config /tmp/c --url
+          docker run --rm --entrypoint /opt/Signal/signal-desktop \
+            signal-headless --version

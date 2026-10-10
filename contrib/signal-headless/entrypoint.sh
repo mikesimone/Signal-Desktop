@@ -32,9 +32,7 @@ helper_args=(--user-data "$USER_DATA" --config "$HOME/signal-rambox"
 if [ -n "${RAMBOX_ORIGIN:-}" ]; then
   helper_args+=(--origin "$RAMBOX_ORIGIN")
 fi
-# Electron doubles as Node, so the image needs no separate Node install.
-ELECTRON_RUN_AS_NODE=1 /opt/Signal/signal-desktop \
-  /opt/signal-rambox/signal-rambox.mjs "${helper_args[@]}" &
+node /opt/signal-rambox/signal-rambox.mjs "${helper_args[@]}" &
 
 wait -n
 exit 1

@@ -32,8 +32,7 @@ case "${1:-}" in
   url)
     args=(--config /data/signal-rambox --url)
     [ -n "${RAMBOX_ORIGIN:-}" ] && args+=(--origin "$RAMBOX_ORIGIN")
-    ELECTRON_RUN_AS_NODE=1 /opt/Signal/signal-desktop \
-      /opt/signal-rambox/signal-rambox.mjs "${args[@]}"
+    node /opt/signal-rambox/signal-rambox.mjs "${args[@]}"
     ;;
   vnc) exec x11vnc -nopw -forever -shared -rfbport 5900 ;;
   *) sed -n '5,17p' "$0"; exit 2 ;;

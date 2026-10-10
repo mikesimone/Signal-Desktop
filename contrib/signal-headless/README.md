@@ -16,8 +16,8 @@ dir`) and a slim runtime image with Xvfb. Signal runs with
   `SIGNAL_ENABLE_EXTERNAL_CLIENTS=1` turn the bridge on in a packaged build.
   Upstream only allows that in development builds, and Signal's remote
   config has not enabled the feature.
-- `entrypoint.sh`: starts Xvfb, Signal and the helper. Electron runs the
-  helper as Node (`ELECTRON_RUN_AS_NODE=1`).
+- `entrypoint.sh`: starts Xvfb, Signal and the helper (on the Node copied
+  from the build stage).
 - `screen.sh`: screenshots, clicks and VNC for the one-time setup.
 - `compose.yml`: publishes the chat page and VNC on the host's 127.0.0.1
   only. Put a reverse proxy with HTTPS in front of 8083 and set
