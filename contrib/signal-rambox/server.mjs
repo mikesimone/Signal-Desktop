@@ -403,7 +403,14 @@ export function createWebServer({
     }
     if (req.method === 'GET' && route === 'api/thumbnail') {
       const target = attachmentTarget(url);
-      const thumb = await bridge.call('attachments.getThumbnail', target);
+      const width = Number(url.searchParams.get('width'));
+      const thumb = await bridge.call('attachments.getThumbnail', {
+        ...target,
+        // Drawn at this many device pixels wide; Signal clamps it.
+        ...(Number.isInteger(width) && width >= 32
+          ? { width: Math.min(width, 1600) }
+          : {}),
+      });
       res.writeHead(200, {
         ...SECURITY_HEADERS,
         'Content-Type': thumb.contentType,

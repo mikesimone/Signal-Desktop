@@ -288,6 +288,11 @@ a not-yet-downloaded attachment does). `AttachmentMetadataDTO` gains
 the message's DTO shows it, so view-once, deleted and erased content never
 crosses, as in D7.
 
+Amended 2026-10-10: `attachments.getThumbnail` draws from the full image
+(Signal's small thumbnail only as a fallback) and takes an optional `width`
+in device pixels (at most 1600), because a 640 px preview of a tall
+screenshot was unreadable on a scaled display.
+
 WHY: "open Signal to view" is not acceptable for a client that replaces
 Signal's window (Mike, 2026-10-10).
 

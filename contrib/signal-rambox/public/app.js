@@ -709,6 +709,13 @@ function downloadState(m, a) {
   return button;
 }
 
+// Device pixels for an image drawn this many CSS pixels wide, in steps so
+// the browser's cache still works after a zoom change.
+function previewWidth(cssWidth) {
+  const px = cssWidth * Math.max(1, window.devicePixelRatio || 1);
+  return Math.min(1600, Math.ceil(px / 160) * 160);
+}
+
 function mediaBox(a, multiple) {
   const box = el('span', `media${multiple ? ' tile' : ''}`);
   if (!multiple && a.width && a.height) {
@@ -737,7 +744,9 @@ function renderVisual(m, a, index, multiple) {
     const img = el('img');
     img.alt = a.caption ?? '';
     img.loading = 'lazy';
-    img.src = `api/thumbnail?${attachmentParams(m, index)}`;
+    img.src = `api/thumbnail?${attachmentParams(m, index, {
+      width: String(previewWidth(multiple ? 160 : 320)),
+    })}`;
     box.append(img);
   } else {
     box.classList.add('placeholder');
@@ -993,6 +1002,7 @@ function renderLinkPreview(m, p, index) {
     img.src = `api/thumbnail?${new URLSearchParams({
       messageId: m.id,
       preview: String(index),
+      width: String(previewWidth(360)),
     })}`;
     card.append(img);
   }
@@ -1660,7 +1670,10 @@ async function sendCurrent() {
     box.value = '';
     autosize();
     cancelReply();
-    putMessage(message);
+    // Events can get here first with a newer status (Sent); keep that.
+    if (!messages.has(message.id)) {
+      putMessage(message);
+    }
     renderMessages();
     $('messages').scrollTop = $('messages').scrollHeight;
   } catch (error) {

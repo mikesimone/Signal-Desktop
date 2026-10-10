@@ -464,6 +464,8 @@ export type ReactionsGetPreferredResultType = Readonly<{
 // Fork addition: attachment content. `index` is the position in the
 // message's `attachments`; `sticker: true` names the message's sticker
 // instead. Content of view-once, deleted and erased messages never crosses.
+export const MAX_THUMBNAIL_WIDTH_PX = 1600;
+
 const attachmentTargetShape = {
   messageId: messageIdSchema,
   index: z.number().int().min(0).max(63).optional(),
@@ -473,7 +475,13 @@ const attachmentTargetShape = {
 };
 
 export const attachmentsGetThumbnailParamsSchema = z
-  .object(attachmentTargetShape)
+  .object({
+    ...attachmentTargetShape,
+    // The width the client will draw it at, in device pixels; the preview
+    // is made that wide (never wider than the image), so text stays sharp.
+    // Without it, the longer side is THUMBNAIL_SIZE_PX.
+    width: z.number().int().min(32).max(MAX_THUMBNAIL_WIDTH_PX).optional(),
+  })
   .strict();
 export type AttachmentsGetThumbnailParamsType = z.infer<
   typeof attachmentsGetThumbnailParamsSchema

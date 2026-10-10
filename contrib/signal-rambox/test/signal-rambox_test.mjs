@@ -470,6 +470,23 @@ describe('signal-rambox', () => {
     assert.deepEqual(call.params, { messageId: 'm1', preview: 0 });
   });
 
+  it('asks for previews as wide as the page draws them, within limits', async () => {
+    for (const [asked, sent] of [
+      ['480', 480],
+      ['99999', 1600],
+      ['x', undefined],
+    ]) {
+      // oxlint-disable-next-line no-await-in-loop
+      await http(port, {
+        path: `/${helper.token}/api/thumbnail?messageId=m1&index=0&width=${asked}`,
+      });
+      const call = bridge.calls.findLast(
+        c => c.method === 'attachments.getThumbnail'
+      );
+      assert.equal(call.params.width, sent);
+    }
+  });
+
   it('edits and deletes', async () => {
     const edit = await http(port, {
       method: 'POST',

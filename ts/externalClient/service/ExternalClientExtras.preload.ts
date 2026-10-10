@@ -97,9 +97,12 @@ type RenderedImageType = Readonly<{
 
 // Decodes an image from a local (decrypting) URL and re-encodes it: either
 // cover-cropped to a square, or scaled to fit within `fit` pixels.
+// Base64 of the result must fit in a frame with room to spare.
+const MAX_RENDERED_BASE64 = 900 * 1024;
+
 async function renderImage(
   url: string,
-  size: Readonly<{ square: number } | { fit: number }>
+  size: Readonly<{ square: number } | { fit: number } | { width: number }>
 ): Promise<RenderedImageType | undefined> {
   const response = await fetch(url);
   if (!response.ok) {
@@ -126,27 +129,48 @@ async function renderImage(
       dw = size.square;
       dh = size.square;
     } else {
-      const scale = Math.min(1, size.fit / Math.max(width, height));
+      const scale =
+        'fit' in size
+          ? Math.min(1, size.fit / Math.max(width, height))
+          : Math.min(1, size.width / width, (size.width * 4) / height);
       dw = Math.max(1, Math.round(width * scale));
       dh = Math.max(1, Math.round(height * scale));
     }
-    const canvas = new OffscreenCanvas(dw, dh);
-    const context = canvas.getContext('2d');
-    if (!context) {
-      return undefined;
+    // Lower the quality, then the size, until it fits in a frame.
+    for (let attempt = 0; attempt < 6; attempt += 1) {
+      const canvas = new OffscreenCanvas(dw, dh);
+      const context = canvas.getContext('2d');
+      if (!context) {
+        return undefined;
+      }
+      context.imageSmoothingQuality = 'high';
+      context.drawImage(bitmap, sx, sy, sw, sh, 0, 0, dw, dh);
+      // oxlint-disable-next-line no-await-in-loop
+      let blob = await canvas.convertToBlob({
+        type: 'image/webp',
+        quality: attempt === 0 ? 0.9 : 0.75,
+      });
+      if (blob.type !== 'image/webp') {
+        // oxlint-disable-next-line no-await-in-loop
+        blob = await canvas.convertToBlob({ type: 'image/png' });
+      }
+      // oxlint-disable-next-line no-await-in-loop
+      const bytes = new Uint8Array(await blob.arrayBuffer());
+      const data = Buffer.from(bytes).toString('base64');
+      if (data.length <= MAX_RENDERED_BASE64) {
+        return {
+          contentType: blob.type === 'image/webp' ? 'image/webp' : 'image/png',
+          width: dw,
+          height: dh,
+          data,
+        };
+      }
+      if (attempt > 0) {
+        dw = Math.max(1, Math.round(dw * 0.75));
+        dh = Math.max(1, Math.round(dh * 0.75));
+      }
     }
-    context.drawImage(bitmap, sx, sy, sw, sh, 0, 0, dw, dh);
-    let blob = await canvas.convertToBlob({ type: 'image/webp', quality: 0.9 });
-    if (blob.type !== 'image/webp') {
-      blob = await canvas.convertToBlob({ type: 'image/png' });
-    }
-    const bytes = new Uint8Array(await blob.arrayBuffer());
-    return {
-      contentType: blob.type === 'image/webp' ? 'image/webp' : 'image/png',
-      width: dw,
-      height: dh,
-      data: Buffer.from(bytes).toString('base64'),
-    };
+    return undefined;
   } finally {
     bitmap.close();
   }
@@ -194,26 +218,29 @@ export async function getAttachmentThumbnail(
   if (!attachment) {
     return notFound;
   }
+  // Drawn from the full image, as the timeline does, so the preview is
+  // sharp at any size; Signal's own small thumbnail only as a fallback.
   let source: Pick<AttachmentType, 'path'> | undefined;
-  if (attachment.thumbnail?.path) {
-    source = attachment.thumbnail;
-  } else if (attachment.screenshot?.path) {
-    source = attachment.screenshot;
-  } else if (
+  if (
     (isImageAttachment(attachment) ||
       params.sticker ||
       params.preview !== undefined) &&
     attachment.path
   ) {
     source = attachment;
+  } else if (attachment.screenshot?.path) {
+    source = attachment.screenshot;
+  } else if (attachment.thumbnail?.path) {
+    source = attachment.thumbnail;
   }
   if (!source) {
     return notFound;
   }
   try {
-    const image = await renderImage(getLocalAttachmentUrl(source), {
-      fit: THUMBNAIL_SIZE_PX,
-    });
+    const image = await renderImage(
+      getLocalAttachmentUrl(source),
+      params.width ? { width: params.width } : { fit: THUMBNAIL_SIZE_PX }
+    );
     if (!image) {
       return notFound;
     }
