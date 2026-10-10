@@ -11,7 +11,11 @@ across. Nothing here is part of the upstream PR.
 
 - `Dockerfile`: builds Signal from this repository (`build:release --linux
 dir`) and a slim runtime image with Xvfb. Signal runs with
-  `--password-store=basic` because there is no desktop keyring.
+  `--password-store=basic` because there is no desktop keyring, and with
+  `--no-sandbox` because Chromium's sandbox can't create its namespaces
+  under Docker's default seccomp profile. That was a deliberate choice;
+  the container, its loopback-only ports and the token page are the
+  boundary instead.
 - `patches/0001-enable-bridge-from-env.patch`: lets
   `SIGNAL_ENABLE_EXTERNAL_CLIENTS=1` turn the bridge on in a packaged build.
   Upstream only allows that in development builds, and Signal's remote

@@ -61,7 +61,6 @@ jobs:
           check helper docker run --rm --entrypoint node signal-headless \
             /opt/signal-rambox/signal-rambox.mjs --config /tmp/c --url || fail=1
           docker run -d --name smoke --shm-size 1g \
-            --security-opt seccomp=contrib/signal-headless/seccomp.json \
             --tmpfs /data:uid=1000,gid=1000 signal-headless
           sleep 60
           check running docker inspect -f '{{.State.Status}}' smoke || fail=1

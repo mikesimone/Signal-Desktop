@@ -25,7 +25,10 @@ done
 
 # --password-store=basic: no desktop keyring in here; the database key is
 # kept in the profile, which only this container's volume holds.
-/opt/Signal/signal-desktop --password-store=basic ${SIGNAL_EXTRA_ARGS:-} &
+# --no-sandbox: Mike's choice (2026-10-10). Chromium's sandbox can't create
+# its namespaces under Docker's default seccomp profile and capabilities.
+/opt/Signal/signal-desktop --password-store=basic --no-sandbox \
+  ${SIGNAL_EXTRA_ARGS:-} &
 
 helper_args=(--user-data "$USER_DATA" --config "$HOME/signal-rambox"
   --bind 0.0.0.0 --port 8083)
