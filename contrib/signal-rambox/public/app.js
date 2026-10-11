@@ -249,7 +249,14 @@ function renderBanner() {
   const action = $('banner-action');
   let text = null;
   if (!helperConnected) {
-    text = "The signal-rambox helper isn't running. Start it, then reload.";
+    // A restart (an update, a redeploy) takes a few seconds; only a long
+    // outage means the helper is really down.
+    const long =
+      disconnectedSince !== null &&
+      Date.now() - disconnectedSince > HELPER_DOWN_AFTER_MS;
+    text = long
+      ? "The signal-rambox helper isn't running. Retrying…"
+      : 'Connecting…';
   } else if (bridgeState !== 'ready') {
     text = BANNERS[bridgeState] ?? `Signal: ${bridgeState}`;
   }
@@ -1864,6 +1871,12 @@ async function loadState() {
   }
 }
 
+const HELPER_DOWN_AFTER_MS = 60_000;
+const MAX_RECONNECT_DELAY_MS = 5_000;
+let disconnectedSince = null;
+let reconnectDelay = 1000;
+let reconnectTimer = null;
+
 function connectEvents() {
   const source = new EventSource('api/events');
   const on = (type, handler) =>
@@ -1871,6 +1884,9 @@ function connectEvents() {
 
   on('hello', () => {
     helperConnected = true;
+    disconnectedSince = null;
+    reconnectDelay = 1000;
+    renderBanner();
     loadState().catch(() => {});
   });
   on('resync', () => loadState().catch(() => {}));
@@ -1919,9 +1935,19 @@ function connectEvents() {
     }
   });
   source.addEventListener('error', () => {
-    // EventSource reconnects by itself; say so meanwhile.
     helperConnected = false;
+    disconnectedSince ??= Date.now();
     renderBanner();
+    // EventSource retries a dropped stream by itself, but gives up for good
+    // when the reconnect gets an error status (a reverse proxy's 502 while
+    // the helper restarts). Start over then, backing off up to 5 s.
+    if (source.readyState === EventSource.CLOSED) {
+      source.close();
+      clearTimeout(reconnectTimer);
+      const delay = reconnectDelay * (0.8 + Math.random() * 0.4);
+      reconnectDelay = Math.min(reconnectDelay * 2, MAX_RECONNECT_DELAY_MS);
+      reconnectTimer = setTimeout(connectEvents, delay);
+    }
   });
 }
 
