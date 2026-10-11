@@ -15,6 +15,7 @@ import {
   messagesForwardParamsSchema,
   messagesSendTextParamsSchema,
   negotiateVersion,
+  MAX_MENTIONS,
   pollsSendParamsSchema,
   pollsVoteParamsSchema,
   requestEnvelopeSchema,
@@ -219,6 +220,31 @@ describe('externalClient/protocol', () => {
         accepts(pollsVoteParamsSchema, {
           messageId: conversationId,
           optionIndexes: [10],
+        })
+      );
+    });
+
+    it('takes mentions on sends and edits, within bounds', () => {
+      const mention = { start: 0, conversationId };
+      assert.isTrue(
+        accepts(messagesSendTextParamsSchema, {
+          conversationId,
+          body: '\uFFFC hi',
+          mentions: [mention],
+        })
+      );
+      assert.isFalse(
+        accepts(messagesSendTextParamsSchema, {
+          conversationId,
+          body: '\uFFFC hi',
+          mentions: [{ ...mention, aci: 'x' }],
+        })
+      );
+      assert.isFalse(
+        accepts(messagesSendTextParamsSchema, {
+          conversationId,
+          body: 'hi',
+          mentions: Array.from({ length: MAX_MENTIONS + 1 }, () => mention),
         })
       );
     });

@@ -36,6 +36,7 @@ import {
   sendPoll,
   votePoll,
 } from './ExternalClientOutgoing.preload.ts';
+import { getMembers } from './ExternalClientMentions.preload.ts';
 import { markRead, sendText } from './ExternalClientSend.preload.ts';
 import {
   getDtoContext,
@@ -233,6 +234,13 @@ async function dispatch(
       }
       const params = safeParseUnknown(SERVICE_PARAM_SCHEMAS[method], rawParams);
       return params.success ? markRead(params.data) : invalid;
+    }
+    case Method.ConversationsGetMembers: {
+      if (!window.ConversationController.isInitialFetchComplete()) {
+        return notReady;
+      }
+      const params = safeParseUnknown(SERVICE_PARAM_SCHEMAS[method], rawParams);
+      return params.success ? getMembers(params.data) : invalid;
     }
     case Method.ConversationsGetAvatar: {
       if (!window.ConversationController.isInitialFetchComplete()) {

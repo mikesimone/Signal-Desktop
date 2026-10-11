@@ -104,6 +104,8 @@ export class FakeBridge {
   grants = new Map();
   conversations = [];
   messages = new Map();
+  // conversationId -> [{ conversationId, author }]
+  members = new Map();
   calls = [];
   notificationsHandled = false;
   // conversationId -> reason, for messages.sendText refusals
@@ -288,6 +290,11 @@ export class FakeBridge {
         this.#reply(session, id, {
           conversations: this.conversations,
           nextCursor: null,
+        });
+        return;
+      case 'conversations.getMembers':
+        this.#reply(session, id, {
+          members: this.members.get(params.conversationId) ?? [],
         });
         return;
       case 'messages.list':

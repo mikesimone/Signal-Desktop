@@ -639,6 +639,28 @@ describe('signal-rambox', () => {
     );
   });
 
+  it('lists group members and sends mentions', async () => {
+    bridge.members.set('g1', [
+      { conversationId: 'c-bill', author: { title: 'Bill Smith' } },
+    ]);
+    const list = await http(port, {
+      path: `/${helper.token}/api/members?conversationId=g1`,
+    });
+    assert.equal(list.status, 200);
+    assert.equal(JSON.parse(list.text).members[0].conversationId, 'c-bill');
+
+    const mentions = [{ start: 3, conversationId: 'c-bill' }];
+    const res = await http(port, {
+      method: 'POST',
+      path: `/${helper.token}/api/send`,
+      headers: json,
+      body: { conversationId: 'g1', body: 'hi \uFFFC', mentions },
+    });
+    assert.equal(res.status, 200);
+    const call = bridge.calls.findLast(c => c.method === 'messages.sendText');
+    assert.deepEqual(call.params.mentions, mentions);
+  });
+
   it('marks read', async () => {
     const res = await http(port, {
       method: 'POST',

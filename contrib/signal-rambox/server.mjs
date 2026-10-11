@@ -465,6 +465,15 @@ export function createWebServer({
       sendJson(res, 200, result);
       return;
     }
+    if (req.method === 'GET' && route === 'api/members') {
+      const conversationId = url.searchParams.get('conversationId');
+      sendJson(
+        res,
+        200,
+        await bridge.call('conversations.getMembers', { conversationId })
+      );
+      return;
+    }
     if (req.method === 'GET' && route === 'api/messages') {
       const conversationId = url.searchParams.get('conversationId');
       const cursor = url.searchParams.get('cursor') ?? undefined;
@@ -477,12 +486,18 @@ export function createWebServer({
       return;
     }
     if (req.method === 'POST' && route === 'api/send') {
-      const { conversationId, body, quoteMessageId, attachmentUploadIds } =
-        await readJson(req);
+      const {
+        conversationId,
+        body,
+        quoteMessageId,
+        attachmentUploadIds,
+        mentions,
+      } = await readJson(req);
       const result = await bridge.call('messages.sendText', {
         conversationId,
         body,
         ...(quoteMessageId ? { quoteMessageId } : {}),
+        ...(mentions?.length ? { mentions } : {}),
         ...(attachmentUploadIds?.length ? { attachmentUploadIds } : {}),
       });
       sendJson(res, 200, result);
@@ -528,8 +543,12 @@ export function createWebServer({
       return;
     }
     if (req.method === 'POST' && route === 'api/edit') {
-      const { messageId, body } = await readJson(req);
-      const result = await bridge.call('messages.edit', { messageId, body });
+      const { messageId, body, mentions } = await readJson(req);
+      const result = await bridge.call('messages.edit', {
+        messageId,
+        body,
+        ...(mentions?.length ? { mentions } : {}),
+      });
       sendJson(res, 200, result);
       return;
     }

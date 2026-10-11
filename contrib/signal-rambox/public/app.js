@@ -1341,6 +1341,8 @@ async function selectConversation(id) {
   clearExpiryTimers();
   closePopovers();
   cancelReply();
+  // Mentions name members of the chat they were typed in.
+  composeMentions = [];
   $('send-error').hidden = true;
   $('empty').hidden = true;
   $('chat-head').hidden = false;
@@ -1411,6 +1413,7 @@ function closePopovers() {
   $('more-menu').hidden = true;
   $('emoji-picker').hidden = true;
   $('reaction-viewer').hidden = true;
+  $('mention-picker').hidden = true;
 }
 
 // anchor: an element, or a rect taken before its element was hidden.
@@ -1646,6 +1649,7 @@ function insertEmoji(e) {
   const start = box.selectionStart ?? box.value.length;
   const end = box.selectionEnd ?? start;
   box.value = box.value.slice(0, start) + e + box.value.slice(end);
+  trackComposeChange();
   const at = start + e.length;
   box.focus();
   box.setSelectionRange(at, at);
@@ -1760,8 +1764,7 @@ function cancelReply() {
   $('reply-bar').hidden = true;
   $('reply-bar').classList.remove('editing');
   if (wasEditing) {
-    $('compose').value = '';
-    autosize();
+    setCompose('');
   }
 }
 
@@ -1778,8 +1781,7 @@ function startEdit(m) {
   $('reply-bar').classList.add('editing');
   $('reply-bar').hidden = false;
   const box = $('compose');
-  box.value = plainText(m);
-  autosize();
+  setCompose(m.body ?? '', m.mentions ?? []);
   box.focus();
   box.setSelectionRange(box.value.length, box.value.length);
 }
@@ -1955,20 +1957,27 @@ function connectEvents() {
 
 async function sendCurrent() {
   const box = $('compose');
-  const body = box.value;
+  const { body: rawBody, mentions: rawMentions } = composeForSend();
   const conversationId = selectedId;
   const files = editing ? [] : draftsFor(conversationId);
-  if (!conversationId || (body.trim() === '' && files.length === 0)) {
+  if (!conversationId || (rawBody.trim() === '' && files.length === 0)) {
     return;
   }
+  // A caption is trimmed; mentions move with it.
+  const lead =
+    files.length > 0 ? rawBody.length - rawBody.trimStart().length : 0;
+  const body = files.length > 0 ? rawBody.trim() : rawBody;
+  const mentions = rawMentions
+    .map(mention => ({ ...mention, start: mention.start - lead }))
+    .filter(mention => mention.start >= 0 && mention.start < body.length);
+  const withMentions = mentions.length > 0 ? { mentions } : {};
   $('send').disabled = true;
   $('send-error').hidden = true;
   try {
     if (editing) {
-      await api('api/edit', { messageId: editing.id, body });
+      await api('api/edit', { messageId: editing.id, body, ...withMentions });
       cancelReply();
-      box.value = '';
-      autosize();
+      setCompose('');
       return;
     }
     const attachmentUploadIds = [];
@@ -1980,13 +1989,13 @@ async function sendCurrent() {
     }
     const { message } = await api('api/send', {
       conversationId,
-      body: files.length > 0 ? body.trim() : body,
+      body,
+      ...withMentions,
       ...(replyTo ? { quoteMessageId: replyTo.id } : {}),
       ...(attachmentUploadIds.length > 0 ? { attachmentUploadIds } : {}),
     });
     clearDrafts(conversationId);
-    box.value = '';
-    autosize();
+    setCompose('');
     cancelReply();
     // Events can get here first with a newer status (Sent); keep that.
     if (!messages.has(message.id)) {
@@ -2004,6 +2013,279 @@ async function sendCurrent() {
     box.focus();
   }
 }
+
+// --- @mentions -----------------------------------------------------------------
+
+const MENTION_PLACEHOLDER = '\uFFFC';
+// In the composer, a mention is the text "@Name"; these say where each is.
+// [{ start, end, conversationId }], kept in order.
+let composeMentions = [];
+let composeLast = '';
+// conversationId -> Promise of [{ conversationId, author }]
+const memberCache = new Map();
+let mentionQuery = null;
+let mentionChoices = [];
+let mentionIndex = 0;
+
+function setCompose(text, mentions = []) {
+  // Messages hold U+FFFC where a mention is; write it out as "@Name".
+  let value = '';
+  let at = 0;
+  composeMentions = [];
+  for (const mention of [...mentions].sort((a, b) => a.start - b.start)) {
+    value += text.slice(at, mention.start);
+    const token = `@${mention.title ?? 'Someone'}`;
+    if (mention.conversationId) {
+      composeMentions.push({
+        start: value.length,
+        end: value.length + token.length,
+        conversationId: mention.conversationId,
+      });
+    }
+    value += token;
+    at = mention.start + mention.length;
+  }
+  value += text.slice(at);
+  const box = $('compose');
+  box.value = value;
+  composeLast = value;
+  autosize();
+}
+
+// Moves mentions after an edit, and drops any the edit touched.
+function trackComposeChange() {
+  const value = $('compose').value;
+  const old = composeLast;
+  composeLast = value;
+  if (composeMentions.length === 0 || value === old) {
+    return;
+  }
+  let prefix = 0;
+  const max = Math.min(old.length, value.length);
+  while (prefix < max && old[prefix] === value[prefix]) {
+    prefix += 1;
+  }
+  let suffix = 0;
+  while (
+    suffix < max - prefix &&
+    old[old.length - 1 - suffix] === value[value.length - 1 - suffix]
+  ) {
+    suffix += 1;
+  }
+  const oldEnd = old.length - suffix;
+  const shift = value.length - old.length;
+  composeMentions = composeMentions.flatMap(mention => {
+    if (mention.end <= prefix) {
+      return [mention];
+    }
+    if (mention.start >= oldEnd) {
+      return [
+        { ...mention, start: mention.start + shift, end: mention.end + shift },
+      ];
+    }
+    return [];
+  });
+}
+
+// The body as Signal wants it: U+FFFC for each mention, with its start.
+function composeForSend() {
+  const value = $('compose').value;
+  let body = '';
+  let at = 0;
+  const mentions = [];
+  for (const mention of composeMentions) {
+    body += value.slice(at, mention.start);
+    mentions.push({
+      start: body.length,
+      conversationId: mention.conversationId,
+    });
+    body += MENTION_PLACEHOLDER;
+    at = mention.end;
+  }
+  body += value.slice(at);
+  return { body, mentions };
+}
+
+function loadMembers(conversationId) {
+  if (!memberCache.has(conversationId)) {
+    const params = new URLSearchParams({ conversationId });
+    const request = api(`api/members?${params}`)
+      .then(({ members }) => members)
+      .catch(() => {
+        memberCache.delete(conversationId);
+        return [];
+      });
+    memberCache.set(conversationId, request);
+  }
+  return memberCache.get(conversationId);
+}
+
+function fold(text) {
+  return text
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .toLowerCase();
+}
+
+// As Signal's list: a name matches when one of its words starts with what
+// was typed after the @.
+function matchesMention(member, query) {
+  if (!query) {
+    return true;
+  }
+  const q = fold(query);
+  const title = fold(member.author.title);
+  return title.startsWith(q) || title.split(/\s+/).some(w => w.startsWith(q));
+}
+
+// The "@query" right before the caret, if the caret is in one.
+function mentionTrigger() {
+  const box = $('compose');
+  const caret = box.selectionStart;
+  if (caret !== box.selectionEnd) {
+    return null;
+  }
+  const before = box.value.slice(0, caret);
+  const match = /(^|\s)@([^\s@]{0,40})$/u.exec(before);
+  if (!match) {
+    return null;
+  }
+  const start = caret - match[2].length - 1;
+  if (composeMentions.some(m => start >= m.start && start < m.end)) {
+    return null;
+  }
+  return { start, end: caret, query: match[2] };
+}
+
+async function updateMentionPicker() {
+  const c = conversations.get(selectedId);
+  const trigger = c?.type === 'group' ? mentionTrigger() : null;
+  if (!trigger) {
+    closeMentionPicker();
+    return;
+  }
+  const conversationId = selectedId;
+  const members = await loadMembers(conversationId);
+  const now = mentionTrigger();
+  if (selectedId !== conversationId || !now || now.query !== trigger.query) {
+    return;
+  }
+  mentionQuery = now;
+  mentionChoices = members
+    .filter(m => matchesMention(m, now.query))
+    .slice(0, 50);
+  mentionIndex = 0;
+  renderMentionPicker();
+}
+
+function renderMentionPicker() {
+  const picker = $('mention-picker');
+  if (mentionChoices.length === 0) {
+    closeMentionPicker();
+    return;
+  }
+  picker.replaceChildren(
+    ...mentionChoices.map((member, i) => {
+      const row = el(
+        'div',
+        `mention-row${i === mentionIndex ? ' active' : ''}`
+      );
+      row.setAttribute('role', 'option');
+      row.append(
+        avatar(member.conversationId, member.author, 28),
+        el('span', 'mention-name', member.author.title)
+      );
+      row.addEventListener('mousedown', e => {
+        // Keep the focus in the message box.
+        e.preventDefault();
+        pickMention(member);
+      });
+      return row;
+    })
+  );
+  picker.hidden = false;
+  const box = $('compose').getBoundingClientRect();
+  picker.style.left = `${box.left}px`;
+  picker.style.width = `${Math.min(box.width, 360)}px`;
+  picker.style.top = `${Math.max(8, box.top - picker.offsetHeight - 6)}px`;
+  picker.children[mentionIndex]?.scrollIntoView({ block: 'nearest' });
+}
+
+function closeMentionPicker() {
+  mentionQuery = null;
+  mentionChoices = [];
+  $('mention-picker').hidden = true;
+}
+
+function pickMention(member) {
+  const trigger = mentionQuery ?? mentionTrigger();
+  if (!trigger) {
+    return;
+  }
+  const box = $('compose');
+  const token = `@${member.author.title}`;
+  box.setRangeText(`${token} `, trigger.start, trigger.end, 'end');
+  trackComposeChange();
+  composeMentions = [
+    ...composeMentions,
+    {
+      start: trigger.start,
+      end: trigger.start + token.length,
+      conversationId: member.conversationId,
+    },
+  ].sort((a, b) => a.start - b.start);
+  closeMentionPicker();
+  autosize();
+  box.focus();
+}
+
+$('compose').addEventListener('input', () => {
+  trackComposeChange();
+  updateMentionPicker();
+});
+$('compose').addEventListener('blur', () => closeMentionPicker());
+$('compose').addEventListener(
+  'keydown',
+  e => {
+    const box = $('compose');
+    if (!$('mention-picker').hidden && mentionChoices.length > 0) {
+      const move = { ArrowDown: 1, ArrowUp: -1 }[e.key];
+      if (move) {
+        mentionIndex =
+          (mentionIndex + move + mentionChoices.length) % mentionChoices.length;
+        renderMentionPicker();
+      } else if ((e.key === 'Enter' && !e.shiftKey) || e.key === 'Tab') {
+        pickMention(mentionChoices[mentionIndex]);
+      } else if (e.key === 'Escape') {
+        closeMentionPicker();
+      } else {
+        return;
+      }
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      return;
+    }
+    // Backspace or Delete next to a mention removes all of it, as Signal does.
+    if (
+      (e.key === 'Backspace' || e.key === 'Delete') &&
+      box.selectionStart === box.selectionEnd
+    ) {
+      const caret = box.selectionStart;
+      const hit = composeMentions.find(m =>
+        e.key === 'Backspace'
+          ? caret > m.start && caret <= m.end
+          : caret >= m.start && caret < m.end
+      );
+      if (hit) {
+        e.preventDefault();
+        box.setRangeText('', hit.start, hit.end, 'end');
+        trackComposeChange();
+        autosize();
+      }
+    }
+  },
+  { capture: true }
+);
 
 // --- attachments to send ------------------------------------------------------
 

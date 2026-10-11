@@ -41,6 +41,7 @@ import {
   ErrorCode,
   THUMBNAIL_SIZE_PX,
 } from '../protocol.std.ts';
+import { toMentionRanges } from './ExternalClientMentions.preload.ts';
 import { getSendBlockReason } from './ExternalClientSend.preload.ts';
 import {
   getDtoContext,
@@ -419,6 +420,7 @@ export async function react({
 export async function editMessage({
   messageId,
   body,
+  mentions,
 }: MessagesEditParamsType): Promise<ServiceResultType> {
   const message = await loadMessage(messageId);
   if (!message) {
@@ -431,12 +433,17 @@ export async function editMessage({
   if (!getDtoContext().getActions(message).canEdit) {
     return { ok: false, code: ErrorCode.PreconditionFailed };
   }
+  const bodyRanges = toMentionRanges(model, body, mentions);
+  if (!bodyRanges) {
+    return { ok: false, code: ErrorCode.InvalidArgument };
+  }
   const reason = await getSendBlockReason(model, body);
   if (reason) {
     return { ok: false, code: ErrorCode.PreconditionFailed, reason };
   }
   await sendEditedMessage(model.id, {
     body,
+    bodyRanges,
     preview: [],
     quoteSentAt: message.quote?.id ?? undefined,
     quoteAuthorAci: message.quote?.authorAci,

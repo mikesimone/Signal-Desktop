@@ -364,3 +364,19 @@ WHY: Mike asked for polls and "the ability to forward a poll to multiple
 groups" (2026-10-10). Signal can't forward a poll (`canForward` excludes
 them) because votes belong to one message, so the closest thing is the
 same poll created in each chat. The page says each chat gets its own copy.
+
+## F7. Fork only: @mentions
+
+DECISION: `conversations.getMembers` (capability `conversations.read`) lists
+the members Signal's mention list offers: a group's members with an ACI,
+sorted by name, without us, each with the same author details messages
+carry, and no phone numbers or service ids. `messages.sendText` and
+`messages.edit` take `mentions: [{start, conversationId}]`; the body holds
+U+FFFC at each `start`, exactly as Signal's composer sends it. Signal maps
+each to the member's ACI itself and the call is refused if one is not at a
+placeholder or names someone who isn't a member.
+
+WHY: Mike tagged someone in a group from the page and nothing happened
+(2026-10-10). Mentions notify the person and render as mentions for
+everyone, which typed "@Name" text does not.
+

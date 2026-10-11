@@ -8,7 +8,8 @@ Signal Desktop keeps running, minimized to the tray, and stays the real
 client: it holds the keys, sends and receives. This helper is an approved
 companion app. It shows your chats with their photos, lets you read and send
 text messages, reply with a quote, react with your quick-reaction bar (click a reaction to see who sent
-it) and
+it) and @mention people in groups (type @ and pick from the
+members) and
 copy text, shows photos, videos, GIFs, voice notes, files and stickers
 (with a full-screen viewer, and a Download button for anything Signal has
 not fetched yet), marks chats read when you look at them, and while its page is
@@ -41,7 +42,8 @@ Photos, member labels, reactions and replies use fork-only bridge additions
 `attachments.getThumbnail`, `attachments.read`, `attachments.download`,
 `messages.edit`, `messages.delete`, `attachments.uploadBegin`,
 `attachments.uploadChunk`, `messages.forward`, `emoji.getCatalog`, `polls.vote`, `polls.end`,
-`polls.send`, `attachmentUploadIds` on
+`polls.send`, `conversations.getMembers`, mentions and
+`attachmentUploadIds` on
 `messages.sendText`, and pin order, formatting and link previews on the
 DTOs),
 not part of the upstream proposal. Against a Signal without them the helper

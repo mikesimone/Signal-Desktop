@@ -19,6 +19,7 @@ import { makeQuote } from '../../util/makeQuote.preload.ts';
 import { isDirectConversation } from '../../util/whatTypeOfConversation.dom.ts';
 import type { ServiceResultType } from '../hostTypes.std.ts';
 import { toMessageDTO } from '../messageDto.std.ts';
+import { toMentionRanges } from './ExternalClientMentions.preload.ts';
 import type {
   MessagesMarkReadParamsType,
   MessagesSendTextParamsType,
@@ -125,6 +126,7 @@ export async function sendText({
   body,
   quoteMessageId,
   attachmentUploadIds,
+  mentions,
 }: MessagesSendTextParamsType): Promise<ServiceResultType> {
   const model = getListedConversation(conversationId);
   if (!model) {
@@ -153,6 +155,12 @@ export async function sendText({
     return { ok: false, code: ErrorCode.InvalidArgument };
   }
 
+  // Fork addition: @mentions of group members.
+  const bodyRanges = toMentionRanges(model, body, mentions);
+  if (!bodyRanges) {
+    return { ok: false, code: ErrorCode.InvalidArgument };
+  }
+
   const reason = await getSendBlockReason(model, body);
   if (reason) {
     log.info(`sendText: refused (${reason})`);
@@ -171,6 +179,7 @@ export async function sendText({
     sent = await model.enqueueMessageForSend(
       {
         body,
+        ...(bodyRanges.length > 0 ? { bodyRanges } : {}),
         attachments: prepared?.attachments ?? [],
         quote: quoted ? await makeQuote(quoted) : undefined,
       },

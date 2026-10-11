@@ -128,6 +128,7 @@ export const Method = {
   PollsVote: 'polls.vote',
   PollsEnd: 'polls.end',
   PollsSend: 'polls.send',
+  ConversationsGetMembers: 'conversations.getMembers',
 } as const;
 export type MethodType = (typeof Method)[keyof typeof Method];
 
@@ -155,6 +156,7 @@ export const SERVICE_METHOD_CAPABILITIES = {
   [Method.PollsVote]: Capability.MessagesSend,
   [Method.PollsEnd]: Capability.MessagesSend,
   [Method.PollsSend]: Capability.MessagesSend,
+  [Method.ConversationsGetMembers]: Capability.ConversationsRead,
 } as const satisfies Partial<Record<MethodType, CapabilityType>>;
 export type ServiceMethodType = keyof typeof SERVICE_METHOD_CAPABILITIES;
 
@@ -392,10 +394,29 @@ const MAX_SEND_BODY_LENGTH = 64 * 1024;
 // As many as Signal's composer takes.
 export const MAX_SEND_ATTACHMENTS = 32;
 
+// Fork addition: an @mention, as Signal's composer sends one. The body
+// holds U+FFFC (the object replacement character) at `start`; Signal
+// replaces it with the member's name for everyone, and notifies them.
+export const MENTION_PLACEHOLDER = '\uFFFC';
+export const MAX_MENTIONS = 100;
+const mentionsSchema = z
+  .array(
+    z
+      .object({
+        start: z.number().int().min(0).max(MAX_SEND_BODY_LENGTH),
+        conversationId: conversationIdSchema,
+      })
+      .strict()
+  )
+  .max(MAX_MENTIONS);
+export type SendMentionType = z.infer<typeof mentionsSchema>[number];
+
 export const messagesSendTextParamsSchema = z
   .object({
     conversationId: conversationIdSchema,
     body: z.string().max(MAX_SEND_BODY_LENGTH),
+    // Fork addition: mentions of group members.
+    mentions: mentionsSchema.optional(),
     // Reply to this message (it must be in the same conversation), quoting
     // it as Signal's own reply does.
     quoteMessageId: messageIdSchema.optional(),
@@ -441,6 +462,27 @@ export const conversationsGetAvatarParamsSchema = z
 export type ConversationsGetAvatarParamsType = z.infer<
   typeof conversationsGetAvatarParamsSchema
 >;
+
+// Fork addition: the members a group's @mention list offers, as Signal's
+// composer lists them (sorted by name, without us). No phone numbers or
+// service ids; photos come from conversations.getAvatar.
+export const conversationsGetMembersParamsSchema = z
+  .object({
+    conversationId: conversationIdSchema,
+  })
+  .strict();
+export type ConversationsGetMembersParamsType = z.infer<
+  typeof conversationsGetMembersParamsSchema
+>;
+
+export type GroupMemberDTO = Readonly<{
+  conversationId: string;
+  author: AuthorDTO;
+}>;
+
+export type ConversationsGetMembersResultType = Readonly<{
+  members: ReadonlyArray<GroupMemberDTO>;
+}>;
 
 // Avatars are decoded inside Signal and re-encoded at this size, so no
 // file, path or key crosses the bridge, and frames stay small.
@@ -566,6 +608,7 @@ export const messagesEditParamsSchema = z
   .object({
     messageId: messageIdSchema,
     body: z.string().min(1).max(MAX_SEND_BODY_LENGTH),
+    mentions: mentionsSchema.optional(),
   })
   .strict();
 export type MessagesEditParamsType = z.infer<typeof messagesEditParamsSchema>;
@@ -731,6 +774,7 @@ export const SERVICE_PARAM_SCHEMAS = {
   [Method.MessagesSendText]: messagesSendTextParamsSchema,
   [Method.MessagesMarkRead]: messagesMarkReadParamsSchema,
   [Method.ConversationsGetAvatar]: conversationsGetAvatarParamsSchema,
+  [Method.ConversationsGetMembers]: conversationsGetMembersParamsSchema,
   [Method.MessagesReact]: messagesReactParamsSchema,
   [Method.ReactionsGetPreferred]: reactionsGetPreferredParamsSchema,
   [Method.AttachmentsGetThumbnail]: attachmentsGetThumbnailParamsSchema,
