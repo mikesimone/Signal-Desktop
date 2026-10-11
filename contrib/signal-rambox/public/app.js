@@ -2171,9 +2171,8 @@ async function updateMentionPicker() {
     return;
   }
   mentionQuery = now;
-  mentionChoices = members
-    .filter(m => matchesMention(m, now.query))
-    .slice(0, 50);
+  // Everyone who matches, as Signal lists them; the list scrolls.
+  mentionChoices = members.filter(m => matchesMention(m, now.query));
   mentionIndex = 0;
   renderMentionPicker();
 }
