@@ -899,3 +899,8 @@ included, into Signal's styles.
 WHY: Mike asked (2026-10-14 15:16 PT) for formatting that survives a paste
 into an SMS, as yaytext.com does, and for markdown shortcuts. He chose
 real formatting over sending Unicode letters (2026-10-14 15:47 PT).
+
+Update (Mike, 2026-10-15 09:24 PT): marks already in pasted text apply as
+it lands, and any pair still in the text applies when it is sent or
+scheduled, with the same rules. Text inside a link, or already monospace, is
+left as it is.

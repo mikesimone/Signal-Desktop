@@ -1,5 +1,7 @@
 # Backchannel
 
+_Signal for people who actually have friends._
+
 > **Setting it up? Use [github.com/mikesimone/backchannel](https://github.com/mikesimone/backchannel).**
 > It builds a tested release of this folder, and it's where issues go.
 > This folder is the source, for building from the fork's main branch.
@@ -51,7 +53,8 @@ Backchannel does. Each new one is added here when it ships.
   where that person is in the group, and plain "@Name" text elsewhere.
 - **Markdown shortcuts and SMS-ready copies.** Type \*bold\*,
   \_italic\_, \_\*bold italic\*\_, \~strikethrough\~ or \`monospace\` and the
-  style applies as you type (Backspace right after undoes it). Copying
+  style applies as you type (Backspace right after undoes it), or as you
+  paste text that has them. Copying
   styled text puts Unicode bold, italic and strikethrough letters on the
   clipboard, so the styles survive a paste into an SMS or anywhere else,
   and pasting such text into Backchannel turns it back into Signal's styles.

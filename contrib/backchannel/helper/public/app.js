@@ -6088,14 +6088,26 @@ function insertPlain(text) {
   const length = readCompose().length;
   const start = at?.start ?? length;
   const end = at?.end ?? length;
-  // Unicode-styled text comes in as Signal's styles (decision F33).
-  spliceCompose(start, end, charsFromUnicode(text));
+  // Unicode-styled text comes in as Signal's styles (decision F33), and
+  // markdown marks in it apply at once.
+  const inserted = charsFromUnicode(text);
+  if (inserted.length > 1) {
+    const chars = readCompose();
+    chars.splice(start, end - start, ...inserted);
+    const done = markdownPass(chars, start, start + inserted.length);
+    drawCompose(done);
+    composeBox().focus();
+    selectOffsets(start + inserted.length - (chars.length - done.length));
+  } else {
+    spliceCompose(start, end, inserted);
+  }
   onComposeInput();
 }
 
 // The body as Signal wants it: U+FFFC for each mention, and style ranges.
 function composeForSend() {
-  const chars = readCompose();
+  // Marks still in the text apply now (decision F33).
+  const chars = markdownPass(readCompose());
   // Ranges count UTF-16 units, as Signal's do.
   let body = '';
   const mentions = [];
@@ -6986,6 +6998,72 @@ function applyMarkdown() {
   markdownUndo = { chars, caret, restore: at.start };
   markdownCaret = caret;
   return true;
+}
+
+// Marks already in text (pasted, or left at send): the same rules, over
+// from..to. Pairs are applied innermost-out, so _*x*_ and *_x_* both work.
+// Text inside a link or already monospace is left as it is.
+function markdownPass(chars, from = 0, to = chars.length) {
+  const out = [...chars];
+  let end = to;
+  const isMark = c => c && !c.mention && MARKDOWN_STYLE[c.ch];
+  const inLink = i => {
+    let a = i;
+    while (a > 0 && !/\s/.test(out[a - 1].ch)) {
+      a -= 1;
+    }
+    let b = i;
+    while (b < out.length && !/\s/.test(out[b].ch)) {
+      b += 1;
+    }
+    return /https?:\/\/|www\./i.test(
+      out
+        .slice(a, b)
+        .map(c => c.ch)
+        .join('')
+    );
+  };
+  let i = from;
+  while (i < end) {
+    const mark = out[i];
+    const before = out[i - 1];
+    if (
+      !isMark(mark) ||
+      mark.styles.has('monospace') ||
+      (before && !before.mention && WORD_CHAR.test(before.ch))
+    ) {
+      i += 1;
+      continue;
+    }
+    let close = i + 1;
+    while (close < end && out[close].ch !== '\n' && out[close].ch !== mark.ch) {
+      close += 1;
+    }
+    const after = out[close + 1];
+    const inner = out.slice(i + 1, close);
+    if (
+      close >= end ||
+      out[close].ch !== mark.ch ||
+      out[close].mention ||
+      inner.length === 0 ||
+      /\s/.test(inner[0].ch) ||
+      /\s/.test(inner.at(-1).ch) ||
+      (after && !after.mention && WORD_CHAR.test(after.ch)) ||
+      inLink(i)
+    ) {
+      i += 1;
+      continue;
+    }
+    const style = MARKDOWN_STYLE[mark.ch];
+    out.splice(
+      i,
+      close - i + 1,
+      ...inner.map(c => ({ ...c, styles: new Set([...c.styles, style]) }))
+    );
+    end -= 2;
+    // Look again from here: the text inside may hold another pair.
+  }
+  return out;
 }
 
 function undoMarkdown() {
