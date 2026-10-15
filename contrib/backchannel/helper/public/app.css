@@ -477,6 +477,20 @@ button {
   line-height: 56px;
 }
 
+/* Signal's emoji fonts are CBDT bitmaps, which some browsers
+   (Firefox and Safari on macOS) can't draw. There app.js sets
+   .system-emoji and the page uses the system's emoji font instead. */
+:root.system-emoji {
+  --font:
+    'Inter', 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji',
+    system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+:root.system-emoji .emoji,
+:root.system-emoji .pill-emoji,
+:root.system-emoji .bubble.jumbo .body {
+  font-family: var(--font);
+}
+
 .bubble.jumbo .meta {
   color: var(--muted);
 }

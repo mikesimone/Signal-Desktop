@@ -8457,5 +8457,33 @@ setInterval(() => {
   }
 }, 60_000);
 
+// Signal's emoji fonts are CBDT bitmaps, which some browsers
+// (Firefox and Safari on macOS) can't draw; they show empty boxes. Draw an
+// emoji with Signal's font and, if nothing in color comes out, switch the
+// page to the system's emoji font (see .system-emoji in app.css).
+async function checkEmojiFont() {
+  try {
+    await document.fonts.load('32px "Signal Emoji Small"', '😀');
+    const canvas = document.createElement('canvas');
+    canvas.width = 48;
+    canvas.height = 48;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    ctx.font = '32px "Signal Emoji Small"';
+    ctx.textBaseline = 'top';
+    ctx.fillText('😀', 4, 4);
+    const { data } = ctx.getImageData(0, 0, 48, 48);
+    for (let i = 0; i < data.length; i += 4) {
+      const [r, g, b, a] = [data[i], data[i + 1], data[i + 2], data[i + 3]];
+      if (a > 0 && Math.max(r, g, b) - Math.min(r, g, b) > 40) {
+        return;
+      }
+    }
+  } catch {
+    // Can't tell; the system font is the safe choice.
+  }
+  document.documentElement.classList.add('system-emoji');
+}
+
+checkEmojiFont();
 renderBanner();
 connectEvents();
