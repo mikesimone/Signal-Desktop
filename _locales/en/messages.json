@@ -111,10 +111,6 @@
     "messageformat": "Your primary device manages what’s linked, you can link up to 5 devices.",
     "description": "Second bullet point of the Linked Devices Onboarding Dialog"
   },
-  "icu:LinkedDevicesOnboardingDialog__bullet--3": {
-    "messageformat": "Account settings are managed on your primary device only, including account settings and backups.",
-    "description": "(Deleted 2026/09/10) Third bullet point of the Linked Devices Onboarding Dialog"
-  },
   "icu:LinkedDevicesOnboardingDialog__bullet--3--1": {
     "messageformat": "Account settings and backups can only be managed on your primary device.",
     "description": "(Deleted 2026/09/23) Third bullet point of the Linked Devices Onboarding Dialog"
@@ -1236,27 +1232,27 @@
   },
   "icu:home": {
     "messageformat": "home",
-    "description": "Shown on contact detail screen as a label for an address/phone/email"
+    "description": "(Deleted 2026/10/15) Shown on contact detail screen as a label for an address/phone/email"
   },
   "icu:work": {
     "messageformat": "work",
-    "description": "Shown on contact detail screen as a label for an address/phone/email"
+    "description": "(Deleted 2026/10/15) Shown on contact detail screen as a label for an address/phone/email"
   },
   "icu:mobile": {
     "messageformat": "mobile",
-    "description": "Shown on contact detail screen as a label for a phone or email"
+    "description": "(Deleted 2026/10/15) Shown on contact detail screen as a label for a phone or email"
   },
   "icu:email": {
     "messageformat": "email",
-    "description": "Generic label shown if contact email has custom type but no label"
+    "description": "(Deleted 2026/10/15) Generic label shown if contact email has custom type but no label"
   },
   "icu:phone": {
     "messageformat": "phone",
-    "description": "Generic label shown if contact phone has custom type but no label"
+    "description": "(Deleted 2026/10/15) Generic label shown if contact phone has custom type but no label"
   },
   "icu:address": {
     "messageformat": "address",
-    "description": "Generic label shown if contact address has custom type but no label"
+    "description": "(Deleted 2026/10/15) Generic label shown if contact address has custom type but no label"
   },
   "icu:poBox": {
     "messageformat": "PO Box",
@@ -1970,6 +1966,10 @@
     "messageformat": "Learn More",
     "description": "Shown on a button below a 'conversations were merged' timeline notification"
   },
+  "icu:ConversationMerge--explainer-dialog--label": {
+    "messageformat": "Message history merged",
+    "description": "Accessibility label for dialog shown after clicking 'learn more' button on a conversation merge event."
+  },
   "icu:ConversationMerge--explainer-dialog--line-1": {
     "messageformat": "After messaging with {obsoleteConversationTitle} you learned this number belongs to {conversationTitle}. Their phone number is private.",
     "description": "Contents of a dialog shown after clicking 'learn more' button on a conversation merge event."
@@ -1988,7 +1988,7 @@
   },
   "icu:TitleTransition--notification": {
     "messageformat": "You started this chat with {oldTitle}",
-    "description": "Shown when we've received profile information for a contact we have been messaging by username/phone number"
+    "description": "Shown when we've received profile information for a contact we have been messaging by username/phone number/name from a shared contact"
   },
   "icu:imageAttachmentAlt": {
     "messageformat": "Image attached to message",
@@ -8304,10 +8304,6 @@
     "messageformat": "Store this in a safe place, your login info is required to recover your account and data. Never share it with anyone.",
     "description": "Description displayed in PDF version of Signal Account Keys preferences page"
   },
-  "icu:Preferences__SignalAccountKeys__AccountKey": {
-    "messageformat": "Account key",
-    "description": "(Deleted 2026/09/10) Label for the Account Key in Signal Account Keys preferences page"
-  },
   "icu:Preferences__SignalAccountKeys__AccountID": {
     "messageformat": "Account ID",
     "description": "Label for the Account ID in Signal Account Keys preferences page"
@@ -11490,14 +11486,6 @@
     "messageformat": "Deny entry",
     "description": "Call Link Pending Participant Modal > Deny Join Request Button Label"
   },
-  "icu:CallLinkRestrictionsSelect__Option--Off": {
-    "messageformat": "Off",
-    "description": "(Deleted 2026/09/10) Call Link Edit Modal > Require admin approval checkbox > Option > Off"
-  },
-  "icu:CallLinkRestrictionsSelect__Option--On": {
-    "messageformat": "On",
-    "description": "(Deleted 2026/09/10) Call Link Edit Modal > Require admin approval checkbox > Option > On"
-  },
   "icu:CallLinkAddNameModal__Title": {
     "messageformat": "Add call name",
     "description": "Call Link Add Name Modal > Title"
@@ -11561,6 +11549,50 @@
   "icu:SaveMultiDialog__title": {
     "messageformat": "Save attachments",
     "description": "Title of the dialog to save multiple attachments"
+  },
+  "icu:EmbeddedContact__message": {
+    "messageformat": "Message",
+    "description": "Button in a shared contact message in the timeline. Starts a conversation with the shared contact."
+  },
+  "icu:ContactDetail__message": {
+    "messageformat": "Message",
+    "description": "In the shared contact details view, label for the button that starts a conversation with the contact."
+  },
+  "icu:ContactDetail__add-to-group": {
+    "messageformat": "Add to a group",
+    "description": "In the shared contact details view, label for the row that opens a dialog to add the contact to a group."
+  },
+  "icu:ContactDetail__nickname": {
+    "messageformat": "Nickname",
+    "description": "In the shared contact details view, label for the nickname the sender gave to the shared contact."
+  },
+  "icu:ContactDetail__note": {
+    "messageformat": "Notes",
+    "description": "In the shared contact details view, label for the note the sender wrote about the shared contact."
+  },
+  "icu:email-v2": {
+    "messageformat": "Email",
+    "description": "In the shared contact details view, generic label for an email address with a custom type but no label"
+  },
+  "icu:home-v2": {
+    "messageformat": "Home",
+    "description": "In the shared contact details view, label for a home address, phone number, or email"
+  },
+  "icu:mobile-v2": {
+    "messageformat": "Mobile",
+    "description": "In the shared contact details view, label for a mobile phone number or email"
+  },
+  "icu:work-v2": {
+    "messageformat": "Work",
+    "description": "In the shared contact details view, label for a work address, phone number, or email"
+  },
+  "icu:phone-v2": {
+    "messageformat": "Phone",
+    "description": "In the shared contact details view, generic label for a phone number with a custom type but no label"
+  },
+  "icu:address-v2": {
+    "messageformat": "Address",
+    "description": "In the shared contact details view, generic label for a postal address with a custom type but no label"
   },
   "icu:WhatsNew__modal-title": {
     "messageformat": "What's New",
@@ -12200,5 +12232,17 @@
   "icu:WhatsNew__8.30--1": {
     "messageformat": "We also added a convenient shortcut to open your system settings on Windows if you try to join a video call and Signal doesn't have permission to access the camera. Now it's easier to see what you need to do so that people can see you.",
     "description": "(Deleted 2026/10/07)  Release notes for 8.30"
+  },
+  "icu:WhatsNew__8.32--0": {
+    "messageformat": "The unread filter is now also supported in message folders and the search interface, so you can easily see what you've been missing.",
+    "description": "Release notes for 8.32"
+  },
+  "icu:WhatsNew__8.32--1": {
+    "messageformat": "Improved upload reliability under poor network conditions. Thanks, <GH3mmmbulus></GH3mmmbulus>!",
+    "description": "Release notes for 8.32"
+  },
+  "icu:WhatsNew__8.32--2": {
+    "messageformat": "The \"(N)\" shortcut correctly points to the thumbs down emoji. Thumbs up to <lnicola></lnicola> for the bugfix.",
+    "description": "Release notes for 8.32"
   }
 }

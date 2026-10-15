@@ -109,7 +109,9 @@ describe('pnp/send gv2 invite', function (this: Mocha.Suite) {
     debug('inviting ACI member');
 
     await leftPane
-      .locator('.module-left-pane__compose-search-form__input')
+      .locator(
+        '.module-left-pane__compose-search-form .module-SearchInput__input'
+      )
       .fill('ACI');
 
     await leftPane.locator('.ListTile >> "ACI Contact"').click();
@@ -117,7 +119,9 @@ describe('pnp/send gv2 invite', function (this: Mocha.Suite) {
     debug('inviting PNI member');
 
     await leftPane
-      .locator('.module-left-pane__compose-search-form__input')
+      .locator(
+        '.module-left-pane__compose-search-form .module-SearchInput__input'
+      )
       .fill('PNI');
 
     await leftPane.locator('.ListTile >> "PNI Contact"').click();
@@ -148,7 +152,10 @@ describe('pnp/send gv2 invite', function (this: Mocha.Suite) {
 
     let group: Group;
     {
-      state = await phone.waitForStorageState({ after: state });
+      state = await phone.waitForStorageState({
+        after: state,
+        predicate: storageState => storageState.getAllGroupRecords().length > 0,
+      });
       const groups = await phone.getAllGroups(state);
       assert.strictEqual(groups.length, 1);
 

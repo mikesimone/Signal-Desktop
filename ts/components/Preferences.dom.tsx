@@ -14,7 +14,7 @@ import {
 import lodash from 'lodash';
 import classNames from 'classnames';
 import * as LocaleMatcher from '@formatjs/intl-localematcher';
-import type { MutableRefObject, ReactNode, JSX } from 'react';
+import type { MutableRefObject, ReactNode, JSX, CSSProperties } from 'react';
 import type { RowType } from '@signalapp/sqlcipher';
 import type { BackupLevel } from '@signalapp/libsignal-client/zkgroup.js';
 import { ChatColorPicker } from './ChatColorPicker.dom.tsx';
@@ -26,7 +26,7 @@ import {
   KEY_TRANSPARENCY_URL,
   RESTORE_ACCOUNT_URL,
 } from '../types/support.std.ts';
-import { getCustomColorStyle } from '../util/getCustomColorStyle.dom.ts';
+import { getCustomColorStyle } from '../util/getCustomColorStyle.std.ts';
 import {
   DEFAULT_DURATIONS_IN_SECONDS,
   DEFAULT_DURATIONS_SET,
@@ -119,6 +119,7 @@ import { AxoClickableItem } from '../axo/items/AxoClickableItem.dom.tsx';
 import { AxoTextItem } from '../axo/items/AxoTextItem.dom.tsx';
 import { AxoPanel } from '../axo/AxoPanel.dom.tsx';
 import { PinLearnMoreLink } from './standaloneRegistration/util/StepComponents.dom.tsx';
+import { AxoTokens } from '../axo/AxoTokens.std.ts';
 
 const { isNumber, noop, partition } = lodash;
 
@@ -1287,7 +1288,7 @@ export function Preferences({
             <Modal
               i18n={i18n}
               modalName="Preferences__LanguageModal"
-              moduleClassName="Preferences__LanguageModal"
+              className="Preferences__LanguageModal"
               padded={false}
               onClose={closeLanguageDialog}
               title={i18n('icu:Preferences__Language__ModalTitle')}
@@ -1298,7 +1299,6 @@ export function Preferences({
                   placeholder={i18n(
                     'icu:Preferences__Language__SearchLanguages'
                   )}
-                  moduleClassName="Preferences__LanguageModal__SearchInput"
                   onChange={event => {
                     setLanguageSearchInput(event.currentTarget.value);
                   }}
@@ -1422,8 +1422,14 @@ export function Preferences({
             }}
             accessory={
               <div
-                className={`ConversationDetails__chat-color ConversationDetails__chat-color--${defaultConversationColor.color}`}
+                className="ConversationDetails__chat-color"
                 style={{
+                  ...({
+                    '--ConversationDetails__chat-color-bg':
+                      AxoTokens.ChatBubble.anyColorNameToCssBackground(
+                        defaultConversationColor.color
+                      ),
+                  } as CSSProperties),
                   ...getCustomColorStyle(
                     defaultConversationColor.customColorData?.value
                   ),
@@ -2465,10 +2471,7 @@ export function Preferences({
       <>
         <SettingsRow
           title={i18n('icu:Preferences__pnp__sharing--title')}
-          className={classNames('Preferences__settings-row--pnp-sharing', {
-            'Preferences__settings-row--pnp-sharing--nobody':
-              whoCanSeeMe === PhoneNumberSharingMode.Nobody,
-          })}
+          className="Preferences__settings-row--pnp-sharing"
         >
           <SettingsRadio
             onChange={onWhoCanSeeMeChange}
@@ -2898,7 +2901,6 @@ export function Preferences({
                   <Avatar
                     avatarUrl={me.avatarUrl}
                     badge={badge}
-                    className="module-main-header__avatar"
                     color={me.color}
                     conversationType="direct"
                     i18n={i18n}

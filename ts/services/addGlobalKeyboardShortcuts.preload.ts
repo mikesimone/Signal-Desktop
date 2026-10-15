@@ -225,6 +225,7 @@ function onEscape(event: KeyboardEvent): void {
     (target.attributes as any).class &&
     (target.attributes as any).class.value
   ) {
+    // oxlint-disable-next-line signal-desktop/enforce-static-class-names
     const className = (target.attributes as any).class.value;
     /* oxlint-enable @typescript-eslint/no-explicit-any */
 
@@ -247,7 +248,7 @@ function onEscape(event: KeyboardEvent): void {
     return;
   }
 
-  const lightBox = document.querySelector('.Lightbox');
+  const lightBox = document.querySelector('#lightbox');
   if (lightBox) {
     return;
   }
@@ -315,8 +316,7 @@ function onFocusOldestUnreadOrLastMessage(event: KeyboardEvent) {
   const item: HTMLElement | null =
     document.querySelector(
       '.module-last-seen-indicator ~ div .module-message'
-    ) ||
-    document.querySelector('.module-timeline__last-message .module-message');
+    ) || document.querySelector('[data-message-is-last] .module-message');
   item?.focus();
 }
 

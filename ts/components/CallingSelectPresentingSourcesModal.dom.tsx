@@ -48,11 +48,7 @@ function Source({
       }}
       type="button"
     >
-      <img
-        alt={source.name}
-        className="module-CallingSelectPresentingSourcesModal__name--screenshot"
-        src={source.thumbnail}
-      />
+      <img alt={source.name} src={source.thumbnail} />
       <div className="module-CallingSelectPresentingSourcesModal__name--container">
         {source.appIcon ? (
           <img
@@ -112,7 +108,7 @@ export function CallingSelectPresentingSourcesModal({
       modalName="CallingSelectPresentingSourcesModal"
       hasXButton
       i18n={i18n}
-      moduleClassName="module-CallingSelectPresentingSourcesModal"
+      className="module-CallingSelectPresentingSourcesModal"
       onClose={cancelPresenting}
       theme={Theme.Dark}
       title={i18n('icu:calling__SelectPresentingSourcesModal--title')}

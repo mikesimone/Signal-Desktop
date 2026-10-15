@@ -737,7 +737,7 @@ export function SmartPreferences(): JSX.Element | null {
     const value =
       (items[key] as StorageAccessType[K] | undefined) ?? defaultValue;
     const setter = (newValue: StorageAccessType[K]) => {
-      putItem(key, newValue);
+      void putItem(key, newValue);
       callback?.(newValue);
     };
 
@@ -868,7 +868,7 @@ export function SmartPreferences(): JSX.Element | null {
   );
   const hasNotifications = notificationContent !== 'off';
   const onNotificationsChange = (value: boolean) => {
-    putItem(
+    void putItem(
       'notification-setting',
       value ? STORAGE_KEY_DEFAULTS['notification-setting'] : 'off'
     );
@@ -880,14 +880,14 @@ export function SmartPreferences(): JSX.Element | null {
     value: boolean
   ) => {
     const itemKey = NOTIFY_WHILE_MUTED_FIELDS[key];
-    putItem(itemKey, value);
+    void putItem(itemKey, value);
     const account = window.ConversationController.getOurConversationOrThrow();
     account.captureChange(itemKey);
   };
 
   const hasUnreadReminders = useSelector(getGlobalShowUnreadReminders);
   const onUnreadRemindersChange = (value: boolean) => {
-    putItem('showUnreadReminders', value);
+    void putItem('showUnreadReminders', value);
     const account = window.ConversationController.getOurConversationOrThrow();
     account.captureChange('showUnreadReminders');
   };
@@ -1015,6 +1015,7 @@ export function SmartPreferences(): JSX.Element | null {
       // information.
       await writeProfile(getConversation(account), {
         keepAvatar: true,
+        reupload: false,
       });
     }
   );
@@ -1091,7 +1092,7 @@ export function SmartPreferences(): JSX.Element | null {
   const settingsLocation = currentLocation.details;
 
   const setSettingsLocation = (location: SettingsLocation) => {
-    changeLocation({
+    void changeLocation({
       tab: NavTab.Settings,
       details: location,
     });
