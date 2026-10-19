@@ -22,6 +22,10 @@ import {
   chatFoldersListParamsSchema,
   safetyNumbersChangedParamsSchema,
   safetyNumbersAcceptParamsSchema,
+  contactsSyncParamsSchema,
+  Capability,
+  Method,
+  SERVICE_METHOD_CAPABILITIES,
   messagesSearchParamsSchema,
   messagesSendTextParamsSchema,
   negotiateVersion,
@@ -446,6 +450,30 @@ describe('externalClient/protocol', () => {
         accepts(safetyNumbersAcceptParamsSchema, {
           conversationId,
           contactIds: ['x'.repeat(65)],
+        })
+      );
+    });
+
+    it('imports contacts, and picks which photo a chat shows', () => {
+      assert.isTrue(accepts(contactsSyncParamsSchema, {}));
+      assert.isFalse(accepts(contactsSyncParamsSchema, { force: true }));
+      assert.strictEqual(
+        SERVICE_METHOD_CAPABILITIES[Method.ContactsSync],
+        Capability.SettingsManage
+      );
+      const conversationId = '0b9e2c1a-1111-4222-8333-944455556666';
+      for (const value of ['auto', 'contact', 'profile']) {
+        assert.isTrue(
+          accepts(conversationsUpdateParamsSchema, {
+            conversationId,
+            change: { action: 'photoSource', value },
+          })
+        );
+      }
+      assert.isFalse(
+        accepts(conversationsUpdateParamsSchema, {
+          conversationId,
+          change: { action: 'photoSource', value: 'gravatar' },
         })
       );
     });

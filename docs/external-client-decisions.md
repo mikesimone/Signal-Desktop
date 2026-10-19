@@ -942,3 +942,24 @@ refused send now says why in plain words instead of "PRECONDITION_FAILED".
 
 WHY: Mike hit "Not sent (PRECONDITION_FAILED)" on a send to a chat where a
 contact had reinstalled Signal (2026-10-19).
+
+## F36. Fork only: importing contacts from the phone, and each chat's photo
+
+DECISION: `contacts.sync` (settings.manage, so no new Allow) is Signal's
+Settings > Chats > "Import contacts": it asks the phone to send its contacts
+again and waits until contact sync has applied them, photos from the
+phone's address book included. The page offers it in Settings and as
+"Import photos from phone" in a chat's details.
+
+`conversations.update` takes `photoSource` (auto, contact or profile): a
+fork-only conversation attribute that Signal's own getAvatar honors before
+the account-wide preferContactAvatars, so Signal Desktop and the page show
+the same photo. It stays on this computer and does not sync to the phone.
+Chat details report which photos Signal has for the person and which one
+shows, so a chat with no photo says why.
+
+WHY: Dan Mathews showed no photo although he is in Mike's phone contacts
+with one (2026-10-19). Six had neither his profile photo nor the contact
+photo: linked Signal imports contacts once, at linking (2026-10-10), and
+the photo arrived on the phone later.
+

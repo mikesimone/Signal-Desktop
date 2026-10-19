@@ -524,6 +524,10 @@ export type ConversationAttributesType = {
   announcementsOnly?: boolean;
   terminated?: boolean;
   avatar?: ContactAvatarType | null;
+  // Fork addition (decision F36): which photo this chat shows, the one from
+  // the phone's contacts or the Signal profile photo. Unset follows the
+  // account-wide preferContactAvatars, as upstream.
+  photoSource?: 'contact' | 'profile';
   avatars?: ReadonlyArray<Readonly<AvatarDataType>>;
   description?: string;
   expireTimer?: DurationInSeconds;

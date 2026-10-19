@@ -177,6 +177,7 @@ export const Method = {
   ChatFoldersList: 'chatFolders.list',
   SafetyNumbersChanged: 'safetyNumbers.changed',
   SafetyNumbersAccept: 'safetyNumbers.accept',
+  ContactsSync: 'contacts.sync',
 } as const;
 export type MethodType = (typeof Method)[keyof typeof Method];
 
@@ -231,6 +232,7 @@ export const SERVICE_METHOD_CAPABILITIES = {
   // Who stops a send with UNTRUSTED_IDENTITY (decision F35).
   [Method.SafetyNumbersChanged]: Capability.ConversationsRead,
   [Method.SafetyNumbersAccept]: Capability.IdentityManage,
+  [Method.ContactsSync]: Capability.SettingsManage,
 } as const satisfies Partial<Record<MethodType, CapabilityType>>;
 export type ServiceMethodType = keyof typeof SERVICE_METHOD_CAPABILITIES;
 
@@ -1001,6 +1003,11 @@ export const SKIN_TONES = [
 
 export const settingsGetParamsSchema = z.object({}).strict();
 
+// Fork addition (decision F36): Signal's Settings > Chats > "Import
+// contacts": asks the phone to send its contacts again, with their photos.
+export const contactsSyncParamsSchema = z.object({}).strict();
+export type ContactsSyncResultType = Readonly<{ syncedAt: number }>;
+
 const autoDownloadSchema = z
   .object({
     photos: z.boolean(),
@@ -1173,6 +1180,12 @@ const conversationChangeSchema = z.discriminatedUnion('action', [
   // Unblocking and accepting a message request are the same in Signal.
   z.object({ action: z.literal('accept') }),
   z.object({ action: z.literal('delete') }),
+  // Fork addition (decision F36): which photo a direct chat shows. 'auto'
+  // follows the phone's setting, as Signal does.
+  z.object({
+    action: z.literal('photoSource'),
+    value: z.enum(['auto', 'contact', 'profile']),
+  }),
 ]);
 
 export const conversationsUpdateParamsSchema = z
@@ -1244,6 +1257,19 @@ export type ConversationDetailsDTO = Readonly<{
   canAnnounce: boolean;
   // Signal keeps the last admin from leaving while others remain.
   canLeave: boolean;
+  // Fork addition (decision F36): direct chats with someone else only.
+  photo: PhotoSourcesDTO | null;
+}>;
+
+export type PhotoSourcesDTO = Readonly<{
+  // Whether Signal has each photo: the one from the phone's contacts
+  // (contact sync) and the person's Signal profile photo.
+  contact: boolean;
+  profile: boolean;
+  shown: 'contact' | 'profile' | null;
+  choice: 'auto' | 'contact' | 'profile';
+  // The phone's account-wide setting, which 'auto' follows.
+  preferContactPhotos: boolean;
 }>;
 
 export type GroupInviteDTO = Readonly<{
@@ -1599,6 +1625,7 @@ export const SERVICE_PARAM_SCHEMAS = {
   [Method.ChatFoldersList]: chatFoldersListParamsSchema,
   [Method.SafetyNumbersChanged]: safetyNumbersChangedParamsSchema,
   [Method.SafetyNumbersAccept]: safetyNumbersAcceptParamsSchema,
+  [Method.ContactsSync]: contactsSyncParamsSchema,
 } as const satisfies Record<ServiceMethodType, z.ZodType>;
 
 export type ConversationsListParamsType = z.infer<

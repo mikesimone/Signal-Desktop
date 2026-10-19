@@ -4,9 +4,11 @@
 import { DurationMs, MuteExpiration } from '@signalapp/types';
 
 import { createLogger } from '../../logging/log.std.ts';
+import { DataWriter } from '../../sql/Client.preload.ts';
 import { itemStorage } from '../../textsecure/Storage.preload.ts';
 import * as Errors from '../../types/errors.std.ts';
 import { getPinnedConversationLimit } from '../../util/Conversation.preload.ts';
+import { drop } from '../../util/drop.std.ts';
 import { DurationInSeconds } from '../../util/durations/duration-in-seconds.std.ts';
 import type { ServiceResultType } from '../hostTypes.std.ts';
 import type { ConversationsUpdateParamsType } from '../protocol.std.ts';
@@ -83,6 +85,14 @@ export function updateConversation({
         break;
       case 'delete':
         actions.destroyMessages(conversationId);
+        break;
+      // Fork addition (decision F36): stored with the chat on this computer
+      // only; nothing syncs to the phone.
+      case 'photoSource':
+        model.set({
+          photoSource: change.value === 'auto' ? undefined : change.value,
+        });
+        drop(DataWriter.updateConversation(model.attributes));
         break;
       default:
         return { ok: false, code: ErrorCode.InvalidArgument };

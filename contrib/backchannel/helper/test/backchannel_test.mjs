@@ -572,6 +572,32 @@ describe('backchannel helper', () => {
     assert.deepEqual(call.params, { conversationId, contactIds: ['c-1'] });
   });
 
+  it('imports contacts and sets which photo a chat shows', async () => {
+    const before = bridge.contactSyncs ?? 0;
+    const sync = await http(port, {
+      method: 'POST',
+      path: `/${helper.token}/api/contacts/sync`,
+      headers: json,
+      body: {},
+    });
+    assert.equal(sync.status, 200);
+    assert.equal(typeof JSON.parse(sync.text).syncedAt, 'number');
+    assert.equal(bridge.contactSyncs, before + 1);
+    const conversationId = bridge.conversations[0].id;
+    const change = { action: 'photoSource', value: 'contact' };
+    const res = await http(port, {
+      method: 'POST',
+      path: `/${helper.token}/api/conversation`,
+      headers: json,
+      body: { conversationId, change },
+    });
+    assert.equal(res.status, 200);
+    const call = bridge.calls.findLast(
+      c => c.method === 'conversations.update'
+    );
+    assert.deepEqual(call.params, { conversationId, change });
+  });
+
   it("lists Signal's chat folders and searches unread only", async () => {
     bridge.chatFolders = [
       {

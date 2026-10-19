@@ -3142,6 +3142,7 @@ function renderDetails(c, d) {
     if (d.note) {
       rows.push(detailRow('note', d.note, 'Note'));
     }
+    rows.push(...photoRows(c, d));
   } else {
     rows.push(...groupDetailRows(c, d));
   }
@@ -3181,6 +3182,95 @@ function renderDetails(c, d) {
   }
   body.replaceChildren(head, ...rows);
   body.scrollTop = scroll;
+}
+
+// --- chat photos and importing contacts (decision F36) ---------------------
+
+// Signal's Settings > Chats > "Import contacts": the phone sends its
+// contacts again, with the photos from its address book. Resolves to
+// whether it worked.
+async function importContacts(button) {
+  const label = button.textContent;
+  button.disabled = true;
+  button.textContent = 'Importing…';
+  try {
+    await api('api/contacts/sync', {});
+    toast("Imported your phone's contacts and their photos.");
+    return true;
+  } catch (error) {
+    toast(
+      error.code === 'PRECONDITION_FAILED'
+        ? 'Only a linked Signal can import contacts from the phone.'
+        : "Couldn't import. Make sure Signal on your phone is online and allowed to see your contacts."
+    );
+    return false;
+  } finally {
+    button.disabled = false;
+    button.textContent = label;
+  }
+}
+
+function refreshDetailsSoon(conversationId) {
+  openDetails(conversationId, { refresh: true });
+  // Again once the chat's new photo has arrived.
+  setTimeout(() => openDetails(conversationId, { refresh: true }), 1500);
+}
+
+function photoRows(c, d) {
+  const p = d.photo;
+  if (!p) {
+    return [];
+  }
+  const rows = [
+    detailRow(
+      'media',
+      p.shown === 'contact'
+        ? "From your phone's contacts"
+        : p.shown === 'profile'
+          ? 'Their Signal profile photo'
+          : "No photo in your phone's contacts or their Signal profile",
+      'Photo'
+    ),
+  ];
+  const actions = el('div', 'details-actions');
+  if (canManageChats() && p.contact && p.profile) {
+    const select = settingSelect(
+      p.choice,
+      [
+        ['auto', 'Automatic'],
+        ['contact', 'Phone contact'],
+        ['profile', 'Signal profile'],
+      ],
+      async value => {
+        select.disabled = true;
+        try {
+          await api('api/conversation', {
+            conversationId: c.id,
+            change: { action: 'photoSource', value },
+          });
+        } catch (error) {
+          toast(`Not changed (${error.code ?? error.message}).`);
+        }
+        refreshDetailsSoon(c.id);
+      }
+    );
+    select.setAttribute('aria-label', 'Which photo to show');
+    actions.append(select);
+  }
+  if (canManageSettings()) {
+    const sync = el('button', 'setting-button', 'Import photos from phone');
+    sync.type = 'button';
+    sync.addEventListener('click', async () => {
+      if (await importContacts(sync)) {
+        refreshDetailsSoon(c.id);
+      }
+    });
+    actions.append(sync);
+  }
+  if (actions.childElementCount > 0) {
+    rows.push(actions);
+  }
+  return rows;
 }
 
 // --- group management (Signal's group details page) -------------------------
@@ -4561,6 +4651,13 @@ function setPageTheme(theme) {
   renderSettings();
 }
 
+function importContactsButton() {
+  const button = el('button', 'setting-button', 'Import now');
+  button.type = 'button';
+  button.addEventListener('click', () => importContacts(button));
+  return button;
+}
+
 function settingRow(label, description, control) {
   const row = el('div', 'setting-row');
   const text = el('div', 'setting-text');
@@ -4696,6 +4793,11 @@ function settingsSections() {
           settingSwitch(s.keepMutedChatsArchived, v =>
             set('keepMutedChatsArchived', v)
           )
+        ),
+        settingRow(
+          'Import contacts',
+          "Import all Signal groups and contacts from your phone, with the photos in your phone's contacts.",
+          importContactsButton()
         ),
       ],
     },

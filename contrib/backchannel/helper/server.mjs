@@ -694,6 +694,10 @@ export function createWebServer({
       );
       return;
     }
+    if (req.method === 'POST' && route === 'api/contacts/sync') {
+      sendJson(res, 200, await bridge.call('contacts.sync', {}));
+      return;
+    }
     if (req.method === 'GET' && route === 'api/chatFolders') {
       sendJson(res, 200, await bridge.call('chatFolders.list', {}));
       return;

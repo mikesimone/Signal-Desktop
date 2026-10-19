@@ -22,16 +22,22 @@ export function getAvatarHash(
 ): undefined | string {
   const avatar = isMe(conversationAttrs)
     ? conversationAttrs.profileAvatar || conversationAttrs.avatar
-    : conversationAttrs.avatar || conversationAttrs.profileAvatar;
+    : conversationAttrs.photoSource === 'profile'
+      ? conversationAttrs.profileAvatar || conversationAttrs.avatar
+      : conversationAttrs.avatar || conversationAttrs.profileAvatar;
   return avatar?.hash || undefined;
 }
 
 export function getAvatar(
   conversationAttrs: ConversationAttributesType
 ): undefined | ContactAvatarType {
+  // Fork addition (decision F36): a chat's own choice comes first.
+  const { photoSource } = conversationAttrs;
   const shouldShowProfileAvatar =
     isMe(conversationAttrs) ||
-    itemStorage.get('preferContactAvatars') === false;
+    photoSource === 'profile' ||
+    (photoSource !== 'contact' &&
+      itemStorage.get('preferContactAvatars') === false);
   const avatar = shouldShowProfileAvatar
     ? conversationAttrs.profileAvatar || conversationAttrs.avatar
     : conversationAttrs.avatar || conversationAttrs.profileAvatar;

@@ -668,6 +668,10 @@ export class FakeBridge {
         this.#reply(session, id, { accepted: params.contactIds.length });
         return;
       }
+      case 'contacts.sync':
+        this.contactSyncs = (this.contactSyncs ?? 0) + 1;
+        this.#reply(session, id, { syncedAt: Date.now() });
+        return;
       case 'chatFolders.list':
         this.#reply(session, id, { folders: this.chatFolders ?? [] });
         return;

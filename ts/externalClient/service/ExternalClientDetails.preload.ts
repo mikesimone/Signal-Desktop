@@ -2,6 +2,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { SignalService as Proto } from '../../protobuf/index.std.ts';
+import type { ConversationModel } from '../../models/conversations.preload.ts';
+import { itemStorage } from '../../textsecure/Storage.preload.ts';
+import { getAvatar } from '../../util/avatarUtils.preload.ts';
 import { getSharedGroupNames } from '../../util/sharedGroupNames.dom.ts';
 import type { ServiceResultType } from '../hostTypes.std.ts';
 import type {
@@ -11,6 +14,7 @@ import type {
   DetailsMemberDTO,
   GroupInviteDTO,
   GroupRequestDTO,
+  PhotoSourcesDTO,
 } from '../protocol.std.ts';
 import { ErrorCode } from '../protocol.std.ts';
 import {
@@ -32,6 +36,20 @@ function access(value: number | undefined): 'all' | 'admins' {
 function text(value: string | undefined | null): string | null {
   const trimmed = value?.trim();
   return trimmed ? trimmed : null;
+}
+
+// Fork addition (decision F36): which photos Signal has for this person and
+// which one it shows, so the client can say why a chat has no photo.
+function getPhotoSources(model: ConversationModel): PhotoSourcesDTO {
+  const attrs = model.attributes;
+  const shown = getAvatar(attrs);
+  return {
+    contact: Boolean(attrs.avatar?.path),
+    profile: Boolean(attrs.profileAvatar?.path),
+    shown: !shown?.path ? null : shown === attrs.avatar ? 'contact' : 'profile',
+    choice: attrs.photoSource ?? 'auto',
+    preferContactPhotos: itemStorage.get('preferContactAvatars') !== false,
+  };
 }
 
 export function getDetails({
@@ -182,6 +200,7 @@ export function getDetails({
         conversation.announcementsOnly || conversation.announcementsOnlyReady
       ),
     canLeave: isGroup && canLeave,
+    photo: isGroup || conversation.isMe ? null : getPhotoSources(model),
   };
   const value: ConversationsGetDetailsResultType = { details };
   return { ok: true, value };

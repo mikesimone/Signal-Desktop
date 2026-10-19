@@ -44,6 +44,7 @@ import { fetchLinkPreview } from './ExternalClientLinkPreviews.preload.ts';
 import { listMedia } from './ExternalClientMedia.preload.ts';
 import { searchMessages } from './ExternalClientSearch.preload.ts';
 import { listChatFolders } from './ExternalClientChatFolders.preload.ts';
+import { syncContacts } from './ExternalClientContactSync.preload.ts';
 import {
   acceptSafetyNumbers,
   listChangedSafetyNumbers,
@@ -456,6 +457,10 @@ async function dispatch(
     case Method.SafetyNumbersAccept: {
       const params = safeParseUnknown(SERVICE_PARAM_SCHEMAS[method], rawParams);
       return params.success ? acceptSafetyNumbers(params.data) : invalid;
+    }
+    case Method.ContactsSync: {
+      const params = safeParseUnknown(SERVICE_PARAM_SCHEMAS[method], rawParams);
+      return params.success ? syncContacts() : invalid;
     }
     case Method.ChatFoldersList: {
       const params = safeParseUnknown(SERVICE_PARAM_SCHEMAS[method], rawParams);

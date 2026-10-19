@@ -96,6 +96,7 @@ Last reviewed: 2026-10-19, against Signal 8.34.0-alpha.1 in fork main.
 | Chat colors and wallpapers                          | missing   |                             |
 | Chats, notifications, privacy, data usage           | done      | F11                         |
 | Blocked list                                        | done      | F12 (unblock from the chat) |
+| Import contacts (and their photos) from the phone   | done      | F36                         |
 | Stories on/off                                      | done      | F12                         |
 | Notification profiles                               | missing   |                             |
 | Language                                            | missing   | the page is English         |
