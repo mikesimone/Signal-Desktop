@@ -25,6 +25,7 @@ import type {
   GroupsCreateParamsType,
 } from '../protocol.std.ts';
 import { ErrorCode, MAX_GROUP_NAME_GRAPHEMES } from '../protocol.std.ts';
+import { pullContactPhoto } from './ExternalClientContactSync.preload.ts';
 import { toAvatarBytes } from './ExternalClientProfile.preload.ts';
 import {
   getGroupMemberContact,
@@ -75,11 +76,13 @@ export function listContacts({
   return { ok: true, value };
 }
 
-function opened(conversationId: string): ServiceResultType {
+async function opened(conversationId: string): Promise<ServiceResultType> {
   const model = window.ConversationController.get(conversationId);
   if (!model || model.id !== conversationId) {
     return { ok: false, code: ErrorCode.NotFound };
   }
+  // Decision F37: the phone's contacts first, then the chat.
+  await pullContactPhoto(model);
   markConversationOpened(conversationId);
   const value: ConversationsOpenResultType = {
     conversation: toConversationDTO(model.format(), getPinnedIds()),
@@ -90,9 +93,9 @@ function opened(conversationId: string): ServiceResultType {
 // Contacts and groups Signal's composer would offer, and people in a group
 // the client can see (Signal's contact card "Message", decision F23);
 // nothing else, so this can't reach conversations Signal hides.
-export function openConversation({
+export async function openConversation({
   conversationId,
-}: ConversationsOpenParamsType): ServiceResultType {
+}: ConversationsOpenParamsType): Promise<ServiceResultType> {
   const state = window.reduxStore.getState();
   const offered =
     getComposableContacts(state).some(c => c.id === conversationId) ||

@@ -7,7 +7,6 @@ import { isMe } from './whatTypeOfConversation.dom.ts';
 import { isSignalConversation } from './isSignalConversation.dom.ts';
 import { getLocalAttachmentUrl } from './getLocalAttachmentUrl.std.ts';
 import { getAbsoluteAttachmentPath } from './migrations.preload.ts';
-import { itemStorage } from '../textsecure/Storage.preload.ts';
 
 export function hasAvatar(
   conversationAttrs: ConversationAttributesType
@@ -31,13 +30,11 @@ export function getAvatarHash(
 export function getAvatar(
   conversationAttrs: ConversationAttributesType
 ): undefined | ContactAvatarType {
-  // Fork addition (decision F36): a chat's own choice comes first.
-  const { photoSource } = conversationAttrs;
+  // Fork change (decisions F36, F37): the photo from the phone's contacts
+  // always comes first, whatever preferContactAvatars says, unless this
+  // chat was set to show the Signal profile photo.
   const shouldShowProfileAvatar =
-    isMe(conversationAttrs) ||
-    photoSource === 'profile' ||
-    (photoSource !== 'contact' &&
-      itemStorage.get('preferContactAvatars') === false);
+    isMe(conversationAttrs) || conversationAttrs.photoSource === 'profile';
   const avatar = shouldShowProfileAvatar
     ? conversationAttrs.profileAvatar || conversationAttrs.avatar
     : conversationAttrs.avatar || conversationAttrs.profileAvatar;

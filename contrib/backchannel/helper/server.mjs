@@ -212,6 +212,7 @@ export function createWebServer({
   bridge,
   privateReplies = null,
   scheduled = null,
+  contactPhotos = null,
   log,
 }) {
   const streams = new Set();
@@ -695,7 +696,9 @@ export function createWebServer({
       return;
     }
     if (req.method === 'POST' && route === 'api/contacts/sync') {
-      sendJson(res, 200, await bridge.call('contacts.sync', {}));
+      const result = await bridge.call('contacts.sync', {});
+      contactPhotos?.record(result.syncedAt);
+      sendJson(res, 200, result);
       return;
     }
     if (req.method === 'GET' && route === 'api/chatFolders') {
@@ -751,16 +754,20 @@ export function createWebServer({
     }
     if (req.method === 'POST' && route === 'api/find') {
       const { query } = await readJson(req);
-      sendJson(res, 200, await bridge.call('conversations.find', { query }));
+      contactPhotos?.openedByPage();
+      const found = await bridge.call('conversations.find', { query });
+      contactPhotos?.openedByPage();
+      sendJson(res, 200, found);
       return;
     }
     if (req.method === 'POST' && route === 'api/open') {
       const { conversationId } = await readJson(req);
-      sendJson(
-        res,
-        200,
-        await bridge.call('conversations.open', { conversationId })
-      );
+      contactPhotos?.openedByPage();
+      const opened = await bridge.call('conversations.open', {
+        conversationId,
+      });
+      contactPhotos?.openedByPage();
+      sendJson(res, 200, opened);
       return;
     }
     if (req.method === 'POST' && route === 'api/groups') {

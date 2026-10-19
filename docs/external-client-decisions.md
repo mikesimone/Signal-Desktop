@@ -963,3 +963,26 @@ with one (2026-10-19). Six had neither his profile photo nor the contact
 photo: linked Signal imports contacts once, at linking (2026-10-10), and
 the photo arrived on the phone later.
 
+## F37. Fork only: contact photos first, and kept fresh
+
+DECISION (Mike, 2026-10-19 15:35 PT): the photo from the phone's contacts
+always comes first. Signal's getAvatar in this fork ignores
+preferContactAvatars; only a chat set to "Signal profile" (F36) shows the
+profile photo. The page offers just those two choices.
+
+Contact photos are kept fresh, since a linked Signal can't read the phone's
+address book, only what the phone sends:
+- Before a new 1:1 chat opens from the page (conversations.find and
+  conversations.open), Signal asks the phone for its contacts when the
+  person has no contact photo yet, waiting at most 15 seconds and at most
+  once a minute. The chat then opens with the name and photo from the
+  phone's contacts.
+- The helper asks once a day (and when Signal comes back after a day or
+  more), and 30 seconds after someone new appears in a 1:1 chat, such as a
+  first message from an unknown number, at most once in 10 minutes. The
+  last time is kept in contact-sync.json in the helper's config.
+
+WHY: Mike: "Nobody goes to the trouble of setting an individual contact
+photo just to have it overwritten." New chats should look for the number
+in his contacts first.
+

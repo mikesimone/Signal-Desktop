@@ -29,6 +29,10 @@ export class Store {
     this.#conversations = next;
   }
 
+  has(conversationId) {
+    return this.#conversations.has(conversationId);
+  }
+
   apply({ event, data }) {
     if (event === 'conversation.updated') {
       this.#conversations.set(data.id, data);

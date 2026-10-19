@@ -41,6 +41,7 @@ import {
   defaultUserData,
   endpointFor,
 } from './bridge.mjs';
+import { ContactPhotoRefresh } from './contactPhotos.mjs';
 import { largeEmojiFontLoader } from './fonts.mjs';
 import { PrivateReplies } from './privateReplies.mjs';
 import { ScheduledMessages } from './scheduled.mjs';
@@ -162,8 +163,18 @@ const bridge = new Bridge({
     web.broadcast('resync', {});
     // Anything that came due while Signal was away goes now.
     await scheduled.run(scheduled.ready);
+    await contactPhotos.daily();
   },
   onEvent(event) {
+    // Someone new in a 1:1 chat: the phone's contacts may have them.
+    if (
+      event.event === 'conversation.updated' &&
+      event.data.type === 'direct' &&
+      !event.data.noteToSelf &&
+      !store.has(event.data.id)
+    ) {
+      contactPhotos.newChat();
+    }
     store.apply(event);
     web.broadcast(event.event, event.data);
   },
@@ -209,6 +220,15 @@ const scheduled = new ScheduledMessages(configDir, {
 });
 scheduled.ready = () => store.state === BridgeState.Ready;
 
+const contactPhotos = new ContactPhotoRefresh(configDir, {
+  sync: () => bridge.call('contacts.sync', {}),
+  ready: () =>
+    store.state === BridgeState.Ready &&
+    bridge.capabilities.includes('settings.manage'),
+  log,
+});
+contactPhotos.start();
+
 web = createWebServer({
   port: args.port,
   bindAddress: args.bind,
@@ -225,6 +245,7 @@ web = createWebServer({
   bridge,
   privateReplies: new PrivateReplies(join(configDir, 'private-replies.json')),
   scheduled,
+  contactPhotos,
   log,
 });
 

@@ -48,9 +48,11 @@ Backchannel does. Each new one is added here when it ships.
   two.
 - **Scheduled messages.** Signal Desktop has none. Backchannel sends them
   from your server at the time you pick, even with your PC off.
-- **Pick each chat's photo.** Signal shows either your phone's contact
-  photos or people's Signal profile photos, for every chat at once.
-  Backchannel lets you pick per chat, in its details.
+- **Your contact photos come first.** The photo you gave someone in your
+  phone's contacts always wins over their Signal profile photo, unless you
+  pick the profile photo for that chat in its details. Backchannel asks
+  your phone for its contacts every day and before a new chat opens, so new
+  contact photos show up; Signal Desktop asks only when it's linked.
 - **Edit and tag when forwarding.** Signal lets you edit a forward's text;
   Backchannel also lets you @mention people. Each chat gets a real tag
   where that person is in the group, and plain "@Name" text elsewhere.

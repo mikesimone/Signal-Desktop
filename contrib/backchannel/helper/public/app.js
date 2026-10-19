@@ -924,6 +924,17 @@ async function showOpened(conversation) {
   await selectConversation(conversation.id);
 }
 
+// Signal asks the phone for its contacts before a new chat opens (decision
+// F37), which can take a few seconds.
+async function withContactsNote(request) {
+  const note = setTimeout(() => toast("Checking your phone's contacts…"), 1500);
+  try {
+    return await request;
+  } finally {
+    clearTimeout(note);
+  }
+}
+
 async function openContact(conversationId) {
   if (conversations.has(conversationId)) {
     closeNewChat();
@@ -931,7 +942,9 @@ async function openContact(conversationId) {
     return;
   }
   try {
-    const { conversation } = await api('api/open', { conversationId });
+    const { conversation } = await withContactsNote(
+      api('api/open', { conversationId })
+    );
     await showOpened(conversation);
   } catch (error) {
     toast(`Couldn't open the chat (${error.code ?? error.message}).`);
@@ -940,8 +953,8 @@ async function openContact(conversationId) {
 
 async function findAndOpen(query) {
   try {
-    const { conversation } = await api('api/find', { query });
-    await showOpened(conversations.get(conversation.id) ?? conversation);
+    const { conversation } = await withContactsNote(api('api/find', { query }));
+    await showOpened(conversation);
   } catch (error) {
     toast(
       error.code === 'NOT_FOUND'
@@ -3235,10 +3248,9 @@ function photoRows(c, d) {
   const actions = el('div', 'details-actions');
   if (canManageChats() && p.contact && p.profile) {
     const select = settingSelect(
-      p.choice,
+      p.choice === 'profile' ? 'profile' : 'auto',
       [
-        ['auto', 'Automatic'],
-        ['contact', 'Phone contact'],
+        ['auto', 'Phone contact (default)'],
         ['profile', 'Signal profile'],
       ],
       async value => {

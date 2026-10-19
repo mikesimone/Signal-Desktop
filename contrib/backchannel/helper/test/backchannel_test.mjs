@@ -13,6 +13,7 @@ import { dirname, join } from 'node:path';
 import { after, before, describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
+import { ContactPhotoRefresh } from '../contactPhotos.mjs';
 import { FakeBridge, makeConversation, makeMessage } from './fake-bridge.mjs';
 
 const HELPER = join(
@@ -1533,3 +1534,37 @@ describe('backchannel helper behind a reverse proxy', () => {
     assert.equal(res.status, 421);
   });
 });
+
+describe('contact photo refresh', () => {
+  it('asks the phone once a day and remembers when', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'bc-contacts-'));
+    let calls = 0;
+    const options = {
+      sync: async () => {
+        calls += 1;
+        return { syncedAt: Date.now() };
+      },
+      ready: () => true,
+      log: () => undefined,
+    };
+    const refresh = new ContactPhotoRefresh(dir, options);
+    await refresh.daily();
+    assert.equal(calls, 1);
+    await refresh.daily();
+    assert.equal(calls, 1);
+    // A restart keeps the time.
+    const again = new ContactPhotoRefresh(dir, options);
+    await again.daily();
+    assert.equal(calls, 1);
+    assert.ok(again.lastAt > 0);
+    // Not while Signal isn't ready.
+    const offline = new ContactPhotoRefresh(join(dir, 'none'), {
+      ...options,
+      ready: () => false,
+    });
+    await offline.daily();
+    assert.equal(calls, 1);
+    rmSync(dir, { recursive: true, force: true });
+  });
+});
+
