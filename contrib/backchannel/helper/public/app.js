@@ -351,10 +351,60 @@ const FILTERS = {
   group: c => c.type === 'group',
 };
 
+// Signal's chat folders (decision F34). Once you have folders of your own
+// they are the tabs, in Signal's order, as in its chat list; until then the
+// tabs are All, 1:1 and Groups.
+let chatFolders = [];
+
+// As Signal's isConversationInChatFolder. The open chat stays in an
+// unread-only folder while you read it.
+function inChatFolder(folder, c) {
+  const included =
+    (folder.includeAllIndividualChats && c.type === 'direct') ||
+    (folder.includeAllGroupChats && c.type === 'group') ||
+    folder.includedConversationIds.includes(c.id);
+  return (
+    included &&
+    !(folder.showOnlyUnread && !isUnread(c) && c.id !== selectedId) &&
+    !(!folder.showMutedChats && c.muted) &&
+    !folder.excludedConversationIds.includes(c.id)
+  );
+}
+
+// [{ key, label, test }]
+function listTabs() {
+  if (chatFolders.length > 0) {
+    return chatFolders.map(folder => ({
+      key: `folder:${folder.id}`,
+      label: folder.all ? 'All chats' : folder.name,
+      test: c => inChatFolder(folder, c),
+    }));
+  }
+  return [
+    { key: 'all', label: 'All chats', test: FILTERS.all },
+    { key: 'direct', label: '1:1 chats', test: FILTERS.direct },
+    { key: 'group', label: 'Groups', test: FILTERS.group },
+  ];
+}
+
+function currentTab() {
+  const tabs = listTabs();
+  return tabs.find(t => t.key === listFilter) ?? tabs[0];
+}
+
 function keepConversation(c) {
-  const tab = FILTERS[listFilter] ?? FILTERS.all;
   // The open chat stays listed while you read it, as in Signal.
-  return tab(c) && (!unreadOnly || isUnread(c) || c.id === selectedId);
+  return (
+    currentTab().test(c) && (!unreadOnly || isUnread(c) || c.id === selectedId)
+  );
+}
+
+async function loadChatFolders() {
+  const { folders } = await api('api/chatFolders');
+  if (JSON.stringify(folders) !== JSON.stringify(chatFolders)) {
+    chatFolders = folders;
+    renderConversations();
+  }
 }
 
 function sortedConversations() {
@@ -503,6 +553,11 @@ function setListFilter(name, unread) {
   } catch {
     // Storage blocked; the filter still applies until reload.
   }
+  // Search results follow the tab and the unread filter, as in Signal.
+  if (currentSearch().query) {
+    searchAnswer = null;
+    scheduleSearch();
+  }
   renderConversations();
 }
 
@@ -510,22 +565,18 @@ function setListFilter(name, unread) {
 // beside the search box is the unread filter.
 function renderFilters() {
   const unarchived = [...conversations.values()].filter(c => !c.archived);
-  const unreadIn = test => unarchived.filter(c => test(c) && isUnread(c));
-  const tabs = [
-    ['all', 'All chats', unreadIn(FILTERS.all).length],
-    ['direct', '1:1 chats', unreadIn(FILTERS.direct).length],
-    ['group', 'Groups', unreadIn(FILTERS.group).length],
-  ];
+  const current = currentTab();
   $('filters').replaceChildren(
-    ...tabs.map(([name, label, count]) => {
+    ...listTabs().map(({ key, label, test }) => {
+      const count = unarchived.filter(c => test(c) && isUnread(c)).length;
       const tab = el('button', 'filter-tab');
       tab.type = 'button';
-      tab.setAttribute('aria-pressed', String(listFilter === name));
+      tab.setAttribute('aria-pressed', String(current.key === key));
       tab.append(el('span', '', label));
       if (count > 0) {
         tab.append(el('span', 'filter-count', String(count)));
       }
-      tab.addEventListener('click', () => setListFilter(name, unreadOnly));
+      tab.addEventListener('click', () => setListFilter(key, unreadOnly));
       return tab;
     })
   );
@@ -987,12 +1038,16 @@ async function runSearch() {
   if (scope) {
     params.set('conversationId', scope);
   }
+  const unread = unreadOnly && !scope;
+  if (unread) {
+    params.set('unread', '1');
+  }
   let answer;
   try {
     const { results } = await api(`api/search?${params}`);
-    answer = { query, scope, results };
+    answer = { query, scope, unread, results };
   } catch (error) {
-    answer = { query, scope, results: [], error };
+    answer = { query, scope, unread, results: [], error };
   }
   if (seq === searchSeq) {
     searchAnswer = answer;
@@ -1003,7 +1058,9 @@ async function runSearch() {
 function searchRows(chatCount) {
   const { query, scope } = currentSearch();
   const answer =
-    searchAnswer?.query === query && searchAnswer.scope === scope
+    searchAnswer?.query === query &&
+    searchAnswer.scope === scope &&
+    searchAnswer.unread === (unreadOnly && !scope)
       ? searchAnswer
       : null;
   if (!answer) {
@@ -1019,12 +1076,28 @@ function searchRows(chatCount) {
       ),
     ];
   }
-  if (answer.results.length === 0) {
+  // Across chats, only the chats on the current tab (decision F34).
+  const tab = currentTab();
+  const results = scope
+    ? answer.results
+    : answer.results.filter(r => {
+        const c = conversations.get(r.message.conversationId);
+        return !c || tab.test(c);
+      });
+  if (results.length === 0) {
     return chatCount > 0
       ? []
-      : [el('li', 'list-empty', `No results for "${query}"`)];
+      : [
+          el(
+            'li',
+            'list-empty',
+            answer.unread
+              ? `No unread results for "${query}"`
+              : `No results for "${query}"`
+          ),
+        ];
   }
-  return [sectionHead('Messages'), ...answer.results.map(searchResultRow)];
+  return [sectionHead('Messages'), ...results.map(searchResultRow)];
 }
 
 // The snippet as Signal shows it: the matched part of the body, with the
@@ -5251,6 +5324,7 @@ async function loadState() {
   renderTitle();
   renderConversations();
   loadScheduled().catch(() => {});
+  loadChatFolders().catch(() => {});
   if (selectedId && !conversations.has(selectedId)) {
     selectedId = null;
     cancelReply();
@@ -8527,6 +8601,12 @@ $('messages').addEventListener(
 // Rambox may not move window focus on a click into the page.
 document.addEventListener('pointerdown', () => setTimeout(maybeMarkRead, 0));
 window.addEventListener('focus', maybeMarkRead);
+// Folders made or changed in Signal show up when you come back to the page.
+window.addEventListener('focus', () => {
+  if (bridgeState === 'ready') {
+    loadChatFolders().catch(() => {});
+  }
+});
 document.addEventListener('visibilitychange', maybeMarkRead);
 // Relative times in the list ("5m") move on.
 setInterval(() => {

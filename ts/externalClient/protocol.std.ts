@@ -170,6 +170,7 @@ export const Method = {
   MessagesLocateQuote: 'messages.locateQuote',
   LinkPreviewsFetch: 'linkPreviews.fetch',
   MediaList: 'media.list',
+  ChatFoldersList: 'chatFolders.list',
 } as const;
 export type MethodType = (typeof Method)[keyof typeof Method];
 
@@ -219,6 +220,8 @@ export const SERVICE_METHOD_CAPABILITIES = {
   // Part of writing a message, as in Signal's composer.
   [Method.LinkPreviewsFetch]: Capability.MessagesSend,
   [Method.MediaList]: Capability.MessagesRead,
+  // Part of the chat list.
+  [Method.ChatFoldersList]: Capability.ConversationsRead,
 } as const satisfies Partial<Record<MethodType, CapabilityType>>;
 export type ServiceMethodType = keyof typeof SERVICE_METHOD_CAPABILITIES;
 
@@ -1261,6 +1264,8 @@ export const messagesSearchParamsSchema = z
       .refine(query => query.trim().length > 0),
     conversationId: conversationIdSchema.optional(),
     limit: z.number().int().min(1).max(LIMITS.maxSearchResults).optional(),
+    // Signal's unread filter: only unread messages (decision F34).
+    onlyUnread: z.boolean().optional(),
   })
   .strict();
 export type MessagesSearchParamsType = z.infer<
@@ -1322,6 +1327,27 @@ export type MediaListResultType = Readonly<{
   // The messages the items are in, once each.
   messages: ReadonlyArray<MessageDTO>;
   nextCursor: string | null;
+}>;
+
+// Fork addition (decision F34): Signal's chat folders, as the tabs over its
+// chat list. Empty until you make a folder of your own, as in Signal.
+export const chatFoldersListParamsSchema = z.object({}).strict();
+
+export type ChatFolderDTO = Readonly<{
+  id: string;
+  // Empty for the "All chats" folder.
+  name: string;
+  all: boolean;
+  showOnlyUnread: boolean;
+  showMutedChats: boolean;
+  includeAllIndividualChats: boolean;
+  includeAllGroupChats: boolean;
+  includedConversationIds: ReadonlyArray<string>;
+  excludedConversationIds: ReadonlyArray<string>;
+}>;
+
+export type ChatFoldersListResultType = Readonly<{
+  folders: ReadonlyArray<ChatFolderDTO>;
 }>;
 
 // Fork additions: Signal's compose button (decision F20). contacts.list is
@@ -1537,6 +1563,7 @@ export const SERVICE_PARAM_SCHEMAS = {
   [Method.MessagesLocateQuote]: messagesLocateQuoteParamsSchema,
   [Method.LinkPreviewsFetch]: linkPreviewsFetchParamsSchema,
   [Method.MediaList]: mediaListParamsSchema,
+  [Method.ChatFoldersList]: chatFoldersListParamsSchema,
 } as const satisfies Record<ServiceMethodType, z.ZodType>;
 
 export type ConversationsListParamsType = z.infer<

@@ -36,6 +36,7 @@ export async function searchMessages({
   query,
   conversationId,
   limit,
+  onlyUnread = false,
 }: MessagesSearchParamsType): Promise<ServiceResultType> {
   if (conversationId !== undefined && !getListedConversation(conversationId)) {
     return { ok: false, code: ErrorCode.NotFound };
@@ -61,7 +62,7 @@ export async function searchMessages({
       conversationId,
       options: limit === undefined ? undefined : { limit },
       contactServiceIdsMatchingQuery,
-      filterByUnread: false,
+      filterByUnread: onlyUnread,
     });
   } catch (error) {
     // Signal's search box shows no results for a query FTS can't parse.

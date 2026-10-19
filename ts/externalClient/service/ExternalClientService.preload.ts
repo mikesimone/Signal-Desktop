@@ -43,6 +43,7 @@ import { locateQuote } from './ExternalClientQuotes.preload.ts';
 import { fetchLinkPreview } from './ExternalClientLinkPreviews.preload.ts';
 import { listMedia } from './ExternalClientMedia.preload.ts';
 import { searchMessages } from './ExternalClientSearch.preload.ts';
+import { listChatFolders } from './ExternalClientChatFolders.preload.ts';
 import {
   createGroup,
   findConversation,
@@ -443,6 +444,10 @@ async function dispatch(
     case Method.MessagesLocateQuote: {
       const params = safeParseUnknown(SERVICE_PARAM_SCHEMAS[method], rawParams);
       return params.success ? locateQuote(params.data) : invalid;
+    }
+    case Method.ChatFoldersList: {
+      const params = safeParseUnknown(SERVICE_PARAM_SCHEMAS[method], rawParams);
+      return params.success ? listChatFolders() : invalid;
     }
     case Method.MediaList: {
       const params = safeParseUnknown(SERVICE_PARAM_SCHEMAS[method], rawParams);

@@ -548,6 +548,36 @@ describe('backchannel helper', () => {
     ]);
   });
 
+  it("lists Signal's chat folders and searches unread only", async () => {
+    bridge.chatFolders = [
+      {
+        id: 'f1',
+        name: 'Family',
+        all: false,
+        showOnlyUnread: false,
+        showMutedChats: true,
+        includeAllIndividualChats: false,
+        includeAllGroupChats: false,
+        includedConversationIds: [],
+        excludedConversationIds: [],
+      },
+    ];
+    const res = await http(port, {
+      path: `/${helper.token}/api/chatFolders`,
+    });
+    assert.equal(res.status, 200);
+    assert.equal(JSON.parse(res.text).folders[0].name, 'Family');
+    bridge.chatFolders = [];
+    await http(port, {
+      path: `/${helper.token}/api/search?${new URLSearchParams({
+        q: 'hi',
+        unread: '1',
+      })}`,
+    });
+    const call = bridge.calls.findLast(c => c.method === 'messages.search');
+    assert.deepEqual(call.params, { query: 'hi', onlyUnread: true });
+  });
+
   it('asks Signal for link previews and sends the one shown', async () => {
     bridge.linkPreviews.set('https://example.com/a', {
       title: 'Example',

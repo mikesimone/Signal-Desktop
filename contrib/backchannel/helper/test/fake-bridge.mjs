@@ -461,6 +461,9 @@ export class FakeBridge {
             continue;
           }
           for (const message of list) {
+            if (params.onlyUnread && !message.unread) {
+              continue;
+            }
             const at = message.body?.toLowerCase().indexOf(needle) ?? -1;
             if (at === -1) {
               continue;
@@ -645,6 +648,9 @@ export class FakeBridge {
             'base64'
           ),
         });
+        return;
+      case 'chatFolders.list':
+        this.#reply(session, id, { folders: this.chatFolders ?? [] });
         return;
       case 'media.list': {
         // Newest first; a cursor is the index of the next message.

@@ -904,3 +904,23 @@ Update (Mike, 2026-10-15 09:24 PT): marks already in pasted text apply as
 it lands, and any pair still in the text applies when it is sent or
 scheduled, with the same rules. Text inside a link, or already monospace, is
 left as it is.
+
+## F34. Fork only: chat folders, and the unread filter in search
+
+DECISION: `chatFolders.list` (conversations.read, so no new Allow) returns
+Signal's chat folders in Signal's order, with each folder's rules: all 1:1
+chats, all groups, chats added or left out, unread only, and whether muted
+chats show. As in Signal's chat list, it returns none until you have a
+folder of your own. The page then shows those folders as the tabs over the
+chat list, with unread counts, and matches chats to them as Signal does;
+with no folders it keeps All, 1:1 and Groups. Folders are made and edited in
+Signal for now; the page picks up changes when you come back to it.
+
+`messages.search` takes `onlyUnread`, Signal's own unread filter for
+search (Signal 8.32). With the unread filter on, the page's search across
+chats finds unread messages only, and message results follow the current
+tab.
+
+WHY: the weekly parity check (2026-10-19) found Signal 8.32's note that the
+unread filter now works in folders and search; chat folders themselves were
+missing from the parity list.

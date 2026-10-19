@@ -207,7 +207,10 @@ async function applySetting(params: SettingsSetParamsType): Promise<void> {
         await setDiscoverable(true);
       }
       account.captureChange('phoneNumberSharingMode');
-      await writeProfile(getConversation(account), { keepAvatar: true });
+      await writeProfile(getConversation(account), {
+        keepAvatar: true,
+        reupload: false,
+      });
       return;
     }
     case 'phoneNumberDiscoverable':

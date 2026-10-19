@@ -19,6 +19,8 @@ import {
   messagesSendStickerParamsSchema,
   linkPreviewsFetchParamsSchema,
   mediaListParamsSchema,
+  chatFoldersListParamsSchema,
+  messagesSearchParamsSchema,
   messagesSendTextParamsSchema,
   negotiateVersion,
   MAX_FORMATTING_RANGES,
@@ -418,6 +420,17 @@ describe('externalClient/protocol', () => {
           kind: 'files',
           cursor: "1' OR 1=1",
         })
+      );
+    });
+
+    it('lists chat folders, and searches unread messages only', () => {
+      assert.isTrue(accepts(chatFoldersListParamsSchema, {}));
+      assert.isFalse(accepts(chatFoldersListParamsSchema, { all: true }));
+      assert.isTrue(
+        accepts(messagesSearchParamsSchema, { query: 'hi', onlyUnread: true })
+      );
+      assert.isFalse(
+        accepts(messagesSearchParamsSchema, { query: 'hi', onlyUnread: 'yes' })
       );
     });
 

@@ -104,7 +104,7 @@ export async function setProfile(
         // Checked above; Signal's picker hands its editor the same strings.
         aboutEmoji: aboutEmoji as Emoji.Variant | undefined,
       },
-      { keepAvatar: true }
+      { keepAvatar: true, reupload: false }
     );
   } catch (error) {
     log.warn('setProfile failed', Errors.toLogFormat(error));
@@ -182,7 +182,7 @@ export async function setProfileAvatar(
     }
     await writeProfile(getConversation(model), {
       keepAvatar: false,
-      avatarUpdate: { oldAvatar, newAvatar },
+      avatarUpdate: { oldAvatar, newAvatar, reupload: false },
     });
   } catch (error) {
     log.warn('setProfileAvatar failed', Errors.toLogFormat(error));

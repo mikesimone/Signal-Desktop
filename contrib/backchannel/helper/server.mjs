@@ -664,8 +664,15 @@ export function createWebServer({
         await bridge.call('messages.search', {
           query,
           ...(conversationId ? { conversationId } : {}),
+          ...(url.searchParams.get('unread') === '1'
+            ? { onlyUnread: true }
+            : {}),
         })
       );
+      return;
+    }
+    if (req.method === 'GET' && route === 'api/chatFolders') {
+      sendJson(res, 200, await bridge.call('chatFolders.list', {}));
       return;
     }
     if (req.method === 'POST' && route === 'api/conversation') {
