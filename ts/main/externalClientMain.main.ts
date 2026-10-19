@@ -367,7 +367,12 @@ export class ExternalClientMain {
     pending.resolve(
       parsed.data.ok
         ? { ok: true, value: parsed.data.value }
-        : { ok: false, code: parsed.data.code }
+        : {
+            ok: false,
+            code: parsed.data.code,
+            // Why a send was refused, so the client can say so.
+            ...(parsed.data.reason ? { reason: parsed.data.reason } : {}),
+          }
     );
   }
 
