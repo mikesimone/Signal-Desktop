@@ -45,6 +45,10 @@ import { listMedia } from './ExternalClientMedia.preload.ts';
 import { searchMessages } from './ExternalClientSearch.preload.ts';
 import { listChatFolders } from './ExternalClientChatFolders.preload.ts';
 import {
+  acceptSafetyNumbers,
+  listChangedSafetyNumbers,
+} from './ExternalClientSafetyNumbers.preload.ts';
+import {
   createGroup,
   findConversation,
   listContacts,
@@ -444,6 +448,14 @@ async function dispatch(
     case Method.MessagesLocateQuote: {
       const params = safeParseUnknown(SERVICE_PARAM_SCHEMAS[method], rawParams);
       return params.success ? locateQuote(params.data) : invalid;
+    }
+    case Method.SafetyNumbersChanged: {
+      const params = safeParseUnknown(SERVICE_PARAM_SCHEMAS[method], rawParams);
+      return params.success ? listChangedSafetyNumbers(params.data) : invalid;
+    }
+    case Method.SafetyNumbersAccept: {
+      const params = safeParseUnknown(SERVICE_PARAM_SCHEMAS[method], rawParams);
+      return params.success ? acceptSafetyNumbers(params.data) : invalid;
     }
     case Method.ChatFoldersList: {
       const params = safeParseUnknown(SERVICE_PARAM_SCHEMAS[method], rawParams);

@@ -4594,6 +4594,10 @@
     "messageformat": "Change your groups: name, photo, description, members, admins, group link and permissions, and leave groups",
     "description": "Permission shown in the local app access dialog"
   },
+  "icu:ExternalClientCapability__identity-manage": {
+    "messageformat": "Accept changed safety numbers when you choose to send anyway",
+    "description": "Permission shown in the local app access dialog"
+  },
   "icu:ExternalClientCapability__settings-manage": {
     "messageformat": "See and change your Signal settings, including privacy settings that apply to all your devices",
     "description": "Permission shown in the local app access dialog"

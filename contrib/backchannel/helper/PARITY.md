@@ -82,6 +82,7 @@ Last reviewed: 2026-10-19, against Signal 8.34.0-alpha.1 in fork main.
 | Send contact cards                                 | missing   |                                              |
 | GIF search                                         | missing   |                                              |
 | Typing indicators (send them)                      | done      | F14                                          |
+| Safety number changed: Send anyway                 | done      | F35                                          |
 | Send view-once media                               | missing   |                                              |
 | Sent media quality per message                     | missing   | the setting applies                          |
 

@@ -671,6 +671,29 @@ export function createWebServer({
       );
       return;
     }
+    // Signal's "Safety number changed" dialog (decision F35).
+    if (req.method === 'GET' && route === 'api/safetyNumbers') {
+      sendJson(
+        res,
+        200,
+        await bridge.call('safetyNumbers.changed', {
+          conversationId: url.searchParams.get('conversationId'),
+        })
+      );
+      return;
+    }
+    if (req.method === 'POST' && route === 'api/safetyNumbers/accept') {
+      const { conversationId, contactIds } = await readJson(req);
+      sendJson(
+        res,
+        200,
+        await bridge.call('safetyNumbers.accept', {
+          conversationId,
+          contactIds,
+        })
+      );
+      return;
+    }
     if (req.method === 'GET' && route === 'api/chatFolders') {
       sendJson(res, 200, await bridge.call('chatFolders.list', {}));
       return;

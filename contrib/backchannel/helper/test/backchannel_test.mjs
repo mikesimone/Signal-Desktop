@@ -225,6 +225,7 @@ describe('backchannel helper', () => {
       'conversations.manage',
       'conversations.read',
       'groups.manage',
+      'identity.manage',
       'messages.markRead',
       'messages.react',
       'messages.read',
@@ -546,6 +547,29 @@ describe('backchannel helper', () => {
       'messages',
       'nextCursor',
     ]);
+  });
+
+  it('lists and accepts changed safety numbers', async () => {
+    const conversationId = bridge.conversations[0].id;
+    const contact = { conversationId: 'c-1', title: 'Pat' };
+    bridge.untrusted.set(conversationId, [contact]);
+    const list = await http(port, {
+      path: `/${helper.token}/api/safetyNumbers?${new URLSearchParams({
+        conversationId,
+      })}`,
+    });
+    assert.deepEqual(JSON.parse(list.text).contacts, [contact]);
+    const accept = await http(port, {
+      method: 'POST',
+      path: `/${helper.token}/api/safetyNumbers/accept`,
+      headers: json,
+      body: { conversationId, contactIds: ['c-1'] },
+    });
+    assert.equal(accept.status, 200);
+    const call = bridge.calls.findLast(
+      c => c.method === 'safetyNumbers.accept'
+    );
+    assert.deepEqual(call.params, { conversationId, contactIds: ['c-1'] });
   });
 
   it("lists Signal's chat folders and searches unread only", async () => {

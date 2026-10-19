@@ -924,3 +924,21 @@ tab.
 WHY: the weekly parity check (2026-10-19) found Signal 8.32's note that the
 unread filter now works in folders and search; chat folders themselves were
 missing from the parity list.
+
+## F35. Fork only: "Safety number changed" and Send anyway
+
+DECISION: when Signal refuses a send because someone in the chat has a new
+safety number, the page shows Signal's own dialog: who changed, with Cancel
+and Send anyway. `safetyNumbers.changed` (conversations.read) lists those
+people; `safetyNumbers.accept` (new capability `identity.manage`) accepts
+only the ones the user was shown and still untrusted, as Signal's dialog
+does, and the page then sends again. This amends D11: the bridge still never
+accepts anything on its own, but the user can now make the choice in the
+page instead of on their phone. Viewing and verifying the safety number
+itself is still missing.
+
+The main process also stopped dropping the refusal's reason, so every
+refused send now says why in plain words instead of "PRECONDITION_FAILED".
+
+WHY: Mike hit "Not sent (PRECONDITION_FAILED)" on a send to a chat where a
+contact had reinstalled Signal (2026-10-19).

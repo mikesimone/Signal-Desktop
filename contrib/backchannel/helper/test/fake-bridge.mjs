@@ -195,7 +195,10 @@ export class FakeBridge {
     'contacts.read',
     'conversations.create',
     'groups.manage',
+    'identity.manage',
   ];
+  // conversationId -> [{ conversationId, title }] with new safety numbers.
+  untrusted = new Map();
   // contacts.list and conversations.find.
   contacts = [];
   findable = new Map();
@@ -649,6 +652,22 @@ export class FakeBridge {
           ),
         });
         return;
+      case 'safetyNumbers.changed':
+        this.#reply(session, id, {
+          contacts: this.untrusted.get(params.conversationId) ?? [],
+        });
+        return;
+      case 'safetyNumbers.accept': {
+        const left = (this.untrusted.get(params.conversationId) ?? []).filter(
+          c => !params.contactIds.includes(c.conversationId)
+        );
+        this.untrusted.set(params.conversationId, left);
+        if (left.length === 0) {
+          this.sendRefusals.delete(params.conversationId);
+        }
+        this.#reply(session, id, { accepted: params.contactIds.length });
+        return;
+      }
       case 'chatFolders.list':
         this.#reply(session, id, { folders: this.chatFolders ?? [] });
         return;

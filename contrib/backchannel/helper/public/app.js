@@ -4954,6 +4954,10 @@ async function sendSticker(packId, stickerId) {
     }
     $('messages').scrollTop = $('messages').scrollHeight;
   } catch (error) {
+    if (await confirmSafetyNumbers(error, conversationId)) {
+      await sendSticker(packId, stickerId);
+      return;
+    }
     showError(
       SEND_ERRORS[error.reason] ?? `Not sent (${error.code ?? error.message}).`
     );
@@ -5079,12 +5083,93 @@ async function sendReaction(m, emoji, remove) {
   try {
     await api('api/react', { messageId: m.id, emoji, remove });
   } catch (error) {
+    if (await confirmSafetyNumbers(error, m.conversationId)) {
+      await sendReaction(m, emoji, remove);
+      return;
+    }
     toast(
       SEND_ERRORS[error.reason] ??
         `Couldn't react (${error.code ?? error.message}).`
     );
   }
 }
+
+// --- safety numbers (decision F35) -------------------------------------------
+
+// When Signal refuses a send because someone's safety number changed, show
+// who, as Signal's dialog does. Resolves true once the user chose "Send
+// anyway" and Signal accepted the new numbers; the caller then tries again.
+let safetyAnswer = null;
+
+async function confirmSafetyNumbers(error, conversationId) {
+  if (
+    error?.reason !== 'untrustedIdentity' ||
+    !conversationId ||
+    !capabilities.includes('identity.manage')
+  ) {
+    return false;
+  }
+  let contacts;
+  try {
+    ({ contacts } = await api(
+      `api/safetyNumbers?${new URLSearchParams({ conversationId })}`
+    ));
+  } catch {
+    return false;
+  }
+  if (contacts.length === 0) {
+    // Accepted elsewhere in the meantime.
+    return true;
+  }
+  const names = contacts.map(c => c.title);
+  $('safety-text').textContent =
+    (contacts.length === 1
+      ? `${names[0]}'s safety number has changed.`
+      : 'These people have new safety numbers.') +
+    ' This usually means they reinstalled Signal or got a new phone. You can verify it in Signal on your phone, or send anyway.';
+  $('safety-list').replaceChildren(
+    ...contacts.map(c => {
+      const li = el('li');
+      li.append(
+        avatar(c.conversationId, conversations.get(c.conversationId) ?? c, 32),
+        el('span', '', c.title)
+      );
+      return li;
+    })
+  );
+  $('safety').hidden = false;
+  $('safety-send').focus();
+  const send = await new Promise(resolve => {
+    safetyAnswer = resolve;
+  });
+  $('safety').hidden = true;
+  if (!send) {
+    return false;
+  }
+  try {
+    await api('api/safetyNumbers/accept', {
+      conversationId,
+      contactIds: contacts.map(c => c.conversationId),
+    });
+    return true;
+  } catch (acceptError) {
+    toast(`Couldn't accept (${acceptError.code ?? acceptError.message}).`);
+    return false;
+  }
+}
+
+function answerSafety(send) {
+  safetyAnswer?.(send);
+  safetyAnswer = null;
+}
+$('safety-send').addEventListener('click', () => answerSafety(true));
+$('safety-cancel').addEventListener('click', () => answerSafety(false));
+$('safety').addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    e.stopPropagation();
+    answerSafety(false);
+  }
+});
 
 async function copyText(text) {
   try {
@@ -5536,6 +5621,12 @@ async function sendCurrent() {
     renderMessages();
     $('messages').scrollTop = $('messages').scrollHeight;
   } catch (error) {
+    if (await confirmSafetyNumbers(error, conversationId)) {
+      // The text and attachments are still in the box; send them again.
+      $('send').disabled = false;
+      await sendCurrent();
+      return;
+    }
     showError(
       SEND_ERRORS[error.reason] ?? `Not sent (${error.code ?? error.message}).`
     );

@@ -60,6 +60,9 @@ export const Capability = {
   // admins, group link, permissions) and leave them, as Signal's group
   // details page does.
   GroupsManage: 'groups.manage',
+  // Fork addition: accept changed safety numbers when you choose "Send
+  // anyway", as Signal's "Safety number changed" dialog does.
+  IdentityManage: 'identity.manage',
 } as const;
 export type CapabilityType = (typeof Capability)[keyof typeof Capability];
 export const ALL_CAPABILITIES: ReadonlyArray<CapabilityType> =
@@ -82,6 +85,7 @@ export const IMPLEMENTED_CAPABILITIES: ReadonlyArray<CapabilityType> = [
   Capability.ContactsRead,
   Capability.ConversationsCreate,
   Capability.GroupsManage,
+  Capability.IdentityManage,
 ];
 
 export const ErrorCode = {
@@ -171,6 +175,8 @@ export const Method = {
   LinkPreviewsFetch: 'linkPreviews.fetch',
   MediaList: 'media.list',
   ChatFoldersList: 'chatFolders.list',
+  SafetyNumbersChanged: 'safetyNumbers.changed',
+  SafetyNumbersAccept: 'safetyNumbers.accept',
 } as const;
 export type MethodType = (typeof Method)[keyof typeof Method];
 
@@ -222,6 +228,9 @@ export const SERVICE_METHOD_CAPABILITIES = {
   [Method.MediaList]: Capability.MessagesRead,
   // Part of the chat list.
   [Method.ChatFoldersList]: Capability.ConversationsRead,
+  // Who stops a send with UNTRUSTED_IDENTITY (decision F35).
+  [Method.SafetyNumbersChanged]: Capability.ConversationsRead,
+  [Method.SafetyNumbersAccept]: Capability.IdentityManage,
 } as const satisfies Partial<Record<MethodType, CapabilityType>>;
 export type ServiceMethodType = keyof typeof SERVICE_METHOD_CAPABILITIES;
 
@@ -1350,6 +1359,30 @@ export type ChatFoldersListResultType = Readonly<{
   folders: ReadonlyArray<ChatFolderDTO>;
 }>;
 
+// Fork addition (decision F35): Signal's "Safety number changed" dialog.
+// `changed` lists the people in a chat whose new safety number stops a
+// send; `accept` approves the ones the user chose to send anyway to, as
+// the dialog's "Send anyway" does. Nothing is accepted without that call.
+export const safetyNumbersChangedParamsSchema = z
+  .object({ conversationId: conversationIdSchema })
+  .strict();
+export type SafetyNumbersChangedParamsType = z.infer<
+  typeof safetyNumbersChangedParamsSchema
+>;
+export type SafetyNumbersChangedResultType = Readonly<{
+  contacts: ReadonlyArray<Readonly<{ conversationId: string; title: string }>>;
+}>;
+
+export const safetyNumbersAcceptParamsSchema = z
+  .object({
+    conversationId: conversationIdSchema,
+    contactIds: z.array(conversationIdSchema).min(1).max(1000),
+  })
+  .strict();
+export type SafetyNumbersAcceptParamsType = z.infer<
+  typeof safetyNumbersAcceptParamsSchema
+>;
+
 // Fork additions: Signal's compose button (decision F20). contacts.list is
 // the people its "New chat" and "New group" lists offer.
 export const contactsListParamsSchema = z
@@ -1564,6 +1597,8 @@ export const SERVICE_PARAM_SCHEMAS = {
   [Method.LinkPreviewsFetch]: linkPreviewsFetchParamsSchema,
   [Method.MediaList]: mediaListParamsSchema,
   [Method.ChatFoldersList]: chatFoldersListParamsSchema,
+  [Method.SafetyNumbersChanged]: safetyNumbersChangedParamsSchema,
+  [Method.SafetyNumbersAccept]: safetyNumbersAcceptParamsSchema,
 } as const satisfies Record<ServiceMethodType, z.ZodType>;
 
 export type ConversationsListParamsType = z.infer<

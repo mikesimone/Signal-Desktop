@@ -20,6 +20,8 @@ import {
   linkPreviewsFetchParamsSchema,
   mediaListParamsSchema,
   chatFoldersListParamsSchema,
+  safetyNumbersChangedParamsSchema,
+  safetyNumbersAcceptParamsSchema,
   messagesSearchParamsSchema,
   messagesSendTextParamsSchema,
   negotiateVersion,
@@ -419,6 +421,31 @@ describe('externalClient/protocol', () => {
           conversationId,
           kind: 'files',
           cursor: "1' OR 1=1",
+        })
+      );
+    });
+
+    it('lists and accepts changed safety numbers for one chat', () => {
+      const conversationId = '0b9e2c1a-1111-4222-8333-944455556666';
+      assert.isTrue(
+        accepts(safetyNumbersChangedParamsSchema, { conversationId })
+      );
+      assert.isTrue(
+        accepts(safetyNumbersAcceptParamsSchema, {
+          conversationId,
+          contactIds: [conversationId],
+        })
+      );
+      assert.isFalse(
+        accepts(safetyNumbersAcceptParamsSchema, {
+          conversationId,
+          contactIds: [],
+        })
+      );
+      assert.isFalse(
+        accepts(safetyNumbersAcceptParamsSchema, {
+          conversationId,
+          contactIds: ['x'.repeat(65)],
         })
       );
     });
