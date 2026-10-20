@@ -9,7 +9,7 @@
 #
 # See contrib/backchannel/README.md.
 
-FROM node:24.21.0-bookworm AS build
+FROM node:24.22.0-bookworm AS build
 
 RUN apt-get update \
   && apt-get install -y --no-install-recommends python3 make g++ patch libpulse0 \
