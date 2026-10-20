@@ -265,8 +265,8 @@ importers:
         specifier: 2.0.21
         version: 2.0.21
       '@signalapp/libsignal-client':
-        specifier: 0.105.0
-        version: 0.105.0
+        specifier: 0.105.1
+        version: 0.105.1
       '@signalapp/mute-state-change':
         specifier: workspace:*
         version: link:packages/mute-state-change
@@ -617,8 +617,8 @@ importers:
         specifier: 0.7.1
         version: 0.7.1
       electron:
-        specifier: 44.7.2
-        version: 44.7.2(supports-color@8.1.1)
+        specifier: 44.9.1
+        version: 44.9.1(supports-color@8.1.1)
       electron-builder:
         specifier: 26.11.1
         version: 26.11.1(electron-builder-squirrel-windows@26.11.1)(supports-color@8.1.1)
@@ -947,8 +947,8 @@ importers:
         specifier: 4.0.0
         version: 4.0.0
       '@signalapp/libsignal-client':
-        specifier: 0.105.0
-        version: 0.105.0
+        specifier: 0.105.1
+        version: 0.105.1
       '@tus/file-store':
         specifier: ^1.5.1
         version: 1.5.1(supports-color@10.2.2)
@@ -4891,8 +4891,8 @@ packages:
   '@sideway/pinpoint@2.0.0':
     resolution: {integrity: sha512-RNiOoTPkptFtSVzQevY/yWtZwf/RxyVnPy/OcA9HBM3MlGDnBEYL5B41H0MTn0Uec8Hi+2qUtTfG2WWZBmMejQ==, tarball: https://registry.npmjs.org/@sideway/pinpoint/-/pinpoint-2.0.0.tgz}
 
-  '@signalapp/libsignal-client@0.105.0':
-    resolution: {integrity: sha512-6H7aQ6/grE6A/wG3nAm+c7aMWhj472/wtbTnNzb9z2KEPZ933PwYGi93zy6Pm63Mxd7SiOSfoa4gSTr++F44UQ==, tarball: https://registry.npmjs.org/@signalapp/libsignal-client/-/libsignal-client-0.105.0.tgz}
+  '@signalapp/libsignal-client@0.105.1':
+    resolution: {integrity: sha512-EQRQp76gXce7RNCz1emRlDAGlKmuSWfHYhyEz9buR9FHGIvXEdhL4PH2lt+nT5FYzGEFvfu/P4X0dhtrDhkb6g==, tarball: https://registry.npmjs.org/@signalapp/libsignal-client/-/libsignal-client-0.105.1.tgz}
 
   '@signalapp/minimask@1.0.1':
     resolution: {integrity: sha512-QAwo0joA60urTNbW9RIz6vLKQjy+jdVtH7cvY0wD9PVooD46MAjE40MLssp4xUJrph91n2XvtJ3pbEUDrmT2AA==, tarball: https://registry.npmjs.org/@signalapp/minimask/-/minimask-1.0.1.tgz}
@@ -4910,6 +4910,10 @@ packages:
 
   '@signalapp/sqlcipher@4.1.0':
     resolution: {integrity: sha512-B4K2xIVVEoKq+eVARKZPnJzJiJD2YIe42ZMObp7bmKCL7KGBS1V9Sd5lMGXOcE4wbFrTYkWwYC9jAN6+Eft6Uw==, tarball: https://registry.npmjs.org/@signalapp/sqlcipher/-/sqlcipher-4.1.0.tgz}
+
+  '@signalapp/types@0.3.0':
+    resolution: {integrity: sha512-76xr2s0aNbcGOUY9ciy1Qc7t8alGkNYQrpgGmtoBbFl2YGoww+ZW48J8joQit4VmvDV5oLvWk1DGddWwdEAxzQ==, tarball: https://registry.npmjs.org/@signalapp/types/-/types-0.3.0.tgz}
+    engines: {node: '>=24.18.1'}
 
   '@sinclair/typebox@0.27.8':
     resolution: {integrity: sha512-+Fj43pSMwJs4KRrH/938Uf+uAELIgVBmQzg/q1YG10djyfA3TnrU8N8XzqCh/okZdszqBQTZf96idMfE5lnwTA==, tarball: https://registry.npmjs.org/@sinclair/typebox/-/typebox-0.27.8.tgz}
@@ -7294,8 +7298,8 @@ packages:
     resolution: {integrity: sha512-bO3y10YikuUwUuDUQRM4KfwNkKhnpVO7IPdbsrejwN9/AABJzzTQ4GeHwyzNSrVO+tEH3/Np255a3sVZpZDjvg==, tarball: https://registry.npmjs.org/electron-winstaller/-/electron-winstaller-5.4.0.tgz}
     engines: {node: '>=8.0.0'}
 
-  electron@44.7.2:
-    resolution: {integrity: sha512-u3Pbz0Hi1sSSwBMz2v8LiagsfUG4QURPUe/qphM+g4THKP8o4BYdnuboyhlLO8HIC/KfV5rvltyacbP4jEq9yw==, tarball: https://registry.npmjs.org/electron/-/electron-44.7.2.tgz}
+  electron@44.9.1:
+    resolution: {integrity: sha512-x/tECFFDa2OFNjMObFH0EGKWrCnFZPOR1wP2iMIVt0STecGl8FmDXdaiaryY0kf8mtw9kSLP2yK8dfdaWkfDmw==, tarball: https://registry.npmjs.org/electron/-/electron-44.9.1.tgz}
     engines: {node: '>= 22.12.0'}
     hasBin: true
 
@@ -11526,6 +11530,10 @@ packages:
 
   uuid@11.1.1:
     resolution: {integrity: sha512-vIYxrBCC/N/K+Js3qSN88go7kIfNPssr/hHCesKCQNAjmgvYS2oqr69kIufEG+O4+PfezOH4EbIeHCfFov8ZgQ==, tarball: https://registry.npmjs.org/uuid/-/uuid-11.1.1.tgz}
+    hasBin: true
+
+  uuid@13.0.0:
+    resolution: {integrity: sha512-XQegIaBTVUjSHliKqcnFqYypAd4S+WCYt5NIeRs6w/UAry7z8Y9j5ZwRRL4kzq9U3sD6v+85er9FvkEaBpji2w==, tarball: https://registry.npmjs.org/uuid/-/uuid-13.0.0.tgz}
     hasBin: true
 
   uuid@13.0.2:
@@ -15874,10 +15882,11 @@ snapshots:
 
   '@sideway/pinpoint@2.0.0': {}
 
-  '@signalapp/libsignal-client@0.105.0':
+  '@signalapp/libsignal-client@0.105.1':
     dependencies:
+      '@signalapp/types': 0.3.0
       node-gyp-build: 4.8.4
-      type-fest: 4.26.1
+      type-fest: 5.5.0
 
   '@signalapp/minimask@1.0.1': {}
 
@@ -15901,6 +15910,14 @@ snapshots:
     dependencies:
       node-addon-api: 8.8.0
       node-gyp-build: 4.8.4
+
+  '@signalapp/types@0.3.0':
+    dependencies:
+      buffer: 6.0.3
+      semver: 7.7.4
+      type-fest: 5.5.0
+      uuid: 13.0.0
+      zod: 4.3.6(patch_hash=ab3dbef13a3a4a50b2a2fcab2bdabd3ef94a4b1607e046308492e88bdd9d5553)
 
   '@sinclair/typebox@0.27.8': {}
 
@@ -18508,7 +18525,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  electron@44.7.2(supports-color@8.1.1):
+  electron@44.9.1(supports-color@8.1.1):
     dependencies:
       '@electron-internal/extract-zip': 1.0.4
       '@electron/get': 5.0.0(supports-color@8.1.1)
@@ -23482,6 +23499,8 @@ snapshots:
   utila@0.4.0: {}
 
   uuid@11.1.1: {}
+
+  uuid@13.0.0: {}
 
   uuid@13.0.2: {}
 
