@@ -2883,9 +2883,10 @@ function confirmBlock(c, block) {
     : group
       ? `Unblock ${displayTitle(c)}? Group members will be able to add you to this group again.`
       : `Unblock ${displayTitle(c)}? You will be able to message and call each other.`;
-  if (confirm(text)) {
-    changeConversation(c.id, { action: block ? 'block' : 'accept' });
+  if (!confirm(text)) {
+    return false;
   }
+  return changeConversation(c.id, { action: block ? 'block' : 'accept' });
 }
 
 function confirmDelete(c) {
@@ -4596,10 +4597,109 @@ function blockedRows(blocked) {
           );
         }
         row.append(avatar(b.conversationId, b, 36, b.type), text);
+        if (canManageChats()) {
+          const unblock = el('button', 'setting-button', 'Unblock');
+          unblock.type = 'button';
+          unblock.addEventListener('click', () => unblockFromSettings(b));
+          row.append(unblock);
+        }
         return row;
       }),
     ]);
 }
+
+// --- block and unblock from Settings (decision F38), as Signal 8.35 ------------
+
+function blockedChat(b) {
+  return {
+    id: b.conversationId,
+    type: b.type,
+    title: b.title,
+    avatarColor: b.avatarColor,
+    avatarVersion: b.avatarVersion,
+  };
+}
+
+async function refreshBlocked() {
+  await loadSettings();
+  renderSettings();
+}
+
+async function unblockFromSettings(b) {
+  if (await confirmBlock(blockedChat(b), false)) {
+    await refreshBlocked();
+  }
+}
+
+function addBlockedButton() {
+  const add = el('button', 'setting-button', 'Add blocked user or group');
+  add.type = 'button';
+  add.addEventListener('click', openBlockChooser);
+  const row = el('div', 'details-actions');
+  row.append(add);
+  return row;
+}
+
+// People from Signal's contact list and the groups in the chat list, minus
+// those already blocked, as Signal's chooser offers them.
+let blockCandidates = [];
+
+async function openBlockChooser() {
+  const blocked = new Set(
+    (signalSettings?.blocked ?? []).map(b => b.conversationId)
+  );
+  let contacts = [];
+  try {
+    ({ contacts } = await api('api/contacts'));
+  } catch (error) {
+    toast(`Couldn't load contacts (${error.code ?? error.message}).`);
+  }
+  const people = contacts
+    .filter(c => !c.noteToSelf && !blocked.has(c.conversationId))
+    .map(c => ({ ...contactAsChat(c), match: c }));
+  const groups = [...conversations.values()]
+    .filter(c => c.type === 'group' && !c.blocked && !blocked.has(c.id))
+    .map(c => ({ ...c, match: { title: displayTitle(c) } }));
+  blockCandidates = [...people, ...groups].sort((a, b) =>
+    displayTitle(a).localeCompare(displayTitle(b))
+  );
+  $('block-chooser-search').value = '';
+  renderBlockChooser();
+  $('block-chooser').hidden = false;
+  $('block-chooser-search').focus();
+}
+
+function closeBlockChooser() {
+  $('block-chooser').hidden = true;
+  blockCandidates = [];
+}
+
+function renderBlockChooser() {
+  const query = $('block-chooser-search').value.trim();
+  const found = blockCandidates.filter(c => matchesContact(c.match, query));
+  $('block-chooser-list').replaceChildren(
+    ...(found.length === 0
+      ? [el('li', 'sub', 'No chats')]
+      : found.map(c => {
+          const li = el('li');
+          li.append(
+            conversationAvatar(c, 36),
+            el('span', 'title', displayTitle(c))
+          );
+          li.addEventListener('click', async () => {
+            if (await confirmBlock(c, true)) {
+              closeBlockChooser();
+              await refreshBlocked();
+            }
+          });
+          return li;
+        }))
+  );
+}
+
+$('block-chooser-close').append(icon('close'));
+$('block-chooser-close').addEventListener('click', closeBlockChooser);
+$('block-chooser-search').addEventListener('input', renderBlockChooser);
 
 async function changeSetting(key, value) {
   try {
@@ -4925,8 +5025,9 @@ function settingsSections() {
         el(
           'p',
           'setting-note',
-          "Blocked people and groups can't message or call you. Unblock one from its chat."
+          "Blocked people and groups can't message or call you."
         ),
+        ...(canManageChats() ? [addBlockedButton()] : []),
         ...blockedRows(s.blocked ?? []),
       ],
     },
@@ -8773,6 +8874,8 @@ document.addEventListener('keydown', e => {
       closeSchedule();
     } else if (!$('scheduled').hidden) {
       closeScheduledList();
+    } else if (!$('block-chooser').hidden) {
+      closeBlockChooser();
     } else if (!$('forward').hidden) {
       closeForward();
     } else if (!$('new-chat').hidden) {

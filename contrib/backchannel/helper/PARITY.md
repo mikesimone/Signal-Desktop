@@ -9,7 +9,7 @@ Status: **done**, **partial**, **missing**, or **different** (on purpose).
 A weekly check compares new Signal releases against this list and adds
 what they bring.
 
-Last reviewed: 2026-10-19, against Signal 8.34.0-alpha.1 in fork main.
+Last reviewed: 2026-10-26, against Signal 8.35.0-alpha.1 in fork main.
 
 ## Chat list
 
@@ -95,7 +95,7 @@ Last reviewed: 2026-10-19, against Signal 8.34.0-alpha.1 in fork main.
 | Appearance (page theme)                             | done      | F11                         |
 | Chat colors and wallpapers                          | missing   |                             |
 | Chats, notifications, privacy, data usage           | done      | F11                         |
-| Blocked list                                        | done      | F12 (unblock from the chat) |
+| Blocked list, block and unblock here               | done      | F12, F38                    |
 | Import contacts (and their photos) from the phone   | done      | F36                         |
 | Stories on/off                                      | done      | F12                         |
 | Notification profiles                               | missing   |                             |

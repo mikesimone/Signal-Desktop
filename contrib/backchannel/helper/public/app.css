@@ -2030,7 +2030,8 @@ button {
   font-weight: 600;
 }
 
-#forward-search {
+#forward-search,
+#block-chooser-search {
   margin: 0 12px 8px;
   padding: 6px 12px;
   border: none;
@@ -2717,6 +2718,11 @@ label.poll-option {
   gap: 12px;
   padding: 8px 0;
   border-bottom: 1px solid var(--border);
+}
+
+/* Opened from Settings > Blocked, over the Settings dialog. */
+#block-chooser {
+  z-index: 31;
 }
 
 /* The about-emoji picker opens over the Settings dialog. */
