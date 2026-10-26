@@ -695,6 +695,16 @@ export function createWebServer({
       );
       return;
     }
+    if (req.method === 'GET' && route === 'api/editHistory') {
+      sendJson(
+        res,
+        200,
+        await bridge.call('messages.getEditHistory', {
+          messageId: url.searchParams.get('messageId'),
+        })
+      );
+      return;
+    }
     if (req.method === 'POST' && route === 'api/contacts/sync') {
       const result = await bridge.call('contacts.sync', {});
       contactPhotos?.record(result.syncedAt);

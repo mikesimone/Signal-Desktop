@@ -53,7 +53,7 @@ Last reviewed: 2026-10-26, against Signal 8.35.0-alpha.1 in fork main.
 | Contact cards (view)                                     | missing   |                                                      |
 | Payments, gift badges                                    | missing   |                                                      |
 | Message details (per-recipient delivery)                 | missing   |                                                      |
-| Edit history                                             | missing   |                                                      |
+| Edit history                                             | done      | F39                                                  |
 | Chat header: details, members, safety number             | partial   | F16: details and members; safety number missing      |
 | Contact card from a group member's photo or name         | done      | F23: About and Message                               |
 | Reply privately to a group message                       | different | F23: beyond Signal; links both ways on this page     |

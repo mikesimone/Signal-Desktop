@@ -998,3 +998,12 @@ first with Signal's own wording.
 WHY: the weekly parity check (2026-10-26) found upstream's "Support
 block/unblock from preferences".
 
+## F39. Fork only: edit history
+
+DECISION: "Edited" under a message opens its earlier versions, newest first,
+with their formatting and mentions, as Signal's edit history dialog.
+`messages.getEditHistory` (messages.read, so no new Allow) returns them, and
+nothing for deleted or view-once messages, whose content never crosses.
+
+WHY: next missing item on the parity list after the 2026-10-26 check.
+

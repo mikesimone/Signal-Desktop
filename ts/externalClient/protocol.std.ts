@@ -178,6 +178,7 @@ export const Method = {
   SafetyNumbersChanged: 'safetyNumbers.changed',
   SafetyNumbersAccept: 'safetyNumbers.accept',
   ContactsSync: 'contacts.sync',
+  MessagesGetEditHistory: 'messages.getEditHistory',
 } as const;
 export type MethodType = (typeof Method)[keyof typeof Method];
 
@@ -233,6 +234,7 @@ export const SERVICE_METHOD_CAPABILITIES = {
   [Method.SafetyNumbersChanged]: Capability.ConversationsRead,
   [Method.SafetyNumbersAccept]: Capability.IdentityManage,
   [Method.ContactsSync]: Capability.SettingsManage,
+  [Method.MessagesGetEditHistory]: Capability.MessagesRead,
 } as const satisfies Partial<Record<MethodType, CapabilityType>>;
 export type ServiceMethodType = keyof typeof SERVICE_METHOD_CAPABILITIES;
 
@@ -450,6 +452,24 @@ export const messagesGetParamsSchema = z
     messageId: messageIdSchema,
   })
   .strict();
+
+// Fork addition (decision F39): what Signal's "Edited" opens.
+export const messagesGetEditHistoryParamsSchema = z
+  .object({ messageId: messageIdSchema })
+  .strict();
+export type MessagesGetEditHistoryParamsType = z.infer<
+  typeof messagesGetEditHistoryParamsSchema
+>;
+export type EditVersionDTO = Readonly<{
+  sentAt: number;
+  body: string;
+  mentions: ReadonlyArray<MentionDTO>;
+  formatting: ReadonlyArray<FormattingDTO>;
+  attachmentCount: number;
+}>;
+export type MessagesGetEditHistoryResultType = Readonly<{
+  versions: ReadonlyArray<EditVersionDTO>;
+}>;
 
 // Fork addition (decision F23): where the message a reply quotes is. In
 // this chat as Signal finds it, or, for "Reply privately", in a group the
@@ -1626,6 +1646,7 @@ export const SERVICE_PARAM_SCHEMAS = {
   [Method.SafetyNumbersChanged]: safetyNumbersChangedParamsSchema,
   [Method.SafetyNumbersAccept]: safetyNumbersAcceptParamsSchema,
   [Method.ContactsSync]: contactsSyncParamsSchema,
+  [Method.MessagesGetEditHistory]: messagesGetEditHistoryParamsSchema,
 } as const satisfies Record<ServiceMethodType, z.ZodType>;
 
 export type ConversationsListParamsType = z.infer<

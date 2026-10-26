@@ -2415,15 +2415,21 @@ function renderMessage(m, prev, next) {
   }
 
   const meta = el('span', 'meta');
-  const bits = [formatTime(m.sentAt)];
+  meta.append(formatTime(m.sentAt));
   if (m.edited) {
-    bits.push('Edited');
+    // As in Signal, "Edited" opens the earlier versions (decision F39).
+    const edited = el('button', 'edited-link', 'Edited');
+    edited.type = 'button';
+    edited.addEventListener('click', ev => {
+      ev.stopPropagation();
+      openEditHistory(m);
+    });
+    meta.append(' · ', edited);
   }
   // Problems keep their words too; the checkmarks speak for themselves.
   if (['failed', 'partiallySent', 'paused'].includes(m.sendStatus)) {
-    bits.push(STATUS_TEXT[m.sendStatus]);
+    meta.append(` · ${STATUS_TEXT[m.sendStatus]}`);
   }
-  meta.textContent = bits.join(' · ');
   if (m.sendStatus) {
     meta.append(statusIcon(m.sendStatus));
   }
@@ -8472,6 +8478,54 @@ function openPollVotes(m) {
   $('poll-votes').hidden = false;
 }
 
+// --- edit history (decision F39) ----------------------------------------------
+
+async function openEditHistory(m) {
+  const body = $('edit-history-body');
+  body.replaceChildren(el('p', 'setting-note', 'Loading…'));
+  $('edit-history').hidden = false;
+  let versions;
+  try {
+    ({ versions } = await api(
+      `api/editHistory?${new URLSearchParams({ messageId: m.id })}`
+    ));
+  } catch (error) {
+    body.replaceChildren(
+      el(
+        'p',
+        'setting-note',
+        `Couldn't load the edit history (${error.code ?? error.message}).`
+      )
+    );
+    return;
+  }
+  body.replaceChildren(
+    ...versions.map((v, i) => {
+      const item = el('div', 'edit-version');
+      item.append(renderBody(v));
+      const files =
+        v.attachmentCount > 0
+          ? ` · ${v.attachmentCount} attachment${v.attachmentCount === 1 ? '' : 's'}`
+          : '';
+      item.append(
+        el(
+          'div',
+          'sub',
+          `${i === versions.length - 1 ? 'Sent' : 'Edited'} ${formatTime(v.sentAt)}${files}`
+        )
+      );
+      return item;
+    })
+  );
+}
+
+function closeEditHistory() {
+  $('edit-history').hidden = true;
+}
+
+$('edit-history-close').append(icon('close'));
+$('edit-history-close').addEventListener('click', closeEditHistory);
+
 function closePollVotes() {
   pollVotesFor = null;
   $('poll-votes').hidden = true;
@@ -8883,6 +8937,7 @@ document.addEventListener('keydown', e => {
     } else {
       closePollCompose();
       closePollVotes();
+      closeEditHistory();
       closeSettings();
       closeDetails();
     }

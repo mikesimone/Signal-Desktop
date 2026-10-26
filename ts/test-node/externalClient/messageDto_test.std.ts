@@ -9,7 +9,10 @@ import type {
   MessageDtoContextType,
   MessageSourceType,
 } from '../../externalClient/messageDto.std.ts';
-import { toMessageDTO } from '../../externalClient/messageDto.std.ts';
+import {
+  toEditHistoryDTO,
+  toMessageDTO,
+} from '../../externalClient/messageDto.std.ts';
 import { MessageKind } from '../../externalClient/protocol.std.ts';
 import { DurationInSeconds } from '../../util/durations/duration-in-seconds.std.ts';
 import type { AciString } from '../../types/ServiceId.std.ts';
@@ -391,6 +394,27 @@ describe('externalClient/messageDto', () => {
     assert.strictEqual(
       toMessageDTO({ ...incoming, body: undefined }, context)?.kind,
       MessageKind.Unsupported
+    );
+  });
+
+  it('lists edit history versions, newest first, only for text', () => {
+    const edited = {
+      ...incoming,
+      editHistory: [
+        { body: 'b', timestamp: 2, received_at: 2 },
+        { body: 'a', timestamp: 1, received_at: 1 },
+      ],
+    };
+    assert.deepEqual(
+      toEditHistoryDTO(edited, context).map(v => [v.sentAt, v.body]),
+      [
+        [2, 'b'],
+        [1, 'a'],
+      ]
+    );
+    assert.deepEqual(
+      toEditHistoryDTO({ ...edited, isErased: true }, context),
+      []
     );
   });
   it('reads polls as the timeline does', () => {

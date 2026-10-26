@@ -78,12 +78,14 @@ import {
   preferCached,
 } from './serviceHelpers.preload.ts';
 import type { ServiceResultType } from '../hostTypes.std.ts';
-import { toMessageDTO } from '../messageDto.std.ts';
+import { toEditHistoryDTO, toMessageDTO } from '../messageDto.std.ts';
 import type {
   ConversationsGetParamsType,
   ConversationsListParamsType,
   ConversationsListResultType,
   MessageDTO,
+  MessagesGetEditHistoryParamsType,
+  MessagesGetEditHistoryResultType,
   MessagesGetParamsType,
   MessagesListParamsType,
   MessagesListResultType,
@@ -233,6 +235,23 @@ async function getMessage({
   return { ok: true, value: { message: dto } };
 }
 
+// Fork addition (decision F39).
+async function getEditHistory({
+  messageId,
+}: MessagesGetEditHistoryParamsType): Promise<ServiceResultType> {
+  if (!window.ConversationController.isInitialFetchComplete()) {
+    return notReady;
+  }
+  const message = await loadMessage(messageId);
+  if (!message || !getListedConversation(message.conversationId)) {
+    return notFound;
+  }
+  const value: MessagesGetEditHistoryResultType = {
+    versions: toEditHistoryDTO(message, getDtoContext()),
+  };
+  return { ok: true, value };
+}
+
 async function dispatch(
   method: ServiceMethodType,
   rawParams: unknown
@@ -258,6 +277,10 @@ async function dispatch(
     case Method.MessagesGet: {
       const params = safeParseUnknown(SERVICE_PARAM_SCHEMAS[method], rawParams);
       return params.success ? getMessage(params.data) : invalid;
+    }
+    case Method.MessagesGetEditHistory: {
+      const params = safeParseUnknown(SERVICE_PARAM_SCHEMAS[method], rawParams);
+      return params.success ? getEditHistory(params.data) : invalid;
     }
     case Method.MessagesSendText: {
       if (!window.ConversationController.isInitialFetchComplete()) {

@@ -2254,6 +2254,36 @@ label.poll-option {
   overflow-y: auto;
 }
 
+.edit-version {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.edit-version .sub {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.edit-version:last-child {
+  border-bottom: none;
+}
+
+.edited-link {
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.edited-link:hover {
+  text-decoration: underline;
+}
+
 .poll-votes-question {
   margin-bottom: 8px;
   font-weight: 600;
