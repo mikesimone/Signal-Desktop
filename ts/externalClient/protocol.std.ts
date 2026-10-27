@@ -1805,6 +1805,8 @@ export type QuoteDTO = Readonly<{
   author: AuthorDTO | null;
   sentAt: number | null;
   text: string | null;
+  mentions: ReadonlyArray<MentionDTO>;
+  formatting: ReadonlyArray<FormattingDTO>;
   // Fork addition: the quoted message's first attachment, as Signal shows
   // it in the quote (a thumbnail, or the kind of file).
   attachment: QuoteAttachmentDTO | null;

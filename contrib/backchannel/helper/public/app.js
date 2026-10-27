@@ -1314,11 +1314,21 @@ function describeAttachments(attachments) {
 }
 
 // Plain-text summary for notifications and quotes.
+// Message text with each @mention written out; Signal keeps a placeholder
+// character where a mention goes.
+function withMentions(text, mentions = []) {
+  let out = text;
+  for (const r of [...mentions].sort((a, b) => b.start - a.start)) {
+    out = `${out.slice(0, r.start)}@${r.title ?? 'Someone'}${out.slice(r.start + r.length)}`;
+  }
+  return out;
+}
+
 function summarize(m) {
   switch (m.kind) {
     case 'text': {
       if (m.body) {
-        return m.body;
+        return withMentions(m.body, m.mentions);
       }
       return describeAttachments(m.attachments).join(', ') || 'Message';
     }
@@ -1516,13 +1526,22 @@ function renderQuote(quote, m) {
     box.classList.add(`nc-${author.nameColor}`);
   }
   const a = quote.attachment;
+  let text;
+  if (quote.text) {
+    // Mentions as names and the quoted styles, as in the message itself.
+    text = renderBody({
+      kind: 'quote',
+      body: quote.text,
+      mentions: quote.mentions ?? [],
+      formatting: quote.formatting ?? [],
+    });
+    text.className = 'quote-text';
+  } else {
+    text = el('span', 'quote-text', (a ? quoteLabel(a) : null) || 'Attachment');
+  }
   box.append(
     nameLine(nameOf(quote.authorConversationId), author, 'quote-author'),
-    el(
-      'span',
-      'quote-text',
-      quote.text || (a ? quoteLabel(a) : null) || 'Attachment'
-    )
+    text
   );
   if (a?.hasThumbnail && m) {
     addQuoteThumb(

@@ -17,6 +17,7 @@ import { MessageKind } from '../../externalClient/protocol.std.ts';
 import { DurationInSeconds } from '../../util/durations/duration-in-seconds.std.ts';
 import type { AciString } from '../../types/ServiceId.std.ts';
 import { IMAGE_PNG } from '../../types/MIME.std.ts';
+import { BodyRange } from '../../types/BodyRange.std.ts';
 import type { Emoji } from '../../axo/emoji.std.ts';
 
 const ALICE_ACI = '00000000-0000-4000-8000-00000000000a' as AciString;
@@ -221,7 +222,11 @@ describe('externalClient/messageDto', () => {
         quote: {
           id: 42,
           authorAci: BOB_ACI,
-          text: 'earlier',
+          text: '\uFFFC earlier',
+          bodyRanges: [
+            { start: 0, length: 1, mentionAci: BOB_ACI },
+            { start: 2, length: 7, style: BodyRange.Style.BOLD },
+          ],
           attachments: [],
           isViewOnce: false,
           referencedMessageNotFound: false,
@@ -264,7 +269,18 @@ describe('externalClient/messageDto', () => {
         label: { text: 'Bobby', emoji: null },
       },
       sentAt: 42,
-      text: 'earlier',
+      text: '\uFFFC earlier',
+      // A mention in the quoted text comes back as a name, not as Signal's
+      // placeholder character.
+      mentions: [
+        {
+          start: 0,
+          length: 1,
+          conversationId: 'conv-bob',
+          title: 'title of conv-bob',
+        },
+      ],
+      formatting: [{ start: 2, length: 7, style: 'bold' }],
       attachment: null,
     });
   });

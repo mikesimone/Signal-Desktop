@@ -331,6 +331,10 @@ function toQuote(
     sentAt: quote.id,
     // A quote of a view-once message must not reveal it.
     text: quote.isViewOnce ? null : (quote.text ?? null),
+    // Fork addition: @mentions and styles in the quoted text, so a mention
+    // shows as a name and not as Signal's placeholder character.
+    mentions: quote.isViewOnce ? [] : toMentions(quote, context),
+    formatting: quote.isViewOnce ? [] : toFormatting(quote),
     attachment: quote.isViewOnce ? null : toQuoteAttachment(quote),
   };
 }
