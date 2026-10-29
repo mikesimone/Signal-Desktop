@@ -57,6 +57,11 @@ export namespace AxoCheckbox {
      */
     id?: string;
     /**
+     * ID of an element that labels this checkbox, for when it can't be
+     * wrapped with a `<label>`.
+     */
+    labelledby?: string;
+    /**
      * Shape of the checkbox.
      */
     variant: Variant;
@@ -97,6 +102,7 @@ export namespace AxoCheckbox {
     return (
       <Checkbox.Root
         id={props.id}
+        aria-labelledby={props.labelledby}
         checked={props.checked}
         onCheckedChange={props.onCheckedChange}
         disabled={props.disabled}
@@ -114,7 +120,14 @@ export namespace AxoCheckbox {
           'data-[state=checked]:enabled:active:bg-accent-pressed',
           'data-[state=checked]:data-disabled:text-disabled-oncolor',
           'focus-visible:axo-focus-ring',
-          'overflow-hidden'
+          'overflow-hidden',
+          'forced-colors:border-[ButtonText]',
+          'forced-colors:data-[state=checked]:border-[Highlight]',
+          'forced-colors:data-[state=checked]:bg-[Highlight]',
+          'forced-colors:data-[state=checked]:text-[HighlightText]',
+          'forced-colors:data-disabled:border-[GrayText]',
+          'forced-colors:data-disabled:data-[state=checked]:bg-[GrayText]',
+          'forced-colors:data-disabled:data-[state=checked]:text-[Canvas]'
         )}
       >
         <Checkbox.Indicator asChild>

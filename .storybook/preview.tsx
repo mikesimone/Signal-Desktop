@@ -146,7 +146,6 @@ window.SignalContext = {
   getHourCyclePreference: () => HourCyclePreference.UnknownPreference,
   getPreferredSystemLocales: () => ['en'],
   getLocaleOverride: () => null,
-  getLocaleDisplayNames: () => ({ en: { en: 'English' } }),
   getResolvedMessagesLocale: () => 'en',
 
   getLocalizedEmojiList: async locale => {
@@ -259,6 +258,8 @@ function withFunProvider(Story, context) {
       recentGifs={[]}
       emojiSkinToneDefault={Emoji.SkinTone.None}
       onEmojiSkinToneDefaultChange={noop}
+      favoriteStickers={[]}
+      isFavoriteStickersEnabled
       isStickerReplySendEnabled
       installedStickerPacks={[]}
       showStickerPickerHint={false}

@@ -24,10 +24,10 @@ import {
   donationErrorTypeSchema,
   donationStateSchema,
 } from '../types/Donations.std.ts';
-import type { AvatarColorType } from '../types/Colors.std.ts';
-import { Button, ButtonSize, ButtonVariant } from './Button.dom.tsx';
-import { Modal } from './Modal.dom.tsx';
-import { Spinner } from './Spinner.dom.tsx';
+import type {
+  AvatarColorType,
+  AvatarUpdateOptionsType,
+} from '../types/Avatar.std.ts';
 import type { AnyToast } from '../types/Toast.dom.tsx';
 import { ToastType } from '../types/Toast.dom.tsx';
 import { createLogger } from '../logging/log.std.ts';
@@ -53,7 +53,6 @@ import type {
   ConversationType,
   ProfileDataType,
 } from '../state/ducks/conversations.preload.ts';
-import type { AvatarUpdateOptionsType } from '../types/Avatar.std.ts';
 import { drop } from '../util/drop.std.ts';
 import { DonationsOfflineTooltip } from './conversation/DonationsOfflineTooltip.dom.tsx';
 import { getInProgressDonation } from '../util/donations.dom.ts';
@@ -61,6 +60,7 @@ import { AxoButton } from '../axo/AxoButton.dom.tsx';
 import { tw } from '../axo/tw.dom.tsx';
 import { BadgeImage } from './BadgeImage.dom.tsx';
 import { SpinnerV2 } from './SpinnerV2.dom.tsx';
+import { DonationsReceiptDetailsDialog } from './DonationsReceiptDetailsDialog.dom.tsx';
 
 const { groupBy, sortBy } = lodash;
 
@@ -425,6 +425,10 @@ function PreferencesReceiptList({
     showToast,
   ]);
 
+  const handleCloseReceiptDetails = useCallback(() => {
+    setSelectedReceipt(null);
+  }, []);
+
   const dateFormatter = getDateTimeFormatter({
     month: 'short',
     day: 'numeric',
@@ -499,61 +503,13 @@ function PreferencesReceiptList({
       )}
 
       {selectedReceipt && (
-        <Modal
+        <DonationsReceiptDetailsDialog
           i18n={i18n}
-          modalName="ReceiptDetailsModal"
-          className="PreferencesDonations__ReceiptModal"
-          hasXButton
-          padded={false}
-          onClose={() => setSelectedReceipt(null)}
-          modalFooter={
-            <Button
-              variant={ButtonVariant.Primary}
-              size={ButtonSize.Small}
-              onClick={handleDownloadReceipt}
-              disabled={isDownloading}
-            >
-              {isDownloading ? (
-                <Spinner size="24px" svgSize="small" />
-              ) : (
-                i18n('icu:PreferencesDonations__ReceiptModal--download')
-              )}
-            </Button>
-          }
-        >
-          <div className="PreferencesDonations__ReceiptModal__content">
-            <div className="PreferencesDonations__ReceiptModal__logo-container">
-              <div className="PreferencesDonations__ReceiptModal__logo" />
-            </div>
-            <div className="PreferencesDonations__ReceiptModal__amount">
-              {toHumanCurrencyString({
-                amount: getHumanDonationAmount(selectedReceipt),
-                currency: selectedReceipt.currencyType,
-              })}
-            </div>
-            <hr className="PreferencesDonations__ReceiptModal__separator" />
-            <div className="PreferencesDonations__ReceiptModal__details">
-              <div className="PreferencesDonations__ReceiptModal__detail-item">
-                <div className="PreferencesDonations__ReceiptModal__detail-label">
-                  {i18n('icu:PreferencesDonations__ReceiptModal--type-label')}
-                </div>
-                <div className="PreferencesDonations__ReceiptModal__detail-value">
-                  {i18n('icu:DonationReceipt__type-value--one-time')}
-                </div>
-              </div>
-              <div className="PreferencesDonations__ReceiptModal__detail-item">
-                <div className="PreferencesDonations__ReceiptModal__detail-label">
-                  {i18n(
-                    'icu:PreferencesDonations__ReceiptModal--date-paid-label'
-                  )}
-                </div>
-                <div className="PreferencesDonations__ReceiptModal__detail-value">
-                  {dateFormatter.format(new Date(selectedReceipt.timestamp))}
-                </div>
-              </div>
-            </div>
-          </div>
-        </Modal>
+          receipt={selectedReceipt}
+          downloading={isDownloading}
+          onDownload={handleDownloadReceipt}
+          onClose={handleCloseReceiptDetails}
+        />
       )}
     </div>
   );

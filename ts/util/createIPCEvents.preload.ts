@@ -20,7 +20,7 @@ import {
   type NotificationClickData,
   notificationService,
 } from '../services/notifications.preload.ts';
-import { joinViaLink } from '../groups.preload.ts';
+import { startJoinViaLink } from '../groups.preload.ts';
 import {
   StoryViewModeType,
   StoryViewTargetType,
@@ -83,6 +83,7 @@ export type IPCEventsCallbacksType = {
   ) => Promise<string>;
 };
 
+// oxlint-disable-next-line typescript/no-generated-empty-object-type
 type ValuesWithGetters = Omit<
   SettingsValuesType,
   // Async - we'll redefine these in IPCEventsGettersType
@@ -404,7 +405,7 @@ export function createIPCEvents(
         return;
       }
       try {
-        await joinViaLink(value);
+        await startJoinViaLink(value);
       } catch (error) {
         log.error(
           'showGroupViaLink: Ran into an error!',

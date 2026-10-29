@@ -215,7 +215,9 @@ export type MakeVideoScreenshotOptionsType = Readonly<{
 
 export type MakeVideoScreenshotResultType = Readonly<{
   blob: Blob;
-  duration: number | undefined;
+  duration: number;
+  width: number;
+  height: number;
 }>;
 
 export async function makeVideoScreenshot({
@@ -248,23 +250,15 @@ export async function makeVideoScreenshot({
 
   const blob = await canvasToBlob(canvas, contentType);
 
+  const [width, height] = await Promise.all([
+    track.getDisplayWidth(),
+    track.getDisplayHeight(),
+  ]);
+
   return {
     blob,
     duration,
+    width,
+    height,
   };
-}
-
-export function makeObjectUrl(
-  data: Uint8Array<ArrayBuffer> | ArrayBuffer,
-  contentType: MIMEType
-): string {
-  const blob = new Blob([data], {
-    type: contentType,
-  });
-
-  return URL.createObjectURL(blob);
-}
-
-export function revokeObjectUrl(objectUrl: string): void {
-  URL.revokeObjectURL(objectUrl);
 }

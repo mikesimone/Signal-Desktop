@@ -5,12 +5,10 @@ import { assert } from 'chai';
 import * as sinon from 'sinon';
 
 import * as Message from '../../types/Message2.preload.ts';
-import { SignalService } from '../../protobuf/index.std.ts';
-import * as Bytes from '../../Bytes.std.ts';
 import * as MIME from '../../types/MIME.std.ts';
 
 import type { EmbeddedContactType } from '../../types/EmbeddedContact.std.ts';
-import type { MessageAttributesType } from '../../model-types.d.ts';
+import type { MessageAttributesType } from '../../model-types.std.ts';
 import type {
   AddressableAttachmentType,
   AttachmentType,
@@ -74,16 +72,11 @@ describe('Message', () => {
         contentType: MIME.MIMEType;
         logger: LoggerType;
       }) => new Blob(),
-      makeObjectUrl: (
-        _data: Uint8Array<ArrayBuffer> | ArrayBuffer,
-        _contentType: MIME.MIMEType
-      ) => 'fake-object-url',
       makeVideoScreenshot: async (_params: {
         objectUrl: string;
         contentType: MIME.MIMEType;
         logger: LoggerType;
-      }) => ({ blob: new Blob(), duration: undefined }),
-      revokeObjectUrl: (_objectUrl: string) => undefined,
+      }) => ({ blob: new Blob(), duration: 1, width: 1, height: 1 }),
       readAttachmentData: async (
         attachment: Partial<AddressableAttachmentType>
       ): Promise<Uint8Array<ArrayBuffer>> => {
@@ -178,45 +171,6 @@ describe('Message', () => {
   });
 
   describe('upgradeSchema', () => {
-    it('should upgrade an unversioned message to the latest version', async () => {
-      const input = getDefaultMessage({
-        attachments: [
-          {
-            contentType: MIME.AUDIO_AAC,
-            flags: SignalService.AttachmentPointer.Flags.VOICE_MESSAGE,
-            data: Bytes.fromString('It’s easy if you try'),
-            fileName: 'test\u202Dfig.exe',
-            size: 1111,
-          },
-        ],
-        schemaVersion: 0,
-      });
-      const expected = getDefaultMessage({
-        attachments: [
-          {
-            ...FAKE_LOCAL_ATTACHMENT,
-            contentType: MIME.AUDIO_AAC,
-            flags: 1,
-            fileName: 'test\uFFFDfig.exe',
-          },
-        ],
-        schemaVersion: Message.CURRENT_SCHEMA_VERSION,
-      });
-
-      const expectedAttachmentData = 'It’s easy if you try';
-      const context = getDefaultContext({
-        writeNewAttachmentData: async attachmentData => {
-          assert.strictEqual(
-            Bytes.toString(attachmentData),
-            expectedAttachmentData
-          );
-          return FAKE_LOCAL_ATTACHMENT;
-        },
-      });
-      const actual = await Message.upgradeSchema(input, context);
-      assert.deepEqual(actual, expected);
-    });
-
     context('with multiple upgrade steps', () => {
       it('should return last valid message when any upgrade step fails', async () => {
         const input = getDefaultMessage({
@@ -604,7 +558,6 @@ describe('Message', () => {
               thumbnail: {
                 contentType: MIME.TEXT_ATTACHMENT,
                 size: 100,
-                data: Buffer.from('data is here'),
               },
             },
           ],

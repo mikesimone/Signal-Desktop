@@ -4,6 +4,21 @@
 # Database Schema
 
 <details>
+<summary>Table: account</summary>
+
+```sql
+CREATE TABLE account (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  defaultBubbleColorPreset TEXT,
+  defaultCustomChatColorId INTEGER REFERENCES customChatColors (id) ON DELETE SET NULL
+) STRICT
+```
+
+---
+
+</details>
+
+<details>
 <summary>Table: attachment_backup_jobs</summary>
 
 ```sql
@@ -533,7 +548,9 @@ CREATE TABLE conversations (
   serviceId TEXT,
   groupId TEXT,
   profileLastFetchedAt INTEGER,
-  expireTimerVersion INTEGER NOT NULL DEFAULT 1
+  expireTimerVersion INTEGER NOT NULL DEFAULT 1,
+  bubbleColorPreset TEXT,
+  customChatColorId INTEGER REFERENCES customChatColors (id) ON DELETE SET NULL
 )
 ```
 
@@ -544,6 +561,15 @@ CREATE TABLE conversations (
 CREATE INDEX conversations_active ON conversations (active_at)
 WHERE
   active_at IS NOT NULL
+```
+
+</details>
+
+<details>
+<summary>Index: conversations → conversations_customChatColorId</summary>
+
+```sql
+CREATE INDEX conversations_customChatColorId ON conversations (customChatColorId)
 ```
 
 </details>
@@ -594,6 +620,23 @@ WHERE
 ```
 
 </details>
+
+---
+
+</details>
+
+<details>
+<summary>Table: customChatColors</summary>
+
+```sql
+CREATE TABLE customChatColors (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  solid INTEGER,
+  gradientStart INTEGER,
+  gradientEnd INTEGER,
+  gradientAngle INTEGER
+) STRICT
+```
 
 ---
 
@@ -709,6 +752,49 @@ CREATE INDEX edited_messages_unread ON edited_messages (
   readStatus,
   conversationId
 )
+```
+
+</details>
+
+---
+
+</details>
+
+<details>
+<summary>Table: favorite_stickers</summary>
+
+```sql
+CREATE TABLE favorite_stickers (
+  packId TEXT NOT NULL,
+  stickerId INTEGER NOT NULL,
+  packKey TEXT,
+  favoritedAtTimestampMs INTEGER,
+  deletedAtTimestampMs INTEGER,
+  status TEXT NOT NULL,
+  storageID TEXT,
+  storageVersion INTEGER,
+  storageUnknownFields BLOB,
+  storageNeedsSync INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (packId, stickerId)
+) STRICT
+```
+
+<details>
+<summary>Index: favorite_stickers → favorite_stickers_by_favoritedAtTimestampMs</summary>
+
+```sql
+CREATE INDEX favorite_stickers_by_favoritedAtTimestampMs on favorite_stickers (
+  favoritedAtTimestampMs
+)
+```
+
+</details>
+
+<details>
+<summary>Index: favorite_stickers → sqlite_autoindex_favorite_stickers_1</summary>
+
+```text
+(404: SQL Not Found)
 ```
 
 </details>

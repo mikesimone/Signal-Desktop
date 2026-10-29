@@ -291,7 +291,7 @@ describe('backups', function (this: Mocha.Suite) {
 
       const [catMessage] = await app.getMessagesBySentAt(catTimestamp);
       const [image] = catMessage?.attachments ?? [];
-      strictAssert(image.plaintextHash, 'plaintextHash was calculated');
+      strictAssert(image?.plaintextHash, 'plaintextHash was calculated');
       strictAssert(image.digest, 'digest was calculated at download time');
       strictAssert(
         ciphertextCat.digest,
@@ -349,7 +349,10 @@ describe('backups', function (this: Mocha.Suite) {
         await window.getByTestId('NavTabsItem--Stories').click();
 
         debug('Opening story privacy');
-        await window.locator('.StoriesTab__MoreActionsIcon').click();
+        await window
+          .locator('.NavSidebar__HeaderActions')
+          .getByRole('button', { name: 'More actions' })
+          .click();
         await window.getByRole('menuitem', { name: 'Story Privacy' }).click();
 
         const dialog = window.getByRole('dialog', { name: 'Story privacy' });
@@ -410,12 +413,12 @@ describe('backups', function (this: Mocha.Suite) {
       const [image] = catMessage?.attachments ?? [];
       if (!bootstrapLinkParams.localBackup) {
         strictAssert(
-          image.digest,
+          image?.digest,
           'digest was calculated after download from media tier'
         );
         assert.strictEqual(image.digest, toBase64(ciphertextCat.digest));
       }
-      assert.strictEqual(image.plaintextHash, catPlaintextHash);
+      assert.strictEqual(image?.plaintextHash, catPlaintextHash);
     }
 
     await comparator(app);

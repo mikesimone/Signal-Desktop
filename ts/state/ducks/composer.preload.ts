@@ -3,7 +3,7 @@
 
 import path from 'node:path';
 import lodash from 'lodash';
-import { v4 as generateUuid } from 'uuid';
+import { v7 as generateUuid } from 'uuid';
 
 import type { ReadonlyDeep } from 'type-fest';
 import type {
@@ -19,21 +19,26 @@ import {
   isImageAttachment,
   isVideoAttachment,
 } from '../../util/Attachment.std.ts';
+import { writeNewAttachmentData } from '../../util/migrations.preload.ts';
+import { getExistingAttachmentDataForReuse } from '../../util/attachments/deduplicateAttachment.preload.ts';
+import { migrateDataToFileSystem } from '../../util/attachments/migrateDataToFilesystem.std.ts';
 import { isViewOnceEligible } from '../../util/viewOnceEligibility.std.ts';
 import { DataReader, DataWriter } from '../../sql/Client.preload.ts';
 import type { BoundActionCreatorsMapObject } from '../../hooks/useBoundActions.std.ts';
 import type { DraftBodyRanges } from '../../types/BodyRange.std.ts';
-import type { LinkPreviewForUIType } from '../../types/message/LinkPreviews.std.ts';
+import type { LinkPreviewDraftType } from '../../types/LinkPreview.std.ts';
 import type {
   PinMessageData,
   ReadonlyMessageAttributesType,
-} from '../../model-types.d.ts';
+} from '../../model-types.std.ts';
 import { noopAction, type NoopActionType } from './noop.std.ts';
 import type { ShowToastActionType } from './toast.preload.ts';
 import { createLogger } from '../../logging/log.std.ts';
 import * as Errors from '../../types/errors.std.ts';
 import type { PollCreateType } from '../../types/Polls.dom.ts';
 import { enqueuePollCreateForSend } from '../../util/enqueuePollCreateForSend.dom.ts';
+import { enqueueSharedContactForSend } from '../../util/enqueueSharedContactForSend.preload.ts';
+import type { ShareContactType } from '../../util/shareContact.std.ts';
 import {
   ADD_PREVIEW as ADD_LINK_PREVIEW,
   REMOVE_PREVIEW as REMOVE_LINK_PREVIEW,
@@ -50,7 +55,7 @@ import { blockSendUntilConversationsAreVerified } from '../../util/blockSendUnti
 import { clearConversationDraftAttachments } from '../../util/clearConversationDraftAttachments.preload.ts';
 import { deleteDraftAttachment } from '../../util/deleteDraftAttachment.preload.ts';
 import {
-  getLinkPreviewForSend,
+  getLinkPreviewsForSend,
   hasLinkPreviewLoaded,
   maybeGrabLinkPreview,
   removeLinkPreview,
@@ -70,7 +75,7 @@ import { isFileDangerous } from '../../util/isFileDangerous.std.ts';
 import { stringToMIMEType } from '../../types/MIME.std.ts';
 import { isNotNil } from '../../util/isNotNil.std.ts';
 import { replaceIndex } from '../../util/replaceIndex.std.ts';
-import { resolveAttachmentDraftData } from '../../util/resolveAttachmentDraftData.preload.ts';
+import { promoteDraftAttachment } from '../../util/promoteDraftAttachment.preload.ts';
 import { resolveDraftAttachmentOnDisk } from '../../util/resolveDraftAttachmentOnDisk.preload.ts';
 import { shouldShowInvalidMessageToast } from '../../util/shouldShowInvalidMessageToast.preload.ts';
 import { writeDraftAttachment } from '../../util/writeDraftAttachment.preload.ts';
@@ -100,6 +105,7 @@ import {
   isImageTypeSupported,
   isVideoTypeSupported,
 } from '../../util/GoogleChrome.std.ts';
+import { getPlaintextHashForInMemoryAttachment } from '../../AttachmentCrypto.node.ts';
 import type {
   AsyncStateThunk,
   StateDispatch,
@@ -126,7 +132,7 @@ type ComposerStateByConversationType = {
   disabledCounter: number;
   isViewOnce: boolean;
   linkPreviewLoading: boolean;
-  linkPreviewResult?: LinkPreviewForUIType;
+  linkPreviewResult?: LinkPreviewDraftType;
   quotedMessage?: QuotedMessageForComposerType;
   sendCounter: number;
   shouldSendHighQualityAttachments?: boolean;
@@ -292,6 +298,7 @@ export const actions = {
   setQuoteByMessageId,
   setQuotedMessage,
   setViewOnce,
+  shareContact,
   updateComposerDisabled,
 };
 
@@ -612,7 +619,7 @@ function sendEditedMessage(
         await doSendEditedMessage(conversationId, {
           body: message,
           bodyRanges,
-          preview: getLinkPreviewForSend(message),
+          preview: await getLinkPreviewsForSend(message),
           quoteAuthorAci,
           quoteSentAt,
           targetMessageId,
@@ -669,10 +676,25 @@ function sendMultiMediaMessage(
     await withPreSendChecks(conversationId, options, dispatch, async () => {
       let attachments: Array<AttachmentType> = [];
       if (voiceNoteAttachment) {
-        attachments = [voiceNoteAttachment];
+        strictAssert(
+          !voiceNoteAttachment.pending,
+          'Voice note is still pending'
+        );
+        const {
+          data,
+          // oxlint-disable-next-line typescript/no-unused-vars
+          screenshotData: _screenshotData,
+          ...rest
+        } = voiceNoteAttachment;
+        const onDisk = await migrateDataToFileSystem(rest, data, {
+          writeNewAttachmentData,
+          getExistingAttachmentDataForReuse,
+          getPlaintextHashForInMemoryAttachment,
+        });
+        attachments = [onDisk];
       } else if (draftAttachments) {
         attachments = (
-          await Promise.all(draftAttachments.map(resolveAttachmentDraftData))
+          await Promise.all(draftAttachments.map(promoteDraftAttachment))
         ).filter(isNotNil);
       }
 
@@ -698,7 +720,7 @@ function sendMultiMediaMessage(
             body: message,
             attachments,
             quote,
-            preview: getLinkPreviewForSend(message),
+            preview: await getLinkPreviewsForSend(message),
             bodyRanges,
             isViewOnce,
           },
@@ -862,6 +884,47 @@ function sendPoll(
   };
 }
 
+function shareContact(
+  conversationId: string,
+  contact: ShareContactType
+): AsyncStateThunk<NoopActionType | ShowToastActionType> {
+  return async dispatch => {
+    const conversation = window.ConversationController.get(conversationId);
+    if (!conversation) {
+      throw new Error('shareContact: No conversation found');
+    }
+
+    const recipientsByConversation = getRecipientsByConversation([
+      conversation.attributes,
+    ]);
+
+    try {
+      const sendAnyway = await blockSendUntilConversationsAreVerified(
+        recipientsByConversation,
+        SafetyNumberChangeSource.MessageSend
+      );
+      if (!sendAnyway) {
+        return;
+      }
+
+      const toast = shouldShowInvalidMessageToast(conversation.attributes);
+      if (toast != null) {
+        dispatch({
+          type: SHOW_TOAST,
+          payload: toast,
+        });
+        return;
+      }
+
+      await enqueueSharedContactForSend(conversation, contact);
+    } catch (error) {
+      log.error('shareContact error:', Errors.toLogFormat(error));
+    }
+
+    dispatch(noopAction('shareContact'));
+  };
+}
+
 // Not cool that we have to pull from ConversationModel here
 // but if the current selected conversation isn't the one that we're operating
 // on then we won't be able to grab attachments from state so we resort to the
@@ -969,12 +1032,19 @@ function addAttachment(
   conversationId: string,
   attachment: InMemoryAttachmentDraftType
 ): AsyncStateThunk<ReplaceAttachmentsActionType> {
-  return async (dispatch, getState) => {
+  return async dispatch => {
     // We do async operations first so multiple in-process addAttachments don't stomp on
     //   each other.
     const onDisk = await writeDraftAttachment(attachment);
-    const toAdd = { ...onDisk, clientUuid: generateUuid() };
+    await dispatch(addDraftAttachment(conversationId, onDisk));
+  };
+}
 
+function addDraftAttachment(
+  conversationId: string,
+  attachment: AttachmentDraftType
+): AsyncStateThunk<ReplaceAttachmentsActionType> {
+  return async (dispatch, getState) => {
     const state = getState();
 
     const isSelectedConversation =
@@ -992,27 +1062,27 @@ function addAttachment(
     // We expect there to either be a pending draft attachment or an existing
     // attachment that we'll be replacing.
     const hasDraftAttachmentPending = draftAttachments.some(
-      draftAttachment => draftAttachment.path === attachment.path
+      draftAttachment => draftAttachment.clientUuid === attachment.clientUuid
     );
 
     // User has canceled the draft so we don't need to continue processing
     if (!hasDraftAttachmentPending) {
-      await deleteDraftAttachment(toAdd);
+      await deleteDraftAttachment(attachment);
       return;
     }
 
     // Remove any pending attachments that were transcoding
     const index = draftAttachments.findIndex(
-      draftAttachment => draftAttachment.path === attachment.path
+      draftAttachment => draftAttachment.clientUuid === attachment.clientUuid
     );
     let nextAttachments = draftAttachments;
     if (index < 0) {
       log.warn(
         `addAttachment: Failed to find pending attachment with path ${attachment.path}`
       );
-      nextAttachments = [...draftAttachments, toAdd];
+      nextAttachments = [...draftAttachments, attachment];
     } else {
-      nextAttachments = replaceIndex(draftAttachments, index, toAdd);
+      nextAttachments = replaceIndex(draftAttachments, index, attachment);
     }
 
     dispatch(replaceAttachments(conversationId, nextAttachments));
@@ -1232,6 +1302,7 @@ function processAttachments({
             const attachment = await processAttachment(file, {
               generateScreenshot: true,
               flags,
+              clientUuid: pendingAttachment.clientUuid,
             });
             if (!attachment) {
               void dispatch(
@@ -1239,7 +1310,7 @@ function processAttachments({
               );
               return;
             }
-            void dispatch(addAttachment(conversationId, attachment));
+            void dispatch(addDraftAttachment(conversationId, attachment));
           } catch (err) {
             log.error(
               'handleAttachmentsProcessing: failed to process attachment:',
@@ -1355,9 +1426,8 @@ function removeAttachment(
 
     const targetAttachmentIndex = attachments.findIndex(attachment => {
       return (
-        (attachment.clientUuid != null &&
-          attachment.clientUuid === draft.clientUuid) ||
-        (attachment.path != null && attachment.path === draft.path)
+        attachment.clientUuid != null &&
+        attachment.clientUuid === draft.clientUuid
       );
     });
     if (targetAttachmentIndex === -1) {

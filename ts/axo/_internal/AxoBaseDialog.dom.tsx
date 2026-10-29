@@ -1,8 +1,14 @@
 // Copyright 2025 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import { memo, useCallback } from 'react';
-import type { FC, ReactNode, SyntheticEvent } from 'react';
+import { memo, useCallback, useMemo, useRef } from 'react';
+import type {
+  FC,
+  FocusEvent,
+  ReactNode,
+  RefCallback,
+  SyntheticEvent,
+} from 'react';
 import { tw } from '../tw.dom.tsx';
 
 export namespace AxoBaseDialog {
@@ -139,5 +145,84 @@ export namespace AxoBaseDialog {
       },
       [escape]
     );
+  }
+
+  /**
+   * useTriggerPresenceRef()
+   * --------------------------------------------------------------------------
+   */
+
+  /**
+   * Returns a ref callback for the `Trigger` element that reports whether a
+   * trigger is currently mounted.
+   */
+  export function useTriggerPresenceRef(
+    setHasTrigger: (hasTrigger: boolean) => void
+  ): RefCallback<HTMLElement> {
+    return useCallback(
+      node => {
+        setHasTrigger(node != null);
+        return () => {
+          setHasTrigger(false);
+        };
+      },
+      [setHasTrigger]
+    );
+  }
+
+  /**
+   * useContentRestoreFocusBehavior()
+   * --------------------------------------------------------------------------
+   */
+
+  export type ContentRestoreFocusBehavior = Readonly<{
+    dialogContentProps: {
+      onFocusCapture: (event: FocusEvent) => void;
+      onCloseAutoFocus: (event: Event) => void;
+    };
+  }>;
+
+  /**
+   * Returns `onFocusCapture` and `onCloseAutoFocus` handlers for the dialog
+   * content.
+   *
+   * Radix restores focus to the `Trigger` when the dialog closes, so without
+   * one focus would be lost to `document.body`. Instead, this restores focus to
+   * whatever was focused before the dialog opened.
+   *
+   * The previously focused element is the `relatedTarget` of the first focus
+   * event inside the dialog. Radix skips `onOpenAutoFocus` when an element
+   * inside the dialog has `autoFocus` (which React focuses while committing),
+   * but focus still moves into the dialog either way.
+   */
+  export function useContentRestoreFocusBehavior(
+    hasTrigger: boolean
+  ): ContentRestoreFocusBehavior {
+    const previouslyFocusedRef = useRef<Element | null>(null);
+
+    const onFocusCapture = useCallback((event: FocusEvent) => {
+      if (previouslyFocusedRef.current == null) {
+        previouslyFocusedRef.current = event.relatedTarget;
+      }
+    }, []);
+
+    const onCloseAutoFocus = useCallback(
+      (event: Event) => {
+        const element = previouslyFocusedRef.current;
+        previouslyFocusedRef.current = null;
+        if (hasTrigger) {
+          return;
+        }
+        event.preventDefault();
+        if (element instanceof HTMLElement && element.isConnected) {
+          element.focus();
+        }
+      },
+      [hasTrigger]
+    );
+
+    return useMemo(() => {
+      return { dialogContentProps: { onFocusCapture, onCloseAutoFocus } };
+    }, [onFocusCapture, onCloseAutoFocus]);
   }
 }

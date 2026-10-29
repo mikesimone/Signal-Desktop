@@ -36,6 +36,8 @@ import {
   toPendingCallLinkRecord,
   mergeChatFolderRecord,
   mergeNotificationProfileRecord,
+  mergeFavoriteStickerRecord,
+  toFavoriteStickerPackRecord,
 } from './storageRecordOps.preload.ts';
 import type { MergeResultType } from './storageRecordOps.preload.ts';
 import { MAX_READ_KEYS } from './storageConstants.std.ts';
@@ -104,6 +106,8 @@ import { isCurrentAllChatFolder } from '../types/CurrentChatFolders.std.ts';
 import type { NotificationProfileType } from '../types/NotificationProfile.std.ts';
 import { itemStorage } from '../textsecure/Storage.preload.ts';
 import { toNumber } from '../util/toNumber.std.ts';
+import type { FavoriteStickerType } from '../types/Stickers.preload.ts';
+import { redactPackId } from '../util/Stickers.std.ts';
 
 const { debounce, isNumber, chunk } = lodash;
 
@@ -144,6 +148,7 @@ const validRecordTypes = new Set([
   ITEM_TYPE.CALL_LINK,
   ITEM_TYPE.CHAT_FOLDER,
   ITEM_TYPE.NOTIFICATION_PROFILE,
+  ITEM_TYPE.FAVORITE_STICKER_PACK,
 ]);
 
 const backOff = new BackOff([
@@ -445,6 +450,7 @@ async function generateManifest(
     storyDistributionLists,
     installedStickerPacks,
     uninstalledStickerPacks,
+    favoriteStickers,
     chatFolders,
   } = await getNonConversationRecords();
 
@@ -687,6 +693,66 @@ async function generateManifest(
       `installed=${newlyInstalledPacks}/${installedStickerPacks.length} ` +
       `uninstalled=${newlyUninstalledPacks}/${uninstalledStickerPacks.length}`
   );
+
+  log.info(`${logId}: adding favoriteStickers=${favoriteStickers.length}`);
+
+  let newFavoriteStickers = 0;
+  favoriteStickers.forEach(favoriteSticker => {
+    const storageRecord: Proto.StorageRecord.Params = {
+      record: {
+        sticker: toFavoriteStickerPackRecord(favoriteSticker),
+      },
+    };
+
+    const { deletedAtTimestampMs, packId, stickerId } = favoriteSticker;
+
+    if (
+      deletedAtTimestampMs &&
+      deletedAtTimestampMs !== 0 &&
+      isOlderThan(deletedAtTimestampMs, getMessageQueueTime())
+    ) {
+      const droppedID = favoriteSticker.storageID;
+      const droppedVersion = favoriteSticker.storageVersion;
+      if (droppedID) {
+        const recordID = redactStorageID(droppedID, droppedVersion);
+
+        log.info(
+          `${logId}: dropping favoriteSticker=${recordID} ` +
+            `due to expired deleted timestamp=${deletedAtTimestampMs}`
+        );
+        deleteKeys.add(droppedID);
+      } else {
+        const safePackId = redactPackId(favoriteSticker.packId);
+        log.info(
+          `${logId}: dropping never uploaded favoriteSticker from pack=${safePackId}` +
+            `due to expired deleted timestamp=${deletedAtTimestampMs}`
+        );
+      }
+
+      drop(DataWriter.deleteFavoriteSticker({ packId, stickerId }));
+      return;
+    }
+
+    const { isNewItem, storageID } = processStorageRecord({
+      currentStorageID: favoriteSticker.storageID,
+      currentStorageVersion: favoriteSticker.storageVersion,
+      identifierType: ITEM_TYPE.FAVORITE_STICKER_PACK,
+      storageNeedsSync: favoriteSticker.storageNeedsSync,
+      storageRecord,
+    });
+
+    if (isNewItem) {
+      newFavoriteStickers += 1;
+      postUploadUpdateFunctions.push(() =>
+        DataWriter.updateFavoriteSticker({
+          ...favoriteSticker,
+          storageID,
+          storageVersion: version,
+          storageNeedsSync: false,
+        })
+      );
+    }
+  });
 
   log.info(`${logId}: adding callLinks=${callLinkDbRecords.length}`);
 
@@ -1619,6 +1685,15 @@ async function mergeRecord(
         storageRecord.record.installedStickerPack
       );
     } else if (
+      itemType === ITEM_TYPE.FAVORITE_STICKER_PACK &&
+      storageRecord.record?.sticker
+    ) {
+      mergeResult = await mergeFavoriteStickerRecord(
+        storageID,
+        storageVersion,
+        storageRecord.record.sticker
+      );
+    } else if (
       itemType === ITEM_TYPE.CALL_LINK &&
       storageRecord.record?.callLink
     ) {
@@ -1701,6 +1776,7 @@ type NonConversationRecordsResultType = Readonly<{
   callLinkDbRecords: ReadonlyArray<CallLinkRecord>;
   chatFolders: ReadonlyArray<ChatFolder>;
   defunctCallLinks: ReadonlyArray<DefunctCallLinkType>;
+  favoriteStickers: ReadonlyArray<FavoriteStickerType>;
   installedStickerPacks: ReadonlyArray<StickerPackType>;
   notificationProfiles: ReadonlyArray<NotificationProfileType>;
   pendingCallLinks: ReadonlyArray<PendingCallLinkType>;
@@ -1718,6 +1794,7 @@ async function getNonConversationRecords(): Promise<NonConversationRecordsResult
     storyDistributionLists,
     uninstalledStickerPacks,
     installedStickerPacks,
+    favoriteStickers,
     chatFolders,
   ] = await Promise.all([
     DataReader.getAllCallLinkRecordsForStorageService(),
@@ -1729,6 +1806,7 @@ async function getNonConversationRecords(): Promise<NonConversationRecordsResult
     DataReader.getAllStoryDistributionsWithMembers(),
     DataReader.getUninstalledStickerPacks(),
     DataReader.getInstalledStickerPacks(),
+    DataReader.getAllFavoriteStickers(),
     DataReader.getAllChatFolders(),
   ]);
 
@@ -1736,6 +1814,7 @@ async function getNonConversationRecords(): Promise<NonConversationRecordsResult
     callLinkDbRecords,
     chatFolders,
     defunctCallLinks,
+    favoriteStickers,
     installedStickerPacks,
     notificationProfiles,
     pendingCallLinks,
@@ -1779,6 +1858,7 @@ async function processManifest(
       storyDistributionLists,
       installedStickerPacks,
       uninstalledStickerPacks,
+      favoriteStickers,
       chatFolders,
     } = await getNonConversationRecords();
 
@@ -1813,6 +1893,9 @@ async function processManifest(
 
     installedStickerPacks.forEach(collectLocalKeysFromFields);
     localRecordCount += installedStickerPacks.length;
+
+    favoriteStickers.forEach(collectLocalKeysFromFields);
+    localRecordCount += favoriteStickers.length;
 
     chatFolders.forEach(collectLocalKeysFromFields);
     localRecordCount += chatFolders.length;
@@ -1936,6 +2019,7 @@ async function processManifest(
       pendingCallLinks,
       storyDistributionLists,
       uninstalledStickerPacks,
+      favoriteStickers,
     } = await getNonConversationRecords();
 
     uninstalledStickerPacks.forEach(stickerPack => {
@@ -1971,6 +2055,40 @@ async function processManifest(
         storageNeedsSync: false,
         uninstalledAt: stickerPack.uninstalledAt,
       });
+    });
+
+    favoriteStickers.forEach(favoriteSticker => {
+      const {
+        deletedAtTimestampMs,
+        packId,
+        stickerId,
+        storageID,
+        storageVersion,
+      } = favoriteSticker;
+      if (!storageID || remoteKeys.has(storageID)) {
+        return;
+      }
+
+      const missingKey = redactStorageID(storageID, storageVersion);
+      if (deletedAtTimestampMs) {
+        log.info(
+          `${logId}/favoriteSticker: localKey=${missingKey} was not in remote manifest. Removing.`
+        );
+        drop(DataWriter.deleteFavoriteSticker({ packId, stickerId }));
+        return;
+      }
+
+      log.info(
+        `${logId}/favoriteSticker: localKey=${missingKey} was not in remote manifest`
+      );
+
+      drop(
+        DataWriter.updateFavoriteSticker({
+          ...favoriteSticker,
+          storageID: null,
+          storageVersion: null,
+        })
+      );
     });
 
     storyDistributionLists.forEach(storyDistributionList => {
@@ -2668,6 +2786,8 @@ async function sync({ reason }: { reason: string }): Promise<SyncResult> {
 
     log.info(`${logId}: fetching latest after version=${localManifestVersion}`);
     const fetchResult = await fetchManifest(localManifestVersion);
+    log.info(`${logId}: fetch returned state '${fetchResult.type}'`);
+
     if (fetchResult.type === 'cannotDecrypt') {
       return {
         success: false,
@@ -3017,30 +3137,27 @@ export function runStorageServiceUploadJobAfterEnabled({
 
 export const runStorageServiceUploadJob = debounce(
   ({ reason }: { reason: string }) => {
+    const logId = `runStorageServiceUploadJob(${reason})`;
+
     if (!storageServiceEnabled) {
-      log.info(`runStorageServiceUploadJob(${reason}): called before enabled `);
+      log.info(`${logId}: called before enabled `);
       return;
     }
 
     void storageJobQueue(
       async () => {
         try {
-          await upload({
-            reason: `runStorageServiceUploadJob/${reason}`,
-          });
+          await upload({ reason: logId });
         } catch (error) {
           if (error instanceof CannotDecryptError) {
             drop(stopStorageServiceSync(error));
             return;
           }
 
-          log.error(
-            'runStorageServiceUploadJob: Upload failed',
-            Errors.toLogFormat(error)
-          );
+          log.error(`${logId}: Upload failed`, Errors.toLogFormat(error));
         }
       },
-      `upload v${itemStorage.get('manifestVersion')}`
+      `${logId} v${itemStorage.get('manifestVersion')}`
     );
   },
   isMockEnvironment() ? 0 : 500
@@ -3048,8 +3165,10 @@ export const runStorageServiceUploadJob = debounce(
 
 export const runStorageServiceSyncJob = debounce(
   ({ reason }: { reason: string }) => {
+    const logId = `runStorageServiceSyncJob(${reason})`;
+
     if (!storageServiceEnabled) {
-      log.info(`runStorageServiceSyncJob(${reason}): called before enabled`);
+      log.info(`${logId}: called before enabled`);
       return;
     }
 
@@ -3057,24 +3176,29 @@ export const runStorageServiceSyncJob = debounce(
       storageJobQueue(
         async () => {
           try {
-            await sync({ reason });
+            const result = await sync({ reason: logId });
+
+            if (!result.success && result.error === 'cannotDecrypt') {
+              throw new CannotDecryptError("Sync returned 'cannotDecrypt'");
+            }
+
+            if (!result.success && result.error === 'sameManifest') {
+              log.info(`${logId}: Sync returned 'sameManifest'`);
+            } else if (!result.success) {
+              log.error(`${logId}: Sync failed, returning '${result.error}'`);
+            }
           } catch (error) {
             if (error instanceof CannotDecryptError) {
               drop(stopStorageServiceSync(error));
-              return;
+            } else {
+              log.error(`${logId}: Sync failed`, Errors.toLogFormat(error));
             }
-
-            log.error(
-              'runStorageServiceSyncJob: Sync failed',
-              Errors.toLogFormat(error)
-            );
-            return;
           }
 
           // Notify listeners about sync completion
           window.Whisper.events.emit('storageService:syncComplete');
         },
-        `sync v${itemStorage.get('manifestVersion')}`
+        `${logId} v${itemStorage.get('manifestVersion')}`
       )
     );
   },

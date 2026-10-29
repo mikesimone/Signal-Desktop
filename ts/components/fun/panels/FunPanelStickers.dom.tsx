@@ -127,11 +127,15 @@ function toGridSectionNode(
 
 function getSelectedSection(
   hasSearchQuery: boolean,
+  hasFavoriteStickers: boolean,
   hasRecentStickers: boolean,
   firstInstalledStickerPack: StickerPackType | null
 ): FunStickersSection {
   if (hasSearchQuery) {
     return FunSectionCommon.SearchResults;
+  }
+  if (hasFavoriteStickers) {
+    return FunStickersSectionBase.Favorites;
   }
   if (hasRecentStickers) {
     return FunSectionCommon.Recents;
@@ -156,6 +160,9 @@ function getTitleForSection(
   if (section === FunStickersSectionBase.StickersSetup) {
     return '';
   }
+  if (section === FunStickersSectionBase.Favorites) {
+    return i18n('icu:FunPanelStickers__SectionTitle--Favorites');
+  }
   if (section === FunStickersSectionBase.Featured) {
     return i18n('icu:FunPanelStickers__SectionTitle--Featured');
   }
@@ -174,7 +181,6 @@ export type FunStickerSelection = Readonly<{
 }>;
 
 export type FunPanelStickersProps = Readonly<{
-  isReply: boolean;
   showTimeStickers: boolean;
   onSelectTimeSticker?: (style: FunTimeStickerStyle) => void;
   onSelectSticker: (stickerSelection: FunStickerSelection) => void;
@@ -183,7 +189,6 @@ export type FunPanelStickersProps = Readonly<{
 }>;
 
 export function FunPanelStickers({
-  isReply,
   showTimeStickers,
   onSelectTimeSticker,
   onSelectSticker,
@@ -195,10 +200,11 @@ export function FunPanelStickers({
     i18n,
     storedSearchInput,
     onStoredSearchInputChange,
+    favoriteStickers,
+    isFavoriteStickersEnabled,
     recentStickers,
     installedStickerPacks,
     onSelectSticker: onFunSelectSticker,
-    onStageStickerReply,
   } = fun;
 
   const scrollerRef = useRef<HTMLDivElement>(null);
@@ -213,6 +219,11 @@ export function FunPanelStickers({
 
   const stickerLookup = useMemo(() => {
     const result: StickerLookup = {};
+    if (isFavoriteStickersEnabled) {
+      for (const sticker of favoriteStickers) {
+        result[getStickerId(sticker)] = { kind: 'sticker', sticker };
+      }
+    }
     for (const sticker of recentStickers) {
       result[getStickerId(sticker)] = { kind: 'sticker', sticker };
     }
@@ -225,7 +236,12 @@ export function FunPanelStickers({
       result[getTimeStickerId(style)] = { kind: 'timeSticker', style };
     }
     return result;
-  }, [recentStickers, installedStickerPacks]);
+  }, [
+    favoriteStickers,
+    isFavoriteStickersEnabled,
+    recentStickers,
+    installedStickerPacks,
+  ]);
 
   const [focusedCellKey, setFocusedCellKey] = useState<CellKey | null>(null);
   const [searchInput, setSearchInput] = useState(storedSearchInput);
@@ -233,10 +249,13 @@ export function FunPanelStickers({
 
   const [selectedSection, setSelectedSection] = useState(() => {
     const hasSearchQuery = searchQuery !== '';
+    const hasFavoriteStickers =
+      isFavoriteStickersEnabled && favoriteStickers.length > 0;
     const hasRecentStickers = recentStickers.length > 0;
     const firstInstalledStickerPack = installedStickerPacks.at(0) ?? null;
     return getSelectedSection(
       hasSearchQuery,
+      hasFavoriteStickers,
       hasRecentStickers,
       firstInstalledStickerPack
     );
@@ -278,6 +297,15 @@ export function FunPanelStickers({
       );
     }
 
+    if (isFavoriteStickersEnabled && favoriteStickers.length > 0) {
+      result.push(
+        toGridSectionNode(
+          FunStickersSectionBase.Favorites,
+          toStickerIds(favoriteStickers)
+        )
+      );
+    }
+
     if (recentStickers.length > 0) {
       result.push(
         toGridSectionNode(
@@ -293,7 +321,14 @@ export function FunPanelStickers({
     }
 
     return result;
-  }, [showTimeStickers, recentStickers, installedStickerPacks, searchQuery]);
+  }, [
+    showTimeStickers,
+    favoriteStickers,
+    isFavoriteStickersEnabled,
+    recentStickers,
+    installedStickerPacks,
+    searchQuery,
+  ]);
 
   const [virtualizer, layout] = useFunVirtualGrid({
     scrollerRef,
@@ -313,11 +348,14 @@ export function FunPanelStickers({
   const handleSearchInputChange = useCallback(
     (nextSearchInput: string) => {
       const hasSearchQuery = nextSearchInput.trim() !== '';
+      const hasFavoriteStickers =
+        isFavoriteStickersEnabled && favoriteStickers.length > 0;
       const hasRecentStickers = recentStickers.length > 0;
       const firstInstalledStickerPack = installedStickerPacks.at(0) ?? null;
       setSelectedSection(
         getSelectedSection(
           hasSearchQuery,
+          hasFavoriteStickers,
           hasRecentStickers,
           firstInstalledStickerPack
         )
@@ -325,7 +363,13 @@ export function FunPanelStickers({
       setSearchInput(nextSearchInput);
       onStoredSearchInputChange(nextSearchInput);
     },
-    [onStoredSearchInputChange, recentStickers, installedStickerPacks]
+    [
+      onStoredSearchInputChange,
+      favoriteStickers,
+      isFavoriteStickersEnabled,
+      recentStickers,
+      installedStickerPacks,
+    ]
   );
 
   const handleSelectSection = useCallback(
@@ -361,11 +405,6 @@ export function FunPanelStickers({
 
   const handleClickSticker = useCallback(
     (event: PointerEvent, stickerSelection: FunStickerSelection) => {
-      if (isReply) {
-        onStageStickerReply(stickerSelection);
-        return;
-      }
-
       onFunSelectSticker(stickerSelection);
       onSelectSticker(stickerSelection);
       if (!(event.ctrlKey || event.metaKey)) {
@@ -373,7 +412,7 @@ export function FunPanelStickers({
         onClose();
       }
     },
-    [isReply, onFunSelectSticker, onSelectSticker, onStageStickerReply, onClose]
+    [onFunSelectSticker, onSelectSticker, onClose]
   );
 
   const handleClickTimeSticker = useCallback(
@@ -414,6 +453,16 @@ export function FunPanelStickers({
                   selected={selectedSection}
                   onSelect={handleSelectSection}
                 >
+                  {isFavoriteStickersEnabled && favoriteStickers.length > 0 && (
+                    <FunSubNavListBoxItem
+                      id={FunStickersSectionBase.Favorites}
+                      label={i18n(
+                        'icu:FunPanelStickers__SubNavCategoryLabel--Favorites'
+                      )}
+                    >
+                      <FunSubNavIcon iconClassName="FunSubNav__Icon--Favorites" />
+                    </FunSubNavListBoxItem>
+                  )}
                   {recentStickers.length > 0 && (
                     <FunSubNavListBoxItem
                       id={FunSectionCommon.Recents}

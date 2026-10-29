@@ -6,7 +6,7 @@
   "description": "Private messaging from your desktop",
   "desktopName": "signal.desktop",
   "repository": "https://github.com/signalapp/Signal-Desktop.git",
-  "version": "8.35.0-alpha.1",
+  "version": "8.36.0-alpha.1",
   "license": "AGPL-3.0-only",
   "author": {
     "name": "Signal Messenger, LLC",
@@ -123,9 +123,9 @@
   "dependencies": {
     "@indutny/mac-screen-share": "1.2.5",
     "@indutny/simple-windows-notifications": "2.0.21",
-    "@signalapp/libsignal-client": "0.105.1",
+    "@signalapp/libsignal-client": "0.106.0",
     "@signalapp/mute-state-change": "workspace:*",
-    "@signalapp/ringrtc": "2.72.1",
+    "@signalapp/ringrtc": "2.73.0",
     "@signalapp/sqlcipher": "4.1.0",
     "@signalapp/types": "workspace:*",
     "@signalapp/windows-local-pipe": "workspace:*",
@@ -182,6 +182,7 @@
     "@tailwindcss/cli": "4.3.0",
     "@tailwindcss/postcss": "4.3.0",
     "@tanstack/react-virtual": "3.13.23",
+    "@types/audioworklet": "0.0.100",
     "@types/babel__core": "7.20.5",
     "@types/babel__helper-plugin-utils": "7.10.3",
     "@types/blueimp-load-image": "5.16.6",
@@ -242,7 +243,7 @@
     "debug": "4.4.3",
     "direction": "2.0.1",
     "dom-accessibility-api": "0.7.1",
-    "electron": "44.9.1",
+    "electron": "45.0.0",
     "electron-builder": "26.11.1",
     "electron-mocha": "13.1.0",
     "emoji-regex-xs": "2.0.1",
@@ -283,8 +284,8 @@
     "normalize-path": "3.0.0",
     "npm-run-all2": "8.0.4",
     "oxc-transform": "0.131.0",
-    "oxlint": "1.80.0",
-    "oxlint-tsgolint": "7.0.2001",
+    "oxlint": "1.88.0",
+    "oxlint-tsgolint": "7.0.2004",
     "p-limit": "7.3.0",
     "p-map": "7.0.4",
     "p-queue": "9.1.0",
@@ -327,7 +328,7 @@
     "socks-proxy-agent": "8.0.5",
     "split2": "4.2.0",
     "sql-formatter": "15.7.4",
-    "storybook": "8.6.18",
+    "storybook": "8.6.19",
     "style-loader": "4.0.0",
     "stylelint": "17.11.1",
     "stylelint-config-css-modules": "4.6.0",
@@ -346,7 +347,7 @@
     "wait-on": "9.0.5",
     "webpack": "5.111.1",
     "write-file-atomic": "7.0.1",
-    "zod": "4.3.6"
+    "zod": "4.6.6"
   },
   "engines": {
     "node": "24.22.0"

@@ -4,6 +4,7 @@ lockfileIncludeTarballUrl: true
 verifyDepsBeforeRun: prompt
 verifyStoreIntegrity: true
 
+linkWorkspacePackages: deep
 packages:
   - 'packages/*'
   - 'sticker-creator'
@@ -17,6 +18,26 @@ minimumReleaseAgeStrict: true
 minimumReleaseAgeExclude:
   - '@signalapp/*'
   - 'electron'
+  - '@oxlint/binding-android-arm-eabi@1.88.0'
+  - '@oxlint/binding-android-arm64@1.88.0'
+  - '@oxlint/binding-darwin-arm64@1.88.0'
+  - '@oxlint/binding-darwin-x64@1.88.0'
+  - '@oxlint/binding-freebsd-x64@1.88.0'
+  - '@oxlint/binding-linux-arm-gnueabihf@1.88.0'
+  - '@oxlint/binding-linux-arm-musleabihf@1.88.0'
+  - '@oxlint/binding-linux-arm64-gnu@1.88.0'
+  - '@oxlint/binding-linux-arm64-musl@1.88.0'
+  - '@oxlint/binding-linux-ppc64-gnu@1.88.0'
+  - '@oxlint/binding-linux-riscv64-gnu@1.88.0'
+  - '@oxlint/binding-linux-riscv64-musl@1.88.0'
+  - '@oxlint/binding-linux-s390x-gnu@1.88.0'
+  - '@oxlint/binding-linux-x64-gnu@1.88.0'
+  - '@oxlint/binding-linux-x64-musl@1.88.0'
+  - '@oxlint/binding-openharmony-arm64@1.88.0'
+  - '@oxlint/binding-win32-arm64-msvc@1.88.0'
+  - '@oxlint/binding-win32-ia32-msvc@1.88.0'
+  - '@oxlint/binding-win32-x64-msvc@1.88.0'
+  - oxlint@1.88.0
 
 trustPolicy: no-downgrade
 trustPolicyExclude:
@@ -30,6 +51,7 @@ trustPolicyExclude:
   - 'undici-types@6.21.0'
   - 'vite@4.5.14'
   - 'webpack-dev-middleware@7.4.6'
+  - 'storybook@8.6.19'
 
 auditConfig:
   ignoreGhsas:
@@ -40,8 +62,9 @@ auditConfig:
     - GHSA-hp3w-g68c-fv3c # @storybook/test-runner > ... > sprintf-js
 
 overrides:
-  '@electron/rebuild>node-gyp': '12.4.0'
-  '@electron/rebuild>node-abi': '4.34.0'
+  '@electron/rebuild>node-gyp': '13.1.0'
+  '@electron/rebuild>node-abi': '4.38.0'
+  '@electron/get>undici': '7.30.1'
   '@xmldom/xmldom@0.8': '^0.8.15'
   'axios@1': '^1.20.0'
   'brace-expansion@5': '^5.0.11'
@@ -49,7 +72,7 @@ overrides:
   'brace-expansion@1': '^1.1.20'
   'builder-util-runtime': '9.7.0'
   'canvas': '-'
-  'danger@13.0.10>undici@<6.28.1': '^6.28.1'
+  'danger@13.0.10>undici@<6.28.1': '^6.29.1'
   'js-yaml@3': '^3.15.2'
   'jsdom': '-'
   'react-popper@2.3.0>react-dom': '19.2.4'
@@ -87,7 +110,7 @@ patchedDependencies:
   'playwright-core': 'patches/playwright-core.patch'
   'qrcode-generator': 'patches/qrcode-generator.patch'
   'react-popper@2.3.0': 'patches/react-popper@2.3.0.patch'
-  'zod@4.3.6': 'patches/zod@4.3.6.patch'
+  'zod': 'patches/zod@4.6.6.patch'
 
 strictDepBuilds: true
 allowBuilds:
@@ -96,8 +119,8 @@ allowBuilds:
   '@indutny/mac-screen-share@1.0.13': true
   '@indutny/simple-windows-notifications@2.0.16': true
   '@parcel/watcher@2.5.6': true
-  '@signalapp/libsignal-client@0.105.1': true
-  '@signalapp/ringrtc@2.72.1': true
+  '@signalapp/libsignal-client@0.106.0': true
+  '@signalapp/ringrtc@2.73.0': true
   '@signalapp/sqlcipher@4.1.0': true
   '@signalapp/windows-ucv@1.0.1': true
   '@signalapp/windows-local-pipe@1.0.0': true

@@ -1,11 +1,18 @@
 // Copyright 2025 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
+import type { Readable } from 'node:stream';
+import { Buffer } from 'node:buffer';
 import {
+  CURRENT_ATTACHMENT_VERSION,
   readAndDecryptDataFromDisk,
   writeNewAttachmentData as doWriteNewAttachmentData,
   createDeleter,
 } from '../../app/attachments.node.ts';
+import {
+  generateKeys,
+  encryptAttachmentV2ToDisk,
+} from '../AttachmentCrypto.node.ts';
 import {
   createAbsolutePathGetter,
   createPlaintextReader,
@@ -18,16 +25,9 @@ import {
 import {
   getImageDimensions,
   makeImageThumbnail,
-  makeObjectUrl,
   makeVideoScreenshot,
-  revokeObjectUrl,
 } from '../types/VisualAttachment.dom.ts';
-import { loadData } from './Attachment.std.ts';
 import {
-  loadContactData as doLoadContactData,
-  loadPreviewData as doLoadPreviewData,
-  loadQuoteData as doLoadQuoteData,
-  loadStickerData as doLoadStickerData,
   processNewAttachment as doProcessNewAttachment,
   processNewSticker as doProcessNewSticker,
   upgradeSchema,
@@ -38,7 +38,7 @@ import type {
   LocalAttachmentV2Type,
 } from '../types/Attachment.std.ts';
 import type { MessageAttachmentType } from '../types/AttachmentDownload.std.ts';
-import type { MessageAttributesType } from '../model-types.d.ts';
+import type { MessageAttributesType } from '../model-types.std.ts';
 import { createLogger } from '../logging/log.std.ts';
 import { itemStorage } from '../textsecure/Storage.preload.ts';
 import {
@@ -110,11 +110,6 @@ function createEncryptedWriterForNew(basePath: string): EncryptedWriter {
 }
 
 export const readAttachmentData = createEncryptedReader(ATTACHMENTS_PATH);
-export const loadAttachmentData = loadData(readAttachmentData);
-export const loadContactData = doLoadContactData(loadAttachmentData);
-export const loadPreviewData = doLoadPreviewData(loadAttachmentData);
-export const loadQuoteData = doLoadQuoteData(loadAttachmentData);
-export const loadStickerData = doLoadStickerData(loadAttachmentData);
 export const getAbsoluteAttachmentPath =
   createAbsolutePathGetter(ATTACHMENTS_PATH);
 
@@ -167,6 +162,34 @@ export const getAbsoluteDraftPath = createAbsolutePathGetter(DRAFT_PATH);
 export const writeNewDraftData = createEncryptedWriterForNew(DRAFT_PATH);
 export const deleteDraftFile = createDeleter(DRAFT_PATH);
 export const readDraftData = createEncryptedReader(DRAFT_PATH);
+export const copyDraftIntoAttachmentDirectory = copyIntoAttachmentsDirectory({
+  sourceDir: DRAFT_PATH,
+  targetDir: ATTACHMENTS_PATH,
+});
+
+export async function writeNewDraftStream(
+  stream: Readable,
+  size: number
+): Promise<LocalAttachmentV2Type> {
+  const keys = generateKeys();
+  const encrypted = await encryptAttachmentV2ToDisk({
+    getAbsoluteAttachmentPath: getAbsoluteDraftPath,
+    keys,
+    needIncrementalMac: false,
+    plaintext: {
+      stream,
+      size,
+    },
+  });
+
+  return {
+    version: CURRENT_ATTACHMENT_VERSION,
+    plaintextHash: encrypted.plaintextHash,
+    path: encrypted.path,
+    size,
+    localKey: Buffer.from(keys).toString('base64'),
+  };
+}
 
 export const getAbsoluteDownloadsPath =
   createAbsolutePathGetter(DOWNLOADS_PATH);
@@ -182,8 +205,6 @@ export const processNewAttachment = (
 ): ReturnType<typeof doProcessNewAttachment> =>
   doProcessNewAttachment(attachment, attachmentType, {
     writeNewAttachmentData,
-    makeObjectUrl,
-    revokeObjectUrl,
     getImageDimensions,
     makeImageThumbnail,
     makeVideoScreenshot,
@@ -220,10 +241,8 @@ export const upgradeMessageSchema = (
     getPlaintextHashForInMemoryAttachment,
     getRegionCode: () => itemStorage.get('regionCode'),
     makeImageThumbnail,
-    makeObjectUrl,
     makeVideoScreenshot,
     readAttachmentData,
-    revokeObjectUrl,
     writeNewAttachmentData,
     writeNewStickerData,
     logger,

@@ -5,7 +5,7 @@ import type { AciString, ServiceIdString } from '../types/ServiceId.std.ts';
 import type {
   ConversationAttributesType,
   ReadonlyMessageAttributesType,
-} from '../model-types.d.ts';
+} from '../model-types.std.ts';
 import { getMessageAge } from './getMessageAge.std.ts';
 import {
   getAdminDeleteMaxAgeMs,
@@ -32,7 +32,7 @@ export type DeleteForEveryoneConversation = Pick<
   'id' | 'e164' | 'serviceId' | 'groupId' | 'groupVersion' | 'terminated'
 >;
 
-type Result<T extends object = Record<never, never>> =
+type Result<T extends object = object> =
   | Readonly<{ ok: true } & T>
   | Readonly<{ ok: false; reason: string }>;
 

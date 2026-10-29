@@ -2962,7 +2962,6 @@ ipc.on('get-config', async event => {
 
   const parsed = safeParseLoose(rendererConfigSchema, {
     name: packageJson.productName,
-    availableLocales: getResolvedMessagesLocale().availableLocales,
     resolvedTranslationsLocale: getResolvedMessagesLocale().name,
     resolvedTranslationsLocaleDirection: getResolvedMessagesLocale().direction,
     hourCyclePreference: getResolvedMessagesLocale().hourCyclePreference,
@@ -3040,12 +3039,6 @@ ipc.on('get-config', async event => {
 ipc.on('locale-data', event => {
   // oxlint-disable-next-line no-param-reassign
   event.returnValue = getResolvedMessagesLocale().messages;
-});
-
-// Ingested in preload.js via a sendSync call
-ipc.on('locale-display-names', event => {
-  // oxlint-disable-next-line no-param-reassign
-  event.returnValue = getResolvedMessagesLocale().localeDisplayNames;
 });
 
 // Ingested in preload.js via a sendSync call

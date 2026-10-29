@@ -2,11 +2,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import lodash from 'lodash';
 import type { ReadonlyDeep } from 'type-fest';
+import { v4 as generateUuid } from 'uuid';
 import type { ThunkActionDispatch } from 'redux-thunk';
 import * as Errors from '../../types/errors.std.ts';
 import type { AttachmentType } from '../../types/Attachment.std.ts';
+import type { LinkPreviewDraftType } from '../../types/LinkPreview.std.ts';
 import type { DraftBodyRanges } from '../../types/BodyRange.std.ts';
-import type { ReadonlyMessageAttributesType } from '../../model-types.d.ts';
+import type { ReadonlyMessageAttributesType } from '../../model-types.std.ts';
 import type {
   MessageChangedActionType,
   MessageDeletedActionType,
@@ -18,14 +20,17 @@ import type { StateType as RootStateType } from '../reducer.preload.ts';
 import type {
   StoryViewTargetType,
   StoryViewType,
+  StoryDraftAttachmentType,
 } from '../../types/Stories.std.ts';
 import type { SyncType } from '../../jobs/helpers/syncHelpers.preload.ts';
 import type { StoryDistributionIdString } from '../../types/StoryDistributionId.std.ts';
 import type { ServiceIdString } from '../../types/ServiceId.std.ts';
 import { isAciString } from '../../util/isAciString.std.ts';
+import { promoteDraftAttachment } from '../../util/promoteDraftAttachment.preload.ts';
 import { createLogger } from '../../logging/log.std.ts';
 import { TARGETED_CONVERSATION_CHANGED } from './conversations.preload.ts';
 import { SIGNAL_ACI } from '../../types/SignalConversation.std.ts';
+import { TEXT_ATTACHMENT } from '../../types/MIME.std.ts';
 import { DataReader, DataWriter } from '../../sql/Client.preload.ts';
 import { ReadStatus } from '../../messages/MessageReadStatus.std.ts';
 import { SendStatus } from '../../messages/MessageSendState.std.ts';
@@ -625,7 +630,8 @@ function replyToStory(
 function sendStoryMessage(
   listIds: Array<StoryDistributionIdString>,
   conversationIds: Array<string>,
-  attachment: AttachmentType,
+  draftAttachment: StoryDraftAttachmentType,
+  linkPreviewDraft: LinkPreviewDraftType | undefined,
   bodyRanges: DraftBodyRanges | undefined
 ): AsyncStateThunk<
   SendStoryModalOpenStateChanged | SetStorySendingType | SetAddStoryDataType
@@ -667,10 +673,26 @@ function sendStoryMessage(
     }
 
     try {
+      let attachment: AttachmentType;
+      if (draftAttachment.type === 'media') {
+        const resolved = await promoteDraftAttachment(
+          draftAttachment.attachment
+        );
+        strictAssert(resolved != null, 'Failed to resolve draft attachment');
+        attachment = resolved;
+      } else {
+        attachment = {
+          contentType: TEXT_ATTACHMENT,
+          textAttachment: draftAttachment.attachment,
+          size: draftAttachment.attachment.text?.length || 0,
+          clientUuid: generateUuid(),
+        };
+      }
       await doSendStoryMessage(
         listIds,
         conversationIds,
         attachment,
+        linkPreviewDraft,
         bodyRanges
       );
 

@@ -17,7 +17,7 @@ import type {
   QuotedMessageType,
   SenderKeyInfoType,
   SettableConversationAttributesType,
-} from '../model-types.d.ts';
+} from '../model-types.std.ts';
 import { DataReader, DataWriter } from '../sql/Client.preload.ts';
 import { getConversation } from '../util/getConversation.preload.ts';
 import {
@@ -30,6 +30,7 @@ import {
   upgradeMessageSchema,
   writeNewAttachmentData,
 } from '../util/migrations.preload.ts';
+import { getExistingAttachmentDataForReuse } from '../util/attachments/deduplicateAttachment.preload.ts';
 import { drop } from '../util/drop.std.ts';
 import { isShallowEqual } from '../util/isShallowEqual.std.ts';
 import type { NotifyWhileMutedKey } from '../util/notifyWhileMuted.std.ts';
@@ -54,13 +55,10 @@ import { getDraftPreview } from '../util/getDraftPreview.preload.ts';
 import { hasDraft } from '../util/hasDraft.std.ts';
 import { getStoryReplyContext } from '../util/getStoryReplyContext.std.ts';
 import { normalizeProfileName } from '../util/normalizeProfileName.std.ts';
-import type {
-  StickerType,
-  StickerWithHydratedData,
-} from '../types/Stickers.preload.ts';
+import type { StickerType } from '../types/Stickers.preload.ts';
 import * as Stickers from '../types/Stickers.preload.ts';
 import { StorySendMode } from '../types/Stories.std.ts';
-import type { EmbeddedContactWithHydratedAvatar } from '../types/EmbeddedContact.std.ts';
+import type { EmbeddedContactType } from '../types/EmbeddedContact.std.ts';
 import {
   type GroupV2InfoType,
   messageSender,
@@ -80,17 +78,13 @@ import type {
   ConversationType,
   DraftPreviewType,
 } from '../state/ducks/conversations.preload.ts';
-import type {
-  AvatarColorType,
-  ConversationColorType,
-  CustomColorType,
-} from '../types/Colors.std.ts';
+import type { AvatarColorType } from '../types/Avatar.std.ts';
 import { strictAssert } from '../util/assert.std.ts';
 import { isConversationMuted } from '../util/isConversationMuted.std.ts';
 import { canConversationBeUnarchived } from '../util/canConversationBeUnarchived.preload.ts';
 import { isConversationSMSOnly } from '../util/isConversationSMSOnly.std.ts';
+import { isConversationEverUnregistered } from '../util/isConversationEverUnregistered.std.ts';
 import {
-  isConversationEverUnregistered,
   isConversationUnregistered,
   isConversationUnregisteredAndStale,
 } from '../util/isConversationUnregistered.dom.ts';
@@ -116,7 +110,10 @@ import {
   decryptProfileName,
   hashProfileKey,
 } from '../Crypto.node.ts';
-import { decryptAttachmentV2 } from '../AttachmentCrypto.node.ts';
+import {
+  decryptAttachmentV2,
+  getPlaintextHashForInMemoryAttachment,
+} from '../AttachmentCrypto.node.ts';
 import * as Bytes from '../Bytes.std.ts';
 import type { DraftBodyRanges } from '../types/BodyRange.std.ts';
 import { migrateColor } from '../util/migrateColor.node.ts';
@@ -149,10 +146,7 @@ import { getConversationMembers } from '../util/getConversationMembers.dom.ts';
 import { updateConversationsWithUuidLookup } from '../updateConversationsWithUuidLookup.dom.ts';
 import { ReadStatus } from '../messages/MessageReadStatus.std.ts';
 import { SendStatus } from '../messages/MessageSendState.std.ts';
-import type {
-  LinkPreviewType,
-  LinkPreviewWithHydratedData,
-} from '../types/message/LinkPreviews.std.ts';
+import type { LinkPreviewType } from '../types/message/LinkPreviews.std.ts';
 import type { PollCreateType } from '../types/Polls.dom.ts';
 import {
   MINUTE,
@@ -229,6 +223,7 @@ import {
   getMessageAuthorText,
 } from '../util/getMessageAuthorText.preload.ts';
 import { downscaleOutgoingAttachment } from '../util/attachments.preload.ts';
+import { migrateDataToFileSystem } from '../util/attachments/migrateDataToFilesystem.std.ts';
 import {
   MessageRequestResponseSource,
   type MessageRequestResponseInfo,
@@ -298,6 +293,7 @@ import { QualifiedAddress } from '../types/QualifiedAddress.std.ts';
 import { notifyExternalClientsMessageAdded } from '../externalClient/hooks.std.ts';
 import { registrationJobQueue } from '../jobs/registrationJobQueue.preload.ts';
 import { areWeInGroupWith } from '../util/areWeInGroupWith.preload.ts';
+import { ourProfileKeyService } from '../services/ourProfileKey.std.ts';
 
 const { compact, isNumber, throttle, debounce } = lodash;
 
@@ -431,10 +427,6 @@ export class ConversationModel {
         name in attributes && attributes[name] !== previousAttributes[name]
       );
     };
-
-    if (hasAttributeChanged('profileKey')) {
-      this.onChangeProfileKey();
-    }
 
     const clearUsernameOrSharedNameTriggers: Array<
       keyof ConversationAttributesType
@@ -4206,6 +4198,7 @@ export class ConversationModel {
 
     const { key } = packData;
     const { emoji, width, height } = stickerData;
+
     const data = await readStickerData(stickerData);
 
     // We need this content type to be an image so we can display an `<img>` instead of a
@@ -4225,23 +4218,30 @@ export class ConversationModel {
       contentType = IMAGE_WEBP;
     }
 
-    const sticker: StickerWithHydratedData = {
+    const sticker: StickerType = {
       packId,
       stickerId,
       packKey: key,
       emoji,
-      data: {
-        size: data.byteLength,
+      data: await migrateDataToFileSystem(
+        {
+          contentType,
+          width,
+          height,
+          size: data.byteLength,
+          blurHash: await imageToBlurHash(
+            new Blob([data], {
+              type: IMAGE_JPEG,
+            })
+          ),
+        },
         data,
-        contentType,
-        width,
-        height,
-        blurHash: await imageToBlurHash(
-          new Blob([data], {
-            type: IMAGE_JPEG,
-          })
-        ),
-      },
+        {
+          writeNewAttachmentData,
+          getExistingAttachmentDataForReuse,
+          getPlaintextHashForInMemoryAttachment,
+        }
+      ),
     };
 
     drop(
@@ -4378,12 +4378,12 @@ export class ConversationModel {
     }: {
       attachments: Array<AttachmentType>;
       body: string | undefined;
-      contact?: Array<EmbeddedContactWithHydratedAvatar>;
+      contact?: Array<EmbeddedContactType>;
       bodyRanges?: DraftBodyRanges;
       isViewOnce?: boolean;
-      preview?: Array<LinkPreviewWithHydratedData>;
+      preview?: Array<LinkPreviewType>;
       quote?: QuotedMessageType;
-      sticker?: StickerWithHydratedData;
+      sticker?: StickerType;
       poll?: PollCreateType;
     },
     {
@@ -5378,12 +5378,6 @@ export class ConversationModel {
       );
   }
 
-  onChangeProfileKey(): void {
-    if (isDirectConversation(this.attributes)) {
-      drop(this.getProfiles());
-    }
-  }
-
   async getProfiles(): Promise<void> {
     // request all conversation members' keys
     const conversations = this.getMembers();
@@ -5463,10 +5457,23 @@ export class ConversationModel {
       return;
     }
 
+    const ourAci = itemStorage.user.getAci();
+    const theirAci = this.getAci();
     const shouldDownload =
       forceFetch ||
       this.getAccepted({ ignoreEmptyConvo: true }) ||
-      (await this.#getSharedGroups())?.some(group => group.getAccepted());
+      (ourAci != null &&
+        theirAci != null &&
+        !this.isBlocked() &&
+        !this.isUnregistered() &&
+        window.ConversationController.getAll().some(
+          c =>
+            isGroupV2(c.attributes) &&
+            !c.isTerminated() &&
+            c.getAccepted() &&
+            c.isMember(theirAci) &&
+            c.isMember(ourAci)
+        ));
     if (!shouldDownload) {
       this.set({ remoteAvatarUrl: avatarUrl });
       return;
@@ -5592,11 +5599,15 @@ export class ConversationModel {
       });
     }
 
-    // Don't trigger immediate profile fetches when syncing to remote storage
-    this.set(
-      { profileKey, accessKey: Bytes.toBase64(derivedAccessKey) },
-      { noTrigger: skipProfileFetch || viaStorageServiceSync }
-    );
+    this.set({ profileKey, accessKey: Bytes.toBase64(derivedAccessKey) });
+
+    if (isMe(this.attributes)) {
+      await ourProfileKeyService.set(Bytes.fromBase64(profileKey));
+    }
+
+    if (!skipProfileFetch && isDirectConversation(this.attributes)) {
+      drop(this.getProfiles());
+    }
 
     // We _don't_ update storage service when we find out about a new profileKey unless
     // we're a primary device
@@ -5876,27 +5887,6 @@ export class ConversationModel {
       pni: this.getPni(),
       groupId: this.get('groupId'),
     });
-  }
-
-  getConversationColor(): ConversationColorType | undefined {
-    return this.get('conversationColor');
-  }
-
-  getCustomColorData(): {
-    customColor?: CustomColorType;
-    customColorId?: string;
-  } {
-    if (this.getConversationColor() !== 'custom') {
-      return {
-        customColor: undefined,
-        customColorId: undefined,
-      };
-    }
-
-    return {
-      customColor: this.get('customColor'),
-      customColorId: this.get('customColorId'),
-    };
   }
 
   areWeAdmin(): boolean {

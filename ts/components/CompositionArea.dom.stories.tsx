@@ -12,8 +12,8 @@ import { StorybookThemeContext } from '../../.storybook/StorybookThemeContext.st
 import { fakeDraftAttachment } from '../test-helpers/fakeAttachment.std.ts';
 import { landscapeGreenUrl } from '../storybook/Fixtures.std.ts';
 import { RecordingState } from '../types/AudioRecorder.std.ts';
-import type { ContactNameColorType } from '../types/Colors.std.ts';
-import { ContactNameColors, ConversationColors } from '../types/Colors.std.ts';
+import type { ContactNameColorType } from '../types/ContactNameColor.std.ts';
+import { ContactNameColors } from '../types/ContactNameColor.std.ts';
 import { getDefaultConversation } from '../test-helpers/getDefaultConversation.std.ts';
 import { PaymentEventKind } from '../types/Payment.std.ts';
 import { isNotNil } from '../util/isNotNil.std.ts';
@@ -86,6 +86,7 @@ export default {
     isDisabled: false,
     isFormattingEnabled: true,
     isPollSend1to1Enabled: true,
+    isShareContactEnabled: true,
     sendEditedMessage: action('sendEditedMessage'),
     sendMultiMediaMessage: action('sendMultiMediaMessage'),
     platform: 'darwin',
@@ -155,7 +156,8 @@ export default {
     isSignalConversation: false,
     isFetchingUUID: false,
     renderSmartCompositionRecording: () => <div>RECORDING</div>,
-    renderSmartCompositionRecordingDraft: _ => <div>RECORDING DRAFT</div>,
+    renderSmartCompositionRecordingDraft: () => <div>RECORDING DRAFT</div>,
+    renderShareContactDialog: () => <div>SHARE CONTACT DIALOG</div>,
     // Select mode
     selectedMessageIds: undefined,
     toggleSelectMode: action('toggleSelectMode'),
@@ -273,7 +275,7 @@ export function Quote(args: Props): JSX.Element {
       theme={theme}
       quotedMessageProps={{
         text: 'something',
-        conversationColor: ConversationColors[10],
+        bubbleColor: { bubbleColorPreset: 'vermilion' },
         conversationTitle: getDefaultConversation().title,
         isGiftBadge: false,
         isViewOnce: false,
@@ -293,7 +295,7 @@ export function QuoteWithPayment(args: Props): JSX.Element {
       theme={theme}
       quotedMessageProps={{
         text: '',
-        conversationColor: ConversationColors[10],
+        bubbleColor: { bubbleColorPreset: 'vermilion' },
         conversationTitle: getDefaultConversation().title,
         isGiftBadge: false,
         isViewOnce: false,

@@ -1,197 +1,67 @@
 // Copyright 2020 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import type { JSX } from 'react';
-
-import type { AudioDevice } from '@signalapp/ringrtc';
-
-import type { Option } from './Select.dom.tsx';
-import { Modal } from './Modal.dom.tsx';
-import { Select } from './Select.dom.tsx';
+import type { ReactNode } from 'react';
 import type { LocalizerType } from '../types/Util.std.ts';
+import { AxoDialog } from '../axo/AxoDialog.dom.tsx';
+import { AxoList } from '../axo/items/AxoList.dom.tsx';
+import { AxoItem } from '../axo/items/AxoItem.dom.tsx';
+import { CallingDeviceSelectionItems } from './CallingDeviceSelectionItems.dom.tsx';
+
 import type {
-  ChangeIODevicePayloadType,
-  MediaDeviceSettings,
+  AudioDevicePref,
+  MediaDeviceSettingsRenderProps,
 } from '../types/Calling.std.ts';
-import { CallingDeviceType } from '../types/Calling.std.ts';
-import { Theme } from '../util/theme.std.ts';
 
-export type Props = MediaDeviceSettings & {
-  changeIODevice: (payload: ChangeIODevicePayloadType) => void;
-  i18n: LocalizerType;
-  toggleSettings: () => void;
-};
-
-function localizeDefault(i18n: LocalizerType, deviceLabel: string): string {
-  return deviceLabel.toLowerCase().startsWith('default')
-    ? deviceLabel.replace(
-        /default/i,
-        i18n('icu:callingDeviceSelection__select--default')
-      )
-    : deviceLabel;
-}
-
-function renderAudioOptions(
-  devices: Array<AudioDevice>,
-  i18n: LocalizerType
-): Array<Option> {
-  if (!devices.length) {
-    return [
-      {
-        text: i18n('icu:callingDeviceSelection__select--no-device'),
-        value: '',
-      },
-    ];
+export type CallingDeviceSelectionProps = Readonly<
+  MediaDeviceSettingsRenderProps & {
+    i18n: LocalizerType;
+    onClose: () => void;
+    onSelectedCameraChange: (value: string) => void;
+    onSelectedMicrophoneChange: (value: AudioDevicePref) => void;
+    onSelectedSpeakerChange: (value: AudioDevicePref) => void;
   }
+>;
 
-  return devices.map(device => {
-    return {
-      text: localizeDefault(i18n, device.name),
-      value: device.index,
-    };
-  });
-}
-
-function renderVideoOptions(
-  devices: Array<MediaDeviceInfo>,
-  i18n: LocalizerType
-): Array<Option> {
-  if (!devices.length) {
-    return [
-      {
-        text: i18n('icu:callingDeviceSelection__select--no-device'),
-        value: '',
-      },
-    ];
-  }
-
-  return devices.map((device: MediaDeviceInfo) => {
-    return {
-      text: localizeDefault(i18n, device.label),
-      value: device.deviceId,
-    };
-  });
-}
-
-function createAudioChangeHandler(
-  devices: Array<AudioDevice>,
-  changeIODevice: (payload: ChangeIODevicePayloadType) => void,
-  type: CallingDeviceType.SPEAKER | CallingDeviceType.MICROPHONE
-) {
-  return (value: string): void => {
-    changeIODevice({
-      type,
-      // oxlint-disable-next-line typescript/no-non-null-assertion
-      selectedDevice: devices[Number(value)]!,
-    });
-  };
-}
-
-function createCameraChangeHandler(
-  changeIODevice: (payload: ChangeIODevicePayloadType) => void
-) {
-  return (value: string): void => {
-    changeIODevice({
-      type: CallingDeviceType.CAMERA,
-      selectedDevice: value,
-    });
-  };
-}
-
-export function CallingDeviceSelection({
-  availableCameras,
-  availableMicrophones,
-  availableSpeakers,
-  changeIODevice,
-  i18n,
-  selectedCamera,
-  selectedMicrophone,
-  selectedSpeaker,
-  toggleSettings,
-}: Props): JSX.Element {
-  const selectedMicrophoneIndex = selectedMicrophone
-    ? selectedMicrophone.index
-    : undefined;
-  const selectedSpeakerIndex = selectedSpeaker
-    ? selectedSpeaker.index
-    : undefined;
-
+export function CallingDeviceSelection(
+  props: CallingDeviceSelectionProps
+): ReactNode {
+  const { i18n } = props;
   return (
-    <Modal
-      modalName="CallingDeviceSelection"
-      i18n={i18n}
-      theme={Theme.Dark}
-      onClose={toggleSettings}
-    >
-      <div className="module-calling-device-selection">
-        <button
-          type="button"
-          className="module-calling-device-selection__close-button"
-          onClick={toggleSettings}
-          tabIndex={0}
-          aria-label={i18n('icu:close')}
-        />
-      </div>
-
-      <h1 className="module-calling-device-selection__title">
-        {i18n('icu:callingDeviceSelection__settings')}
-      </h1>
-
-      <label htmlFor="video" className="module-calling-device-selection__label">
-        {i18n('icu:callingDeviceSelection__label--video')}
-      </label>
-      <div className="module-calling-device-selection__select">
-        <Select
-          disabled={!availableCameras.length}
-          id="camera"
-          name="camera"
-          onChange={createCameraChangeHandler(changeIODevice)}
-          options={renderVideoOptions(availableCameras, i18n)}
-          value={selectedCamera}
-        />
-      </div>
-
-      <label
-        htmlFor="audio-input"
-        className="module-calling-device-selection__label"
-      >
-        {i18n('icu:callingDeviceSelection__label--audio-input')}
-      </label>
-      <div className="module-calling-device-selection__select">
-        <Select
-          disabled={!availableMicrophones.length}
-          id="audio-input"
-          name="audio-input"
-          onChange={createAudioChangeHandler(
-            availableMicrophones,
-            changeIODevice,
-            CallingDeviceType.MICROPHONE
-          )}
-          options={renderAudioOptions(availableMicrophones, i18n)}
-          value={selectedMicrophoneIndex}
-        />
-      </div>
-
-      <label
-        htmlFor="audio-output"
-        className="module-calling-device-selection__label"
-      >
-        {i18n('icu:callingDeviceSelection__label--audio-output')}
-      </label>
-      <div className="module-calling-device-selection__select">
-        <Select
-          disabled={!availableSpeakers.length}
-          id="audio-output"
-          name="audio-output"
-          onChange={createAudioChangeHandler(
-            availableSpeakers,
-            changeIODevice,
-            CallingDeviceType.SPEAKER
-          )}
-          options={renderAudioOptions(availableSpeakers, i18n)}
-          value={selectedSpeakerIndex}
-        />
-      </div>
-    </Modal>
+    <AxoDialog.Root open onOpenChange={props.onClose}>
+      <AxoDialog.Content size="sm" escape="cancel-is-noop">
+        <AxoDialog.Header>
+          <AxoDialog.Title>
+            {i18n('icu:callingDeviceSelection__settings-v2')}
+          </AxoDialog.Title>
+          <AxoDialog.Close />
+        </AxoDialog.Header>
+        <AxoDialog.Body padding="md">
+          <AxoList.Group>
+            <AxoList.Root>
+              <AxoList.Body>
+                <AxoItem.Group>
+                  <CallingDeviceSelectionItems
+                    forceStackedLayout
+                    availableCameras={props.availableCameras}
+                    availableMicrophones={props.availableMicrophones}
+                    availableSpeakers={props.availableSpeakers}
+                    i18n={i18n}
+                    selectedCamera={props.selectedCamera}
+                    selectedMicrophone={props.selectedMicrophone}
+                    selectedSpeaker={props.selectedSpeaker}
+                    onSelectedCameraChange={props.onSelectedCameraChange}
+                    onSelectedMicrophoneChange={
+                      props.onSelectedMicrophoneChange
+                    }
+                    onSelectedSpeakerChange={props.onSelectedSpeakerChange}
+                  />
+                </AxoItem.Group>
+              </AxoList.Body>
+            </AxoList.Root>
+          </AxoList.Group>
+        </AxoDialog.Body>
+      </AxoDialog.Content>
+    </AxoDialog.Root>
   );
 }

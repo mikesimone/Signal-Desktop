@@ -1,14 +1,19 @@
 // Copyright 2025 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
-import { memo, useMemo } from 'react';
-import type { FC, ReactNode } from 'react';
+import { memo, useId, useMemo } from 'react';
+import type { FC, ReactNode, Ref } from 'react';
 import { Select } from 'radix-ui';
 import { AxoBaseMenu } from './_internal/AxoBaseMenu.dom.tsx';
+import { AxoBaseLayer } from './_internal/AxoBaseLayer.dom.tsx';
 import { AxoSymbol } from './AxoSymbol.dom.tsx';
 import { tw } from './tw.dom.tsx';
 import { AxoBadge } from './AxoBadge.dom.tsx';
-import { AxoTheme } from './AxoTheme.dom.tsx';
 import { variants } from './_internal/variants.dom.tsx';
+import { forwardExtraPropsForRadix } from './_internal/props.dom.tsx';
+import {
+  createStrictContext,
+  useStrictContext,
+} from './_internal/StrictContext.dom.tsx';
 
 /**
  * Displays a list of options for the user to pick from—triggered by a button.
@@ -60,6 +65,16 @@ export namespace AxoSelect {
      */
     autoComplete?: string;
     /**
+     * Label for the select as a whole.
+     * Note: The label should be for all options, not the currently selected one.
+     */
+    label?: string | null;
+    /**
+     * Reference an element that labels the select.
+     * Note: The label should be for all options, not the currently selected one.
+     */
+    labelledby?: string | null;
+    /**
      * When `true`, prevents the user from interacting with select.
      */
     disabled?: boolean;
@@ -97,7 +112,7 @@ export namespace AxoSelect {
    *
    * @example Notification sound picker
    * ```tsx
-   * <AxoSelect.Root value={sound} onValueChange={setSound}>
+   * <AxoSelect.Root label="Notification sound" value={sound} onValueChange={setSound}>
    *   <AxoSelect.Trigger placeholder="Choose a sound" />
    *   <AxoSelect.Content>
    *     <AxoSelect.Item value="note"><AxoSelect.ItemText>Note</AxoSelect.ItemText></AxoSelect.Item>
@@ -107,21 +122,55 @@ export namespace AxoSelect {
    * </AxoSelect.Root>
    * ```
    */
+  type RootContextType = Readonly<{
+    /**
+     * Rendered as `data-axo-select-id` on both the trigger and the listbox so
+     * that they can be matched up even while the select is closed (Radix only
+     * sets `aria-controls` on the trigger while it is open).
+     */
+    selectId: string;
+    /**
+     * Labels both the trigger and the listbox. Radix doesn't label the listbox
+     * on its own.
+     */
+    label: string | null;
+    labelledby: string | null;
+  }>;
+
+  const RootContext = createStrictContext<RootContextType>('AxoSelect.Root');
+
+  /**
+   * Radix shows the placeholder when the value is an empty string, and
+   * `undefined` would make the select uncontrolled.
+   */
+  const RADIX_EMPTY_VALUE = '';
+
   export const Root: FC<RootProps> = memo(props => {
+    const { label, labelledby } = props;
+    const selectId = useId();
+    const context = useMemo((): RootContextType => {
+      return {
+        selectId,
+        label: label ?? null,
+        labelledby: labelledby ?? null,
+      };
+    }, [selectId, label, labelledby]);
     return (
-      <Select.Root
-        name={props.name}
-        form={props.form}
-        autoComplete={props.autoComplete}
-        disabled={props.disabled}
-        required={props.required}
-        open={props.open}
-        onOpenChange={props.onOpenChange}
-        value={props.value ?? undefined}
-        onValueChange={props.onValueChange}
-      >
-        {props.children}
-      </Select.Root>
+      <RootContext value={context}>
+        <Select.Root
+          name={props.name}
+          form={props.form}
+          autoComplete={props.autoComplete}
+          disabled={props.disabled}
+          required={props.required}
+          open={props.open}
+          onOpenChange={props.onOpenChange}
+          value={props.value ?? RADIX_EMPTY_VALUE}
+          onValueChange={props.onValueChange}
+        >
+          {props.children}
+        </Select.Root>
+      </RootContext>
     );
   });
 
@@ -225,10 +274,7 @@ export namespace AxoSelect {
   );
 
   export type TriggerProps = Readonly<{
-    /**
-     * HTML `id` used to associate a `<label htmlFor={id}>` with this button.
-     */
-    id?: string;
+    ref?: Ref<HTMLButtonElement>;
     /**
      * Visual style of the button. Defaults to `default`.
      */
@@ -245,7 +291,7 @@ export namespace AxoSelect {
      * The content that will be rendered inside the `Trigger` when `value` is
      * `null`.
      */
-    placeholder: string;
+    placeholder: string | null;
     /**
      * Custom rendering of the selected value inside the trigger.
      */
@@ -258,10 +304,20 @@ export namespace AxoSelect {
    * trigger.
    */
   export const Trigger: FC<TriggerProps> = memo(props => {
-    const { placeholder } = props;
-    const variant = props.variant ?? 'default';
-    const width = props.width ?? 'fit';
-    const chevron = props.chevron ?? 'always';
+    const {
+      ref,
+      variant: variantProp,
+      width: widthProp,
+      chevron: chevronProp,
+      placeholder: placeholderProp,
+      children,
+      ...rest
+    } = props;
+    const placeholder = placeholderProp ?? '';
+    const variant = variantProp ?? 'default';
+    const width = widthProp ?? 'fit';
+    const chevron = chevronProp ?? 'always';
+    const { selectId, label, labelledby } = useStrictContext(RootContext);
 
     const placeholderOrEmpty = useMemo(() => {
       return placeholder === '' ? <>&nbsp;</> : placeholder;
@@ -269,13 +325,17 @@ export namespace AxoSelect {
 
     return (
       <Select.Trigger
-        id={props.id}
+        ref={ref}
+        data-axo-select-id={selectId}
         className={tw(TriggerVariants.get(variant), TriggerWidths.get(width))}
+        aria-label={label ?? undefined}
+        aria-labelledby={labelledby ?? undefined}
+        {...forwardExtraPropsForRadix(rest)}
       >
         <div className={TriggerChevronContentStyles.get(chevron)}>
           <AxoBaseMenu.ItemText>
             <Select.Value placeholder={placeholderOrEmpty}>
-              {props.children}
+              {children}
             </Select.Value>
           </AxoBaseMenu.ItemText>
         </div>
@@ -341,10 +401,15 @@ export namespace AxoSelect {
   export const Content: FC<ContentProps> = memo(props => {
     const position = props.position ?? 'item-aligned';
     const positionConfig = ContentPositions.get(position);
+    const { selectId, label, labelledby } = useStrictContext(RootContext);
+
     return (
       <Select.Portal>
-        <AxoTheme.Inherit>
+        <AxoBaseLayer>
           <Select.Content
+            data-axo-select-id={selectId}
+            aria-label={label ?? undefined}
+            aria-labelledby={labelledby ?? undefined}
             className={AxoBaseMenu.selectContentClassName}
             position={positionConfig.position}
             alignOffset={positionConfig.alignOffset}
@@ -373,7 +438,7 @@ export namespace AxoSelect {
               <AxoSymbol.Icon symbol="chevron-down" size={14} label={null} />
             </Select.ScrollDownButton>
           </Select.Content>
-        </AxoTheme.Inherit>
+        </AxoBaseLayer>
       </Select.Portal>
     );
   });

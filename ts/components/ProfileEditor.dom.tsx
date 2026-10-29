@@ -4,7 +4,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSpring, animated } from '@react-spring/web';
 import type { JSX, ReactNode } from 'react';
-import { AvatarColors } from '../types/Colors.std.ts';
+import { AvatarColors } from '../types/Avatar.std.ts';
 import { AvatarEditor } from './AvatarEditor.dom.tsx';
 import { AvatarPreview } from './AvatarPreview.dom.tsx';
 import { UsernameEditState } from '../state/ducks/usernameEnums.std.ts';
@@ -20,8 +20,8 @@ import { FunStaticEmoji } from './fun/FunEmoji.dom.tsx';
 import { FunEmojiPicker } from './fun/FunEmojiPicker.dom.tsx';
 import { ProfileEditorPage } from '../types/Nav.std.ts';
 
-import type { AvatarColorType } from '../types/Colors.std.ts';
 import type {
+  AvatarColorType,
   AvatarDataType,
   AvatarUpdateOptionsType,
   DeleteAvatarFromDiskActionType,
@@ -32,7 +32,6 @@ import type { LocalizerType } from '../types/Util.std.ts';
 import type {
   ConversationType,
   ProfileDataType,
-  SaveAttachmentActionCreatorType,
 } from '../state/ducks/conversations.preload.ts';
 import type { UsernameLinkState } from '../state/ducks/usernameEnums.std.ts';
 import type { ShowToastAction } from '../state/ducks/toast.preload.ts';
@@ -93,7 +92,10 @@ type PropsActionType = {
   deleteAvatarFromDisk: DeleteAvatarFromDiskActionType;
   markCompletedUsernameLinkOnboarding: () => void;
   replaceAvatar: ReplaceAvatarActionType;
-  saveAttachment: SaveAttachmentActionCreatorType;
+  saveAttachmentToDisk: (options: {
+    data: Uint8Array<ArrayBuffer>;
+    name: string;
+  }) => void;
   saveAvatarToDisk: SaveAvatarToDiskActionType;
   setUsernameEditState: (editState: UsernameEditState) => void;
   setUsernameLinkColor: (color: number) => void;
@@ -166,7 +168,7 @@ export function ProfileEditor({
   renderUsernameEditor,
   replaceAvatar,
   resetUsernameLink,
-  saveAttachment,
+  saveAttachmentToDisk,
   saveAvatarToDisk,
   setEditState,
   setUsernameEditState,
@@ -596,7 +598,7 @@ export function ProfileEditor({
         usernameLinkState={usernameLinkState}
         setUsernameLinkColor={setUsernameLinkColor}
         resetUsernameLink={resetUsernameLink}
-        saveAttachment={saveAttachment}
+        saveAttachmentToDisk={saveAttachmentToDisk}
         showToast={showToast}
         onBack={() => setEditState(ProfileEditorPage.None)}
       />

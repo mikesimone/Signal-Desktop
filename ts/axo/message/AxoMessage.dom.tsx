@@ -12,13 +12,12 @@ import {
 } from 'react';
 import { tw } from '../tw.dom.tsx';
 import type { SentTimestampMs } from '@signalapp/types';
-import { AxoSymbol } from '../AxoSymbol.dom.tsx';
 import {
   createStrictContext,
   useStrictContext,
 } from '../_internal/StrictContext.dom.tsx';
-import { variants } from '../_internal/variants.dom.tsx';
 import { AxoExpireTimer } from './AxoExpireTimer.dom.tsx';
+import { AxoOutgoingStatus } from './AxoOutgoingStatus.dom.tsx';
 
 // TODO: We can add  author name and timestamp as invisible text in order to
 // format the message nicely when copy and pasted
@@ -131,7 +130,8 @@ export namespace AxoMessage {
           context.direction === 'outgoing' &&
             'bg-surface-message-outgoing text-primary-oncolor',
           context.direction === 'incoming' &&
-            'bg-surface-message-incoming text-primary'
+            'bg-surface-message-incoming text-primary',
+          'forced-colors:border forced-colors:border-[CanvasText]'
         )}
       >
         {props.children}
@@ -219,7 +219,9 @@ export namespace AxoMessage {
           className={tw(
             'inline-flex gap-[0.5ch] type-caption',
             context.direction === 'incoming' && 'text-secondary',
-            context.direction === 'outgoing' && 'text-secondary-oncolor'
+            context.direction === 'outgoing' && 'text-secondary-oncolor',
+            // Inline glyphs inherit the color with `forced-color-adjust: none`
+            'forced-colors:text-[CanvasText]'
           )}
         >
           {props.children}
@@ -278,42 +280,17 @@ export namespace AxoMessage {
    * --------------------------------------------------------------------------
    */
 
-  export type OutgoingStatus = 'sending' | 'sent' | 'delivered' | 'read';
-
-  const OutgoingStatusSymbols = variants<OutgoingStatus, AxoSymbol.Name>(
-    'AxoMessage.OutgoingStatus',
-    {
-      sending: 'ticks',
-      sent: 'check-circle',
-      delivered: 'check-circle-on-check-circle',
-      read: 'check-circle-on-check-circle-fill',
-    }
-  );
-
   export type MetaOutgoingStatusProps = Readonly<{
-    status: OutgoingStatus;
+    status: AxoOutgoingStatus.Status;
+    /**
+     * Visually hidden label for screen readers. Pass `null` if the status is
+     * already described by the surrounding context.
+     */
+    label?: string | null;
   }>;
 
-  // TODO: Pull this into its own component so it can be used in other places like message details
   export const MetaOutgoingStatus: FC<MetaOutgoingStatusProps> = memo(props => {
-    const inlineGlyph = (
-      <AxoSymbol.InlineGlyph
-        symbol={OutgoingStatusSymbols.get(props.status)}
-        label={null}
-        preferWide
-      />
-    );
-
-    return (
-      <span
-        // TODO: Need to do more research on the best way to make this accessible
-        // but maybe something like adding role="status"` `aria-live={false}`,
-        // and `aria-label` for each status
-        className={tw(props.status === 'sending' && 'animate-spin')}
-      >
-        {inlineGlyph}
-      </span>
-    );
+    return <AxoOutgoingStatus.Root status={props.status} label={props.label} />;
   });
 
   MetaOutgoingStatus.displayName = 'AxoMessage.MetaOutgoingStatus';
@@ -343,7 +320,10 @@ export namespace AxoMessage {
       <button
         type="button"
         onClick={handleClick}
-        className={tw('rounded-xs focus-visible:axo-focus-ring')}
+        className={tw(
+          'rounded-xs focus-visible:axo-focus-ring',
+          'forced-colors:text-[LinkText] forced-colors:underline'
+        )}
       >
         {props.children}
       </button>

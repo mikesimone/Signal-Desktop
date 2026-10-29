@@ -245,6 +245,74 @@ export function FullWidthActions(): ReactNode {
   );
 }
 
+export function Tabs(): ReactNode {
+  const [tab, setTab] = useState('short');
+  return (
+    <AxoDialog.Root>
+      <AxoDialog.Trigger asChild>
+        <AxoDialog.StoryTrigger />
+      </AxoDialog.Trigger>
+      <AxoDialog.Content
+        size="md"
+        escape="cancel-is-noop"
+        disableMissingAriaDescriptionWarning
+      >
+        <AxoDialog.Header>
+          <AxoDialog.Title>Tabs</AxoDialog.Title>
+          <AxoDialog.Close />
+        </AxoDialog.Header>
+        <AxoDialog.Tabs value={tab} onValueChange={setTab}>
+          <AxoDialog.TabList>
+            <AxoDialog.Tab value="short">Short</AxoDialog.Tab>
+            <AxoDialog.Tab value="long">Long</AxoDialog.Tab>
+            <AxoDialog.Tab value="cards">Cards</AxoDialog.Tab>
+          </AxoDialog.TabList>
+          <AxoDialog.TabContent value="short">
+            <AxoDialog.Body>
+              <p>{TEXT_SHORT}</p>
+            </AxoDialog.Body>
+          </AxoDialog.TabContent>
+          <AxoDialog.TabContent value="long">
+            <AxoDialog.Body>
+              {Array.from({ length: 6 }, (_, index) => {
+                return (
+                  <p key={index} className={tw('mb-3')}>
+                    {TEXT_LONG}
+                  </p>
+                );
+              })}
+            </AxoDialog.Body>
+          </AxoDialog.TabContent>
+          <AxoDialog.TabContent value="cards">
+            <AxoDialog.Body padding="md">
+              <div className={tw('flex flex-col gap-3')}>
+                <Box>1</Box>
+                <Box>2</Box>
+              </div>
+            </AxoDialog.Body>
+          </AxoDialog.TabContent>
+        </AxoDialog.Tabs>
+        <AxoDialog.Footer>
+          <AxoDialog.Actions>
+            <AxoDialog.Action
+              variant="subtle-secondary"
+              onClick={action('onCancel')}
+            >
+              Cancel
+            </AxoDialog.Action>
+            <AxoDialog.Action
+              variant="strong-primary"
+              onClick={action('onSave')}
+            >
+              Save
+            </AxoDialog.Action>
+          </AxoDialog.Actions>
+        </AxoDialog.Footer>
+      </AxoDialog.Content>
+    </AxoDialog.Root>
+  );
+}
+
 function Spacer(props: { height: 8 | 12 }) {
   return <div style={{ height: props.height }} />;
 }
@@ -386,25 +454,19 @@ export function ExampleMuteNotificationsDialog(): JSX.Element {
 }
 
 function ExampleItem(props: { label: string; description: string }) {
-  const labelId = useId();
-  const descriptionId = useId();
-
+  // The option is named by all of its visible text (both lines), so that
+  // speech input users can say what they see.
   return (
     <div
       role="option"
       aria-selected={false}
-      aria-labelledby={labelId}
-      aria-describedby={descriptionId}
       tabIndex={0}
       className={tw('rounded-lg px-[13px] py-2.5 hover:bg-primary')}
     >
-      <div id={labelId} className={tw('truncate type-body-large text-primary')}>
+      <div className={tw('truncate type-body-large text-primary')}>
         {props.label}
       </div>
-      <div
-        id={descriptionId}
-        className={tw('truncate type-body-small text-secondary')}
-      >
+      <div className={tw('truncate type-body-small text-secondary')}>
         {props.description}
       </div>
     </div>
@@ -436,6 +498,7 @@ export function ExampleLanguageDialog(): JSX.Element {
         <AxoDialog.Body padding="sm">
           <div
             role="listbox"
+            aria-label="Languages"
             style={{
               paddingInline:
                 'calc(11px - var(--axo-scrollbar-gutter-thin-vertical)',

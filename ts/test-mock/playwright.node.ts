@@ -15,7 +15,7 @@ import type { ReceiptType } from '../types/Receipt.std.ts';
 import { SECOND } from '../util/durations/index.std.ts';
 import { drop } from '../util/drop.std.ts';
 import { toNumber } from '../util/toNumber.std.ts';
-import type { MessageAttributesType } from '../model-types.d.ts';
+import type { MessageAttributesType } from '../model-types.std.ts';
 import type { SocketStatuses } from '../textsecure/SocketManager.preload.ts';
 import type {
   RestoreResponseType,
@@ -337,6 +337,15 @@ export class App extends EventEmitter {
   ): Promise<Array<MessageAttributesType>> {
     const window = await this.getWindow();
     return window.evaluate(`window.SignalCI.getMessagesBySentAt(${timestamp})`);
+  }
+
+  public async getMessagesInDBBySentAt(
+    timestamp: number
+  ): Promise<Array<MessageAttributesType>> {
+    const window = await this.getWindow();
+    return window.evaluate(
+      `window.SignalCI.getMessagesInDBBySentAt(${timestamp})`
+    );
   }
 
   public async waitForMessage({

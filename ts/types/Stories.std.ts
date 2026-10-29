@@ -1,10 +1,14 @@
 // Copyright 2022 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import type { AttachmentType } from './Attachment.std.ts';
+import type {
+  AttachmentType,
+  AttachmentDraftType,
+  TextAttachmentType,
+} from './Attachment.std.ts';
 import type { HydratedBodyRangesType } from './BodyRange.std.ts';
 import type { LocalizerType } from './Util.std.ts';
-import type { ContactNameColorType } from './Colors.std.ts';
+import type { ContactNameColorType } from './ContactNameColor.std.ts';
 import type { ConversationType } from '../state/ducks/conversations.preload.ts';
 import type { ReadStatus } from '../messages/MessageReadStatus.std.ts';
 import type { SendStatus } from '../messages/MessageSendState.std.ts';
@@ -178,3 +182,13 @@ export type StoryMessageRecipientsType = Array<{
   distributionListIds: Array<StoryDistributionIdString>;
   isAllowedToReply: boolean;
 }>;
+
+export type StoryDraftAttachmentType =
+  | {
+      type: 'media';
+      attachment: AttachmentDraftType;
+    }
+  | {
+      type: 'text';
+      attachment: TextAttachmentType;
+    };

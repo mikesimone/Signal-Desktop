@@ -1,62 +1,95 @@
 // Copyright 2021 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import type { AudioDevice } from '@signalapp/ringrtc';
+import type { AudioDevice, AudioDeviceList } from '@signalapp/ringrtc';
+import type { AudioDevicePref } from '../types/Calling.std.ts';
 
-export function findBestMatchingAudioDeviceIndex(
-  {
-    available,
-    preferred,
-  }: Readonly<{
-    available: ReadonlyArray<AudioDevice>;
-    preferred: undefined | AudioDevice;
-  }>,
-  isWindows: boolean
-): undefined | number {
-  if (!preferred) {
-    return available.length > 0 ? 0 : undefined;
+// Try to get the relevant default device, falling back to the first device in the list
+// if there is no OS-specified default.
+//
+// The fallback to the first device is arbitrary: there is no special semantic
+// meaning to a device being first in the list. Instead, we assume that it's better
+// to have a device available for a call than not to have any, so if there is no OS-specified
+// default available, we select one of the non-default devices it provides, if there are any.
+//
+// On windows, |preferWindowsComms| defines whether to check the communications or console device first.
+// Allows for the case of the preference being for a different OS than the OS we're running on
+function defaultWithFallback(
+  available: AudioDeviceList,
+  preferWindowsComms = true
+): AudioDevice | null {
+  const { defaults } = available;
+  const firstDevice = available.devices.at(0) ?? null;
+
+  if (!defaults.isWindows) {
+    return defaults.device ?? firstDevice ?? null;
   }
 
-  // On Linux and Mac, the default device is at index 0.
-  // On Windows, there are two default devices, as presented by RingRTC:
-  // * The default communications device (for voice calls, at index 0)
-  // * the default device (for, e.g., media, at index 1)
-  if (
-    preferred.index === 0 ||
-    (isWindows && preferred.index === 1 && available.length >= 2)
-  ) {
-    return preferred.index;
+  const { communicationsDevice, consoleDevice } = defaults;
+
+  if (preferWindowsComms) {
+    return communicationsDevice ?? consoleDevice ?? firstDevice;
   }
 
-  // Number of default devices at start of list to ignore.
-  const offset = isWindows ? 2 : 1;
-  const searchArr = available.slice(offset);
+  return consoleDevice ?? communicationsDevice ?? firstDevice;
+}
 
-  if (preferred.uniqueId) {
-    const idMatchIndex = searchArr.findIndex(
-      d => d.uniqueId === preferred.uniqueId
+export type FindBestMatchingAudioDeviceOptions = Readonly<{
+  available: AudioDeviceList;
+  preferred: AudioDevicePref;
+}>;
+
+/**
+ * Caution: You probably **only** want to use this when you are about to hand
+ * a specific device id to RingRTC. For any other UI purposes, hold on to the
+ * AudioDevicePref, to distinguish to the user whether they have selected the
+ * system default or a specific device
+ */
+export function findBestMatchingAudioDevice(
+  options: FindBestMatchingAudioDeviceOptions
+): AudioDevice | null {
+  const { available, preferred } = options;
+
+  if (preferred.type !== 'specificDevice') {
+    return defaultWithFallback(
+      available,
+      preferred && preferred.type !== 'windowsConsole'
     );
-    if (idMatchIndex !== -1) {
-      return idMatchIndex + offset;
+  }
+
+  if (preferred.device.uniqueId.length !== 0) {
+    const idMatch = available.devices.find(device => {
+      return device.uniqueId === preferred.device.uniqueId;
+    });
+    if (idMatch != null) {
+      return idMatch;
     }
   }
 
-  const nameMatchIndex = searchArr.findIndex(d => d.name === preferred.name);
-  if (nameMatchIndex !== -1) {
-    return nameMatchIndex + offset;
+  const nameMatch = available.devices.find(device => {
+    return device.name === preferred.device.name;
+  });
+
+  if (nameMatch != null) {
+    return nameMatch;
   }
 
-  return available.length > 0 ? 0 : undefined;
+  return defaultWithFallback(available);
 }
 
+export type FindBestMatchingCameraIdOptions = Readonly<{
+  available: ReadonlyArray<MediaDeviceInfo>;
+  preferred: string | null;
+}>;
+
 export function findBestMatchingCameraId(
-  available: ReadonlyArray<MediaDeviceInfo>,
-  preferred?: string
-): undefined | string {
+  options: FindBestMatchingCameraIdOptions
+): string | null {
+  const { available, preferred } = options;
   const matchingId = available.filter(d => d.deviceId === preferred);
   const nonInfrared = available.filter(d => !d.label.includes('IR Camera'));
 
   // By default, pick the first non-IR camera (but allow the user to pick the
   // infrared if they so desire)
-  return matchingId[0]?.deviceId ?? nonInfrared[0]?.deviceId;
+  return matchingId[0]?.deviceId ?? nonInfrared[0]?.deviceId ?? null;
 }

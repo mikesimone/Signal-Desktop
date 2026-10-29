@@ -23,7 +23,7 @@ import { AxoSwitch } from '../axo/AxoSwitch.dom.tsx';
 import { AxoSymbol } from '../axo/AxoSymbol.dom.tsx';
 import { Input } from './Input.dom.tsx';
 import { Checkbox } from './Checkbox.dom.tsx';
-import { AvatarColorMap, AvatarColors } from '../types/Colors.std.ts';
+import { AvatarColorMap, AvatarColors } from '../types/Avatar.std.ts';
 import { PreferencesSelectChatsDialog } from './preferences/PreferencesSelectChatsDialog.dom.tsx';
 import { DayOfWeek } from '../types/NotificationProfile.std.ts';
 import { Avatar } from './Avatar.dom.tsx';
@@ -1443,7 +1443,9 @@ function EmojiOrMoon({
     return (
       <div
         className={tw(
-          'absolute inset-s-1/2 top-1/2 -translate-1/2 text-accent'
+          // oxlint-disable-next-line better-tailwindcss/no-restricted-classes
+          'left-1/2',
+          'absolute top-1/2 -translate-1/2 text-accent'
         )}
         style={
           forceLightTheme
@@ -1464,7 +1466,11 @@ function EmojiOrMoon({
 
   return (
     <span
-      className={tw('absolute inset-s-1/2 top-1/2 -translate-1/2 leading-0')}
+      className={tw(
+        // oxlint-disable-next-line better-tailwindcss/no-restricted-classes
+        'left-1/2',
+        'absolute top-1/2 -translate-1/2 leading-0'
+      )}
     >
       <FunStaticEmoji
         role="img"

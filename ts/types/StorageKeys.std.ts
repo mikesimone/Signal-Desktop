@@ -1,11 +1,6 @@
 // Copyright 2026 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import type { AudioDevice } from '@signalapp/ringrtc';
-import type {
-  CustomColorsItemType,
-  DefaultConversationColorType,
-} from './Colors.std.ts';
 import type { PhoneNumberDiscoverability } from '../util/phoneNumberDiscoverability.std.ts';
 import type { RetryItemType } from '../services/retryPlaceholders.std.ts';
 import type { ConfigMapType as RemoteConfigType } from '../RemoteConfig.dom.ts';
@@ -31,6 +26,7 @@ import type { AssertSameMembers } from './Util.std.ts';
 import type { Emoji } from '../axo/emoji.std.ts';
 import type { PartialRegistrationType } from './StandaloneRegistration.std.ts';
 import type { RegistrationQueueJobState } from '../jobs/registrationJobQueue.preload.ts';
+import type { AudioDevicePref } from './Calling.std.ts';
 
 export type AutoDownloadAttachmentType = {
   photos: boolean;
@@ -98,7 +94,6 @@ export type StorageAccessType = {
   attachmentMigration_isComplete: boolean;
   attachmentMigration_lastProcessedIndex: number;
   blocked: ReadonlyArray<BlockedNumber>;
-  defaultConversationColor: DefaultConversationColorType;
   externalClientsEnabled: boolean;
   externalClientGrants: ReadonlyArray<{
     publicKey: string;
@@ -109,8 +104,6 @@ export type StorageAccessType = {
     lastSeenAt: number | null;
   }>;
   externalClientServerKey: { privateKey: string; publicKey: string };
-
-  customColors: CustomColorsItemType;
   device_name: string;
   deviceCreatedAt: number;
   existingOnboardingStoryMessageIds: ReadonlyArray<string> | undefined;
@@ -182,8 +175,8 @@ export type StorageAccessType = {
   'storage-service-unknown-records': ReadonlyArray<UnknownRecord>;
   'storage-service-pending-deletes': ReadonlyArray<ExtendedStorageID>;
   'preferred-video-input-device': string | undefined;
-  'preferred-audio-input-device': AudioDevice | undefined;
-  'preferred-audio-output-device': AudioDevice | undefined;
+  'preferred-audio-input-device': AudioDevicePref;
+  'preferred-audio-output-device': AudioDevicePref;
   remoteConfig: RemoteConfigType;
   remoteConfigHash: string;
   serverTimeSkew: number;
@@ -394,8 +387,6 @@ export const STORAGE_KEYS_TO_PRESERVE_AFTER_UNLINK = [
   'autoConvertEmoji',
   'badge-count-muted-conversations',
   'call-ringtone-notification',
-  'customColors',
-  'defaultConversationColor',
   'existingOnboardingStoryMessageIds',
   'hasCompletedSafetyNumberOnboarding',
   'hasCompletedUsernameLinkOnboarding',

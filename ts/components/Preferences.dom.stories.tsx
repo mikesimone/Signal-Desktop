@@ -4,12 +4,10 @@
 import { useState } from 'react';
 import { action } from '@storybook/addon-actions';
 import lodash from 'lodash';
-
 import type { Meta, StoryFn } from '@storybook/react';
 import type { MutableRefObject, JSX } from 'react';
-
 import { Preferences } from './Preferences.dom.tsx';
-import { DEFAULT_CONVERSATION_COLOR } from '../types/Colors.std.ts';
+import { DEFAULT_BUBBLE_COLOR } from '../types/ChatStyle.std.ts';
 import { PhoneNumberSharingMode } from '../types/PhoneNumberSharingMode.std.ts';
 import { PhoneNumberDiscoverability } from '../util/phoneNumberDiscoverability.std.ts';
 import { sleep } from '../util/sleep.std.ts';
@@ -56,7 +54,7 @@ import type { SettingsLocation } from '../types/Nav.std.ts';
 import type { LocalizerType } from '../types/Util.std.ts';
 import type { PropsType } from './Preferences.dom.tsx';
 import type { WidthBreakpoint } from './_util.std.ts';
-import type { MessageAttributesType } from '../model-types.d.ts';
+import type { MessageAttributesType } from '../model-types.std.ts';
 import type {
   DonationReceipt,
   DonationWorkflow,
@@ -70,6 +68,7 @@ import type { ExternalProps as SmartNotificationProfilesProps } from '../state/s
 import type { NotificationProfileIdString } from '../types/NotificationProfile.std.ts';
 import type { ExportResultType } from '../services/backups/types.std.ts';
 import type { BadgeType } from '../badges/types.std.ts';
+import type { AudioDeviceList } from '@signalapp/ringrtc';
 
 const { shuffle } = lodash;
 
@@ -99,33 +98,39 @@ function conversationSelector(conversationId?: string) {
   return found;
 }
 
-const availableMicrophones = [
-  {
-    name: 'DefAuLt (Headphones)',
-    index: 0,
-    uniqueId: 'Default',
-    i18nKey: 'default_communication_device',
+const availableMicrophones: AudioDeviceList = {
+  devices: [
+    {
+      name: 'DefAuLt (Headphones)',
+      uniqueId: 'Default',
+    },
+  ],
+  defaults: {
+    isWindows: false,
+    device: { name: 'Monitor of UE Boom (Bluetooth)', uniqueId: 'bb.monitor' },
   },
-];
+};
 
-const availableSpeakers = [
-  {
-    name: 'Default',
-    index: 0,
-    uniqueId: 'Default',
-    i18nKey: 'default_communication_device',
+const availableSpeakers: AudioDeviceList = {
+  devices: [
+    {
+      name: 'Default',
+      uniqueId: 'Default',
+    },
+    {
+      name: "Natalie's Airpods (Bluetooth)",
+      uniqueId: 'aa',
+    },
+    {
+      name: 'UE Boom (Bluetooth)',
+      uniqueId: 'bb',
+    },
+  ],
+  defaults: {
+    isWindows: false,
+    device: { name: 'Default', uniqueId: 'Default' },
   },
-  {
-    name: "Natalie's Airpods (Bluetooth)",
-    index: 1,
-    uniqueId: 'aa',
-  },
-  {
-    name: 'UE Boom (Bluetooth)',
-    index: 2,
-    uniqueId: 'bb',
-  },
-];
+};
 
 const validateBackupResult: ExportResultType = {
   attachmentBackupJobs: [],
@@ -252,7 +257,7 @@ function renderProfileEditor(): JSX.Element {
       renderUsernameEditor={() => <div />}
       replaceAvatar={action('replaceAvatar')}
       resetUsernameLink={action('resetUsernameLink')}
-      saveAttachment={action('saveAttachment')}
+      saveAttachmentToDisk={action('saveAttachmentToDisk')}
       saveAvatarToDisk={action('saveAvatarToDisk')}
       setEditState={action('setEditState')}
       setUsernameEditState={action('setUsernameEditState')}
@@ -454,21 +459,14 @@ export default {
       {
         deviceId:
           'dfbe6effe70b0611ba0fdc2a9ea3f39f6cb110e6687948f7e5f016c111b7329c',
-        groupId:
-          '63ee218d2446869e40adfc958ff98263e51f74382b0143328ee4826f20a76f47',
-        kind: 'videoinput',
         label: 'FaceTime HD Camera (Built-in) (9fba:bced)',
       },
       {
         deviceId:
           'e2db196a31d50ff9b135299dc0beea67f65b1a25a06d8a4ce76976751bb7a08d',
-        groupId:
-          '218ba7f00d7b1239cca15b9116769e5e7d30cc01104ebf84d667643661e0ecf9',
-        kind: 'videoinput',
         label: 'Logitech Webcam (4e72:9058)',
       },
     ],
-    availableLocales: ['en'],
     availableMicrophones,
     availableSpeakers,
     backupFreeMediaDays: 45,
@@ -479,11 +477,12 @@ export default {
     blockedContactCount: 0,
     blockedGroupCount: 0,
     currentChatFoldersCount: 0,
-    customColors: {},
-    defaultConversationColor: DEFAULT_CONVERSATION_COLOR,
+    customChatColors: [],
+    defaultBubbleColor: DEFAULT_BUBBLE_COLOR,
     deviceName: 'Work Windows ME',
     emojiSkinToneDefault: Emoji.SkinTone.None,
     phoneNumber: '+1 555 123-4567',
+    e164: '+15551234567',
     hasAnyCurrentCustomChatFolders: false,
     hasAudioNotifications: true,
     hasAutoConvertEmoji: true,
@@ -562,8 +561,12 @@ export default {
     resolvedLocale: 'en',
     selectedCamera:
       'dfbe6effe70b0611ba0fdc2a9ea3f39f6cb110e6687948f7e5f016c111b7329c',
-    selectedMicrophone: availableMicrophones[0],
-    selectedSpeaker: availableSpeakers[1],
+    selectedMicrophone: { type: 'nonWindowsDefault' },
+    selectedSpeaker: {
+      type: 'specificDevice',
+      // oxlint-disable-next-line typescript/no-non-null-assertion
+      device: availableSpeakers.devices[1]!,
+    },
     sentMediaQualitySetting: 'standard',
     shouldShowUpdateDialog: false,
     themeSetting: 'system',
@@ -695,18 +698,13 @@ export default {
     refreshCloudBackupStatus: action('refreshCloudBackupStatus'),
     refreshBackupSubscriptionStatus: action('refreshBackupSubscriptionStatus'),
     removeCustomColor: action('removeCustomColor'),
-    removeCustomColorOnConversations: action(
-      'removeCustomColorOnConversations'
-    ),
     resumeBackupMediaDownload: action('resumeBackupMediaDownload'),
     pauseBackupMediaDownload: action('pauseBackupMediaDownload'),
     cancelBackupMediaDownload: action('cancelBackupMediaDownload'),
     resetAllChatColors: action('resetAllChatColors'),
     resetDefaultChatColor: action('resetDefaultChatColor'),
     savePreferredLeftPaneWidth: action('savePreferredLeftPaneWidth'),
-    setGlobalDefaultConversationColor: action(
-      'setGlobalDefaultConversationColor'
-    ),
+    setGlobalDefaultBubbleColor: action('setGlobalDefaultBubbleColor'),
     setSettingsLocation: action('setSettingsLocation'),
     showPinChangeModal: action('showPinChangeModal'),
     showToast: action('showToast'),

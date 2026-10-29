@@ -1,7 +1,7 @@
 // Copyright 2025 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import { Dialog } from 'radix-ui';
+import { Dialog, Tabs as RadixTabs } from 'radix-ui';
 import type {
   CSSProperties,
   FC,
@@ -10,15 +10,30 @@ import type {
   Ref,
   RefCallback,
 } from 'react';
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
+import {
+  AnimatePresence,
+  motion,
+  useIsPresent,
+  useReducedMotion,
+} from 'motion/react';
+import type { Transition } from 'motion/react';
 import { AxoBaseDialog } from './_internal/AxoBaseDialog.dom.tsx';
+import { AxoBaseLayer } from './_internal/AxoBaseLayer.dom.tsx';
 import type { AxoSymbol } from './AxoSymbol.dom.tsx';
 import { tw } from './tw.dom.tsx';
 import { AxoScrollArea } from './AxoScrollArea.dom.tsx';
 import { AxoButton } from './AxoButton.dom.tsx';
 import { AxoIconButton } from './AxoIconButton.dom.tsx';
 import { AxoTooltip } from './AxoTooltip.dom.tsx';
-import { AxoTheme } from './AxoTheme.dom.tsx';
 import { useAxoIntl } from './_internal/AxoIntl.dom.tsx';
 import { variants } from './_internal/variants.dom.tsx';
 import { assert, unreachable } from './_internal/assert.std.tsx';
@@ -30,8 +45,13 @@ import {
 import { forwardExtraPropsForRadix } from './_internal/props.dom.tsx';
 import { mergeRefs } from '@react-aria/utils';
 import { FlexWrapDetector } from './_internal/FlexWrapDetector.dom.tsx';
+import { ExperimentalAxoBaseSegmentedControl } from './_internal/AxoBaseSegmentedControl.dom.tsx';
 
-const { useContentEscapeBehavior } = AxoBaseDialog;
+const {
+  useContentEscapeBehavior,
+  useContentRestoreFocusBehavior,
+  useTriggerPresenceRef,
+} = AxoBaseDialog;
 
 /**
  * A window overlaid on either the primary window or another dialog window,
@@ -64,6 +84,31 @@ const { useContentEscapeBehavior } = AxoBaseDialog;
  * </AxoDialog.Root>
  * ```
  *
+ * @example Anatomy with tabs
+ * ```tsx
+ * <AxoDialog.Root>
+ *   <AxoDialog.Content>
+ *     <AxoDialog.Header>
+ *       <AxoDialog.Title />
+ *       <AxoDialog.Close />
+ *     </AxoDialog.Header>
+ *     <AxoDialog.Tabs>
+ *       <AxoDialog.TabList>
+ *         <AxoDialog.Tab />
+ *         <AxoDialog.Tab />
+ *       </AxoDialog.TabList>
+ *       <AxoDialog.TabContent>
+ *         <AxoDialog.Body />
+ *       </AxoDialog.TabContent>
+ *       <AxoDialog.TabContent>
+ *         <AxoDialog.Body />
+ *       </AxoDialog.TabContent>
+ *     </AxoDialog.Tabs>
+ *     <AxoDialog.Footer />
+ *   </AxoDialog.Content>
+ * </AxoDialog.Root>
+ * ```
+ *
  * @see {@link https://www.radix-ui.com/primitives/docs/components/dialog | Dialog - Radix Docs}
  * @see {@link https://www.w3.org/WAI/ARIA/apg/patterns/dialog-modal/ | Dialog (Modal) Pattern - ARIA Authoring Practices Guide}
  * @see {@link https://w3c.github.io/aria/#dialog | `dialog` role - WAI-ARIA 1.3}
@@ -79,6 +124,8 @@ export namespace AxoDialog {
     setHasHeader: (hasHeader: boolean) => void;
     hasFooter: boolean;
     setHasFooter: (hasFooter: boolean) => void;
+    hasTrigger: boolean;
+    setHasTrigger: (hasTrigger: boolean) => void;
   }>;
 
   const RootContext = createStrictContext<RootContextType>('AxoDialog.Root');
@@ -150,6 +197,7 @@ export namespace AxoDialog {
   export const Root: FC<RootProps> = memo(props => {
     const [hasHeader, setHasHeader] = useState(false);
     const [hasFooter, setHasFooter] = useState(false);
+    const [hasTrigger, setHasTrigger] = useState(false);
 
     const context = useMemo((): RootContextType => {
       return {
@@ -157,8 +205,17 @@ export namespace AxoDialog {
         setHasHeader,
         hasFooter,
         setHasFooter,
+        hasTrigger,
+        setHasTrigger,
       };
-    }, [hasHeader, setHasHeader, hasFooter, setHasFooter]);
+    }, [
+      hasHeader,
+      setHasHeader,
+      hasFooter,
+      setHasFooter,
+      hasTrigger,
+      setHasTrigger,
+    ]);
 
     return (
       <RootContext value={context}>
@@ -191,7 +248,14 @@ export namespace AxoDialog {
    * The button that opens the dialog.
    */
   export const Trigger: FC<TriggerProps> = memo(props => {
-    return <Dialog.Trigger asChild>{props.children}</Dialog.Trigger>;
+    const { setHasTrigger } = useStrictContext(RootContext);
+    const ref = useTriggerPresenceRef(setHasTrigger);
+
+    return (
+      <Dialog.Trigger ref={ref} asChild>
+        {props.children}
+      </Dialog.Trigger>
+    );
   });
 
   Trigger.displayName = 'AxoDialog.Trigger';
@@ -237,7 +301,8 @@ export namespace AxoDialog {
      */
     disableMissingAriaDescriptionWarning?: boolean;
     /**
-     * Should be `Header`, `Body`, `Footer`, and/or `Description` elements.
+     * Should be `Header`, `Search`, `Tabs`, `Body`, `Footer`, and/or
+     * `Description` elements.
      */
     children: ReactNode;
   }>;
@@ -248,6 +313,8 @@ export namespace AxoDialog {
   export const Content: FC<ContentProps> = memo(props => {
     const handleContentEscapeEvent = useContentEscapeBehavior(props.escape);
     const [boundary, setBoundary] = useState<Element | null>(null);
+    const { hasTrigger } = useStrictContext(RootContext);
+    const { dialogContentProps } = useContentRestoreFocusBehavior(hasTrigger);
 
     const descriptionProps = useMemo((): Dialog.DialogContentProps => {
       if (props.disableMissingAriaDescriptionWarning) {
@@ -261,7 +328,7 @@ export namespace AxoDialog {
 
     return (
       <Dialog.Portal>
-        <AxoTheme.Inherit>
+        <AxoBaseLayer>
           <AxoTooltip.CollisionBoundary boundary={boundary} padding={4}>
             <AxoBaseDialog.Host>
               <Dialog.Overlay className={AxoBaseDialog.overlayClassName} />
@@ -273,13 +340,15 @@ export namespace AxoDialog {
                 )}
                 onEscapeKeyDown={handleContentEscapeEvent}
                 onInteractOutside={handleContentEscapeEvent}
+                aria-modal="true"
+                {...dialogContentProps}
                 {...descriptionProps}
               >
                 <div className={tw('relative z-10')}>{props.children}</div>
               </Dialog.Content>
             </AxoBaseDialog.Host>
           </AxoTooltip.CollisionBoundary>
-        </AxoTheme.Inherit>
+        </AxoBaseLayer>
       </Dialog.Portal>
     );
   });
@@ -473,6 +542,275 @@ export namespace AxoDialog {
   });
 
   Search.displayName = 'AxoDialog.Search';
+
+  /**
+   * <AxoDialog.Tabs>
+   * --------------------------------------------------------------------------
+   */
+
+  type TabsContextType = Readonly<{
+    value: string;
+  }>;
+
+  const TabsContext = createStrictContext<TabsContextType>('AxoDialog.Tabs');
+
+  export type TabsProps = Readonly<{
+    /**
+     * The controlled value of the selected tab.
+     * Must be used in conjunction with `onValueChange`.
+     */
+    value: string;
+    /**
+     * Event handler called when the selected tab changes.
+     */
+    onValueChange: (value: string) => void;
+    /**
+     * Should be a `TabList` followed by `TabContent` elements.
+     */
+    children: ReactNode;
+  }>;
+
+  /**
+   * Splits the dialog into tabs, with a `TabList` placed between `Header`
+   * and the content, and each tab's `Body` wrapped in its own `TabContent`.
+   *
+   * @example
+   * ```tsx
+   * <AxoDialog.Content size="md" escape="cancel-is-noop">
+   *   <AxoDialog.Header>
+   *     <AxoDialog.Title>Settings</AxoDialog.Title>
+   *     <AxoDialog.Close />
+   *   </AxoDialog.Header>
+   *   <AxoDialog.Tabs value={tab} onValueChange={setTab}>
+   *     <AxoDialog.TabList>
+   *       <AxoDialog.Tab value="general">General</AxoDialog.Tab>
+   *       <AxoDialog.Tab value="advanced">Advanced</AxoDialog.Tab>
+   *     </AxoDialog.TabList>
+   *     <AxoDialog.TabContent value="general">
+   *       <AxoDialog.Body>...</AxoDialog.Body>
+   *     </AxoDialog.TabContent>
+   *     <AxoDialog.TabContent value="advanced">
+   *       <AxoDialog.Body>...</AxoDialog.Body>
+   *     </AxoDialog.TabContent>
+   *   </AxoDialog.Tabs>
+   * </AxoDialog.Content>
+   * ```
+   */
+
+  export const Tabs: FC<TabsProps> = memo(props => {
+    const { value, onValueChange } = props;
+    const ref = useRef<HTMLDivElement>(null);
+    const [height, setHeight] = useState<number>(0);
+    const reducedMotion = useReducedMotion();
+
+    const context = useMemo((): TabsContextType => {
+      return { value };
+    }, [value]);
+
+    useLayoutEffect(() => {
+      const target = assert(ref.current, 'Missing ref');
+      const observer = new ResizeObserver(entries => {
+        const entry = assert(entries[0], 'Missing entry');
+        const size = assert(entry.borderBoxSize[0], 'Missing size');
+        setHeight(size.blockSize);
+      });
+      observer.observe(target);
+      return () => {
+        observer.disconnect();
+      };
+    }, [value]);
+
+    return (
+      <TabsContext value={context}>
+        <RadixTabs.Root value={value} onValueChange={onValueChange}>
+          <motion.div
+            initial={false}
+            animate={{ height: height !== 0 ? height : 'auto' }}
+            transition={
+              reducedMotion
+                ? { duration: 0 }
+                : ExperimentalAxoBaseSegmentedControl.IndicatorTransition
+            }
+            className={tw(
+              'overflow-clip',
+              // Don't clip the focus rings of the tabs
+              '[overflow-clip-margin:4px]'
+            )}
+          >
+            <div
+              ref={ref}
+              className={tw(
+                // The exiting tab content is absolutely positioned against this container.
+                'relative',
+                // During the transition, the tab content uses `mix-blend-mode: plus-lighter`
+                // so we need `isolation: isolate` so they only blend with each other.
+                'isolate'
+              )}
+            >
+              {props.children}
+            </div>
+          </motion.div>
+        </RadixTabs.Root>
+      </TabsContext>
+    );
+  });
+
+  Tabs.displayName = 'AxoDialog.Tabs';
+
+  /**
+   * <AxoDialog.TabList>
+   * --------------------------------------------------------------------------
+   */
+
+  export type TabListProps = Readonly<{
+    /**
+     * Should be `Tab` elements.
+     */
+    children: ReactNode;
+  }>;
+
+  /**
+   * A padded slot for a segmented control of tabs, placed between `Header`
+   * and the `TabContent` elements.
+   */
+  export const TabList: FC<TabListProps> = memo(props => {
+    const { value } = useStrictContext(TabsContext);
+
+    return (
+      <div className={tw('px-4 pb-2')}>
+        <RadixTabs.List asChild>
+          <ExperimentalAxoBaseSegmentedControl.Root
+            value={value}
+            variant="track"
+            width="full"
+            itemWidth="equal"
+          >
+            {props.children}
+          </ExperimentalAxoBaseSegmentedControl.Root>
+        </RadixTabs.List>
+      </div>
+    );
+  });
+
+  TabList.displayName = 'AxoDialog.TabList';
+
+  /**
+   * <AxoDialog.Tab>
+   * --------------------------------------------------------------------------
+   */
+
+  export type TabProps = Readonly<{
+    /**
+     * A unique value for the tab, matching a `TabContent` value.
+     */
+    value: string;
+    /**
+     * The tab label.
+     */
+    children: ReactNode;
+  }>;
+
+  /**
+   * A tab inside `TabList`.
+   */
+  export const Tab: FC<TabProps> = memo(props => {
+    return (
+      <RadixTabs.Trigger asChild value={props.value}>
+        <ExperimentalAxoBaseSegmentedControl.Item value={props.value}>
+          <ExperimentalAxoBaseSegmentedControl.ItemText>
+            {props.children}
+          </ExperimentalAxoBaseSegmentedControl.ItemText>
+        </ExperimentalAxoBaseSegmentedControl.Item>
+      </RadixTabs.Trigger>
+    );
+  });
+
+  Tab.displayName = 'AxoDialog.Tab';
+
+  /**
+   * <AxoDialog.TabContent>
+   * --------------------------------------------------------------------------
+   */
+
+  export type TabContentProps = Readonly<{
+    /**
+     * The value of the `Tab` this content belongs to.
+     */
+    value: string;
+    /**
+     * Should be a `Body` element.
+     */
+    children: ReactNode;
+  }>;
+
+  /**
+   * Must be a tween (not a spring that can overshoot) so the opacity of the
+   * entering and exiting tab contents always adds up to 1 while cross fading
+   */
+  const TabContentTransition: Transition = {
+    duration: 0.2,
+    ease: 'easeInOut',
+  };
+
+  type TabContentPanelProps = Readonly<{
+    /** Used by `AnimatePresence` to pop the panel out of the layout */
+    ref?: Ref<HTMLDivElement>;
+    value: string;
+    children: ReactNode;
+  }>;
+
+  /**
+   * The content for a single tab, only rendered while its tab is selected.
+   */
+  const TabContentPanel: FC<TabContentPanelProps> = memo(props => {
+    const isPresent = useIsPresent();
+    return (
+      <RadixTabs.Content
+        ref={props.ref}
+        value={props.value}
+        // Needed for animation
+        forceMount
+        asChild
+      >
+        <motion.div
+          // Can't be focused or read while fading out
+          inert={!isPresent}
+          className={tw(
+            'focus-visible:axo-focus-ring',
+            // Adds the entering and exiting tab contents together instead of
+            // layering them, so content that's the same in both tabs stays
+            // fully opaque during the cross fade instead of dimming
+            'mix-blend-plus-lighter'
+          )}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={TabContentTransition}
+        >
+          {props.children}
+        </motion.div>
+      </RadixTabs.Content>
+    );
+  });
+
+  TabContentPanel.displayName = 'AxoDialog.TabContentPanel';
+
+  export const TabContent: FC<TabContentProps> = memo(props => {
+    const { value } = useStrictContext(TabsContext);
+    return (
+      // `popLayout` takes the exiting panel out of the layout so both panels
+      // overlap while they cross fade (and the height only follows the new one)
+      <AnimatePresence initial={false} mode="popLayout">
+        {value === props.value && (
+          <TabContentPanel key={props.value} value={props.value}>
+            {props.children}
+          </TabContentPanel>
+        )}
+      </AnimatePresence>
+    );
+  });
+
+  TabContent.displayName = 'AxoDialog.TabContent';
 
   /**
    * <AxoDialog.Body>
@@ -913,6 +1251,10 @@ export namespace AxoDialog {
      */
     symbol: AxoSymbol.Name;
     /**
+     * When `true`, prevents interaction.
+     */
+    disabled?: boolean | null;
+    /**
      * Event handler called when the button is clicked.
      */
     onClick: (event: MouseEvent<HTMLButtonElement>) => void;
@@ -928,6 +1270,7 @@ export namespace AxoDialog {
         variant={props.variant}
         size="md"
         symbol={props.symbol}
+        disabled={props.disabled}
         onClick={props.onClick}
       />
     );

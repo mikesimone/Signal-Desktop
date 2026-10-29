@@ -16,6 +16,7 @@ import { AutoSubstituteAsciiEmojis } from '../../quill/auto-substitute-ascii-emo
 import { imageToBlurHash } from '../../util/imageToBlurHash.dom.ts';
 import { isConversationSMSOnly } from '../../util/isConversationSMSOnly.std.ts';
 import { isSignalConversation } from '../../util/isSignalConversation.dom.ts';
+import { useHydrateDraftLinkPreview } from '../../hooks/useHydrateDraftLinkPreview.std.ts';
 import {
   getErrorDialogAudioRecorderType,
   getRecordingState,
@@ -32,9 +33,9 @@ import {
   isMissingRequiredProfileSharing,
 } from '../selectors/conversations.dom.ts';
 import { getHasPanelOpen } from '../selectors/nav.std.ts';
+import { getBubbleColorResolver } from '../selectors/chatColors.std.ts';
 import { getSharedGroupNames } from '../../util/sharedGroupNames.dom.ts';
 import {
-  getDefaultConversationColor,
   getEmojiSkinToneDefault,
   getItems,
   getTextFormattingEnabled,
@@ -48,6 +49,8 @@ import {
   getVersion,
 } from '../selectors/user.std.ts';
 import { SmartCompositionRecording } from './CompositionRecording.preload.tsx';
+import type { SmartShareContactDialogProps } from './ShareContactDialog.preload.tsx';
+import { SmartShareContactDialog } from './ShareContactDialog.preload.tsx';
 import type { SmartCompositionRecordingDraftProps } from './CompositionRecordingDraft.preload.tsx';
 import { SmartCompositionRecordingDraft } from './CompositionRecordingDraft.preload.tsx';
 import { useComposerActions } from '../ducks/composer.preload.ts';
@@ -57,7 +60,7 @@ import { useEmojisActions } from '../ducks/emojis.preload.ts';
 import { useGlobalModalActions } from '../ducks/globalModals.preload.ts';
 import { useToastActions } from '../ducks/toast.preload.ts';
 import { isShowingAnyModal } from '../selectors/globalModals.std.ts';
-import { isConversationEverUnregistered } from '../../util/isConversationUnregistered.dom.ts';
+import { isConversationEverUnregistered } from '../../util/isConversationEverUnregistered.std.ts';
 import { isDirectConversation } from '../../util/whatTypeOfConversation.dom.ts';
 import { itemStorage } from '../../textsecure/Storage.preload.ts';
 import { useNavActions } from '../ducks/nav.std.ts';
@@ -71,6 +74,10 @@ function renderSmartCompositionRecordingDraft(
   draftProps: SmartCompositionRecordingDraftProps
 ) {
   return <SmartCompositionRecordingDraft {...draftProps} />;
+}
+
+function renderShareContactDialog(props: SmartShareContactDialogProps) {
+  return <SmartShareContactDialog {...props} />;
 }
 
 export const SmartCompositionArea = memo(function SmartCompositionArea({
@@ -123,6 +130,8 @@ export const SmartCompositionArea = memo(function SmartCompositionArea({
     sendCounter,
     shouldSendHighQualityAttachments,
   } = composerState;
+
+  const linkPreviewForUI = useHydrateDraftLinkPreview(linkPreviewResult);
 
   const isDisabled = disabledCounter > 0;
 
@@ -181,14 +190,14 @@ export const SmartCompositionArea = memo(function SmartCompositionArea({
   }
 
   const ourConversationId = useSelector(getUserConversationId);
-  const defaultConversationColor = useSelector(getDefaultConversationColor);
+  const bubbleColorResolver = useSelector(getBubbleColorResolver);
 
   const quotedMessageProps = useMemo(() => {
     return quotedMessage
       ? getPropsForQuote(quotedMessage, {
           conversationSelector,
           ourConversationId,
-          defaultConversationColor,
+          bubbleColorResolver,
           isGroup,
         })
       : undefined;
@@ -196,7 +205,7 @@ export const SmartCompositionArea = memo(function SmartCompositionArea({
     quotedMessage,
     conversationSelector,
     ourConversationId,
-    defaultConversationColor,
+    bubbleColorResolver,
     isGroup,
   ]);
 
@@ -283,6 +292,12 @@ export const SmartCompositionArea = memo(function SmartCompositionArea({
         currentVersion: version,
         remoteConfig: items.remoteConfig,
       })}
+      isShareContactEnabled={isFeaturedEnabledSelector({
+        betaKey: 'desktop.shareContact.beta',
+        prodKey: 'desktop.shareContact.prod',
+        currentVersion: version,
+        remoteConfig: items.remoteConfig,
+      })}
       isActive={isActive}
       lastEditableMessageId={lastEditableMessageId ?? null}
       platform={platform}
@@ -324,7 +339,7 @@ export const SmartCompositionArea = memo(function SmartCompositionArea({
       setMediaQualitySetting={setMediaQualitySetting}
       // StagedLinkPreview
       linkPreviewLoading={linkPreviewLoading}
-      linkPreviewResult={linkPreviewResult ?? null}
+      linkPreviewResult={linkPreviewForUI ?? null}
       // Quote
       quotedMessageId={quotedMessage?.quote?.messageId ?? null}
       quotedMessageProps={quotedMessageProps ?? null}
@@ -377,6 +392,7 @@ export const SmartCompositionArea = memo(function SmartCompositionArea({
       renderSmartCompositionRecordingDraft={
         renderSmartCompositionRecordingDraft
       }
+      renderShareContactDialog={renderShareContactDialog}
       showGV2MigrationDialog={showGV2MigrationDialog}
       cancelJoinRequest={cancelJoinRequest}
       sortedGroupMembers={conversation.sortedGroupMembers ?? null}

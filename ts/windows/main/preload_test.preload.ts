@@ -106,6 +106,10 @@ window.testUtilities = {
       callLinks: [],
       callHistory: [],
       callHistoryUnreadCountsByConversationId: {},
+      account: {
+        defaultBubbleColor: null,
+      },
+      customChatColors: [],
       chatFolders: [],
       emojis: {
         recentEmojis: [],
@@ -143,6 +147,7 @@ window.testUtilities = {
         installedPack: null,
         packs: {},
         recentStickers: [],
+        favoriteStickers: [],
         blessedPacks: {},
         stickerManagerTab: 'all',
       },

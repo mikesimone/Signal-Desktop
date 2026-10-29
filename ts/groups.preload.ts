@@ -38,7 +38,7 @@ import type {
   GroupV2PendingMemberType,
   GroupV2BannedMemberType,
   MessageAttributesType,
-} from './model-types.d.ts';
+} from './model-types.std.ts';
 import {
   createProfileKeyCredentialPresentation,
   decodeProfileKeyCredentialPresentation,
@@ -150,7 +150,7 @@ const { compact, difference, flatten, fromPairs, isNumber, omit, values } =
 
 const log = createLogger('groups');
 
-export { joinViaLink } from './groups/joinViaLink.preload.ts';
+export { startJoinViaLink } from './groups/joinViaLink.preload.ts';
 
 export type GroupFields = {
   readonly id: Uint8Array<ArrayBuffer>;
@@ -279,6 +279,9 @@ export async function getPreJoinGroupInfo(
   masterKeyBase64: string
 ): Promise<Proto.GroupJoinInfo> {
   const data = deriveGroupFields(Bytes.fromBase64(masterKeyBase64));
+
+  // Ensure we have the credentials we need before attempting GroupsV2 operations
+  await maybeFetchNewCredentials();
 
   return makeRequestWithCredentials({
     // oxlint-disable-next-line typescript/restrict-template-expressions

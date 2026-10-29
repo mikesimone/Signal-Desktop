@@ -10,16 +10,12 @@ import type {
   ConversationAttributesType,
   MessageAttributesType,
   SenderKeyInfoType,
-} from '../model-types.d.ts';
+} from '../model-types.std.ts';
 import type { StoredJob } from '../jobs/types.std.ts';
 import type {
   ReactionType,
   ReactionReadStatus,
 } from '../types/Reactions.std.ts';
-import type {
-  ConversationColorType,
-  CustomColorType,
-} from '../types/Colors.std.ts';
 import type { StorageAccessType } from '../types/Storage.d.ts';
 import type { BytesToStrings } from '../types/Util.std.ts';
 import type { QualifiedAddressStringType } from '../types/QualifiedAddress.std.ts';
@@ -70,6 +66,8 @@ import type { NotificationProfileType } from '../types/NotificationProfile.std.t
 import type { DonationReceipt } from '../types/Donations.std.ts';
 import type { InsertOrUpdateCallLinkFromSyncResult } from './server/callLinks.node.ts';
 import type { ChatFolderId, ChatFolder } from '../types/ChatFolder.std.ts';
+import type { ChatStyle } from '../types/ChatStyle.std.ts';
+import type { Account } from '../types/Account.std.ts';
 import type { CurrentChatFolder } from '../types/CurrentChatFolders.std.ts';
 import type {
   PinnedMessage,
@@ -90,6 +88,11 @@ import type {
   SentTimestampMs,
   ServerTimestampMs,
 } from '@signalapp/types';
+import type {
+  FavoriteStickerStatusType,
+  FavoriteStickerType,
+  StickerReferenceType,
+} from '../types/Stickers.preload.ts';
 
 export type ReadableDB = Database & { __readable_db: never };
 export type WritableDB = ReadableDB & { __writable_db: never };
@@ -416,7 +419,7 @@ export type StickerPackInfoType =
 
 export type StickerPackType = InstalledStickerPackType &
   Readonly<{
-    attemptedStatus?: 'downloaded' | 'installed' | 'ephemeral';
+    attemptedStatus?: 'downloaded' | 'installed' | 'ephemeral' | 'known';
     author: string;
     coverStickerId: number;
     createdAt: number;
@@ -1088,9 +1091,18 @@ type ReadableInterface = {
   getAllStickerPacks: () => Array<StickerPackType>;
   getInstalledStickerPacks: () => Array<StickerPackType>;
   getUninstalledStickerPacks: () => Array<UninstalledStickerPackType>;
+  getSticker: (stickerRef: StickerReferenceType) => StickerType | undefined;
   getStickerPackInfo: (packId: string) => StickerPackInfoType | undefined;
   getAllStickers: () => Array<StickerType>;
   getRecentStickers: (options?: { limit?: number }) => Array<StickerType>;
+  getAllInstalledFavoriteStickers: () => ReadonlyArray<StickerType>;
+  getAllFavoriteStickers: () => ReadonlyArray<FavoriteStickerType>;
+  getFavoriteStickersFromPack: (
+    packId: string
+  ) => ReadonlyArray<FavoriteStickerType>;
+  getFavoriteSticker: (
+    stickerRef: StickerReferenceType
+  ) => FavoriteStickerType | undefined;
 
   getRecentEmojis: (limit: number) => ReadonlyArray<Emoji.Parent>;
   getRecentGifs: (limit: number) => ReadonlyArray<GifType>;
@@ -1125,6 +1137,9 @@ type ReadableInterface = {
   getChatFolder: (id: ChatFolderId) => ChatFolder | null;
   hasAllChatsChatFolder: () => boolean;
   getOldestDeletedChatFolder: () => ChatFolder | null;
+
+  getAllCustomChatColors: () => ReadonlyArray<ChatStyle.CustomChatColor>;
+  getAccount: () => Account;
 
   getAllMegaphones: () => ReadonlyArray<RemoteMegaphoneType>;
   getAllMegaphoneIds: () => ReadonlyArray<RemoteMegaphoneId>;
@@ -1253,13 +1268,7 @@ type WritableInterface = {
   /** @internal use ts/util/Conversation.preload.ts */
   _removeConversation: (id: string) => void;
   _removeAllConversations: () => void;
-  updateAllConversationColors: (
-    conversationColor?: ConversationColorType,
-    customColorData?: {
-      id: string;
-      value: CustomColorType;
-    }
-  ) => void;
+  removeAllConversationColors: () => void;
   removeAllProfileKeyCredentials: () => void;
 
   replaceAllEndorsementsForGroup: (data: GroupSendEndorsementsData) => void;
@@ -1460,6 +1469,21 @@ type WritableInterface = {
   uninstallStickerPack: (packId: string, timestamp: number) => boolean;
   removeUninstalledStickerPack: (packId: string) => void;
   clearAllErrorStickerPackAttempts: () => void;
+  clearStickerPackAttempts: (packId: string) => void;
+  createFavoriteSticker: (sticker: FavoriteStickerType) => void;
+  createFavoriteStickerFromStickerRef: (
+    stickerRef: StickerReferenceType
+  ) => FavoriteStickerType | undefined;
+  updateFavoriteSticker: (sticker: FavoriteStickerType) => void;
+  updateFavoriteStickerStatus: (
+    stickerRef: StickerReferenceType,
+    status: FavoriteStickerStatusType
+  ) => void;
+  markFavoriteStickerDeleted: (
+    stickerRef: StickerReferenceType
+  ) => { deletedAtTimestampMs: number; storageNeedsSync: boolean } | undefined;
+  deleteFavoriteSticker: (stickerRef: StickerReferenceType) => void;
+  maybeDeleteSticker: (stickerRef: StickerReferenceType) => string | undefined;
 
   updateEmojiUsage: (emoji: Emoji.Parent, lastUsedAt: number) => void;
 
@@ -1527,6 +1551,18 @@ type WritableInterface = {
   ) => ReadonlyArray<ChatFolderId>;
   deleteChatFolderById: (id: ChatFolderId) => void;
 
+  createCustomChatColor: (
+    color: ChatStyle.CustomChatColor['color']
+  ) => ChatStyle.CustomChatColor;
+  createCustomChatColors: (
+    colors: ReadonlyArray<ChatStyle.CustomChatColor['color']>
+  ) => ReadonlyArray<ChatStyle.CustomChatColor>;
+  updateCustomChatColor: (customChatColor: ChatStyle.CustomChatColor) => void;
+  deleteCustomChatColor: (id: ChatStyle.CustomChatColorId) => void;
+  updateAccountDefaultBubbleColor: (
+    bubbleColor: ChatStyle['bubbleColor'] | null
+  ) => void;
+
   createMegaphone: (megaphone: RemoteMegaphoneType) => void;
   updateMegaphone: (megaphone: RemoteMegaphoneType) => void;
   deleteMegaphone: (megaphoneId: RemoteMegaphoneId) => void;
@@ -1556,7 +1592,7 @@ type WritableInterface = {
     contentType: MIMEType;
   }) => (ExistingAttachmentData & { reuseToken: string }) | undefined;
   releaseAttachmentPathProtections: (attachment: AttachmentType) => void;
-  _protectAttachmentPathFromDeletion: ({ path }: { path: string }) => string;
+  protectAttachmentPathFromDeletion: ({ path }: { path: string }) => string;
   resetProtectedAttachmentPaths: () => void;
 
   removeAll: () => void;

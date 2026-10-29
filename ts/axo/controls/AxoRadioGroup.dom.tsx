@@ -128,14 +128,16 @@ export namespace AxoRadioGroup {
         value={props.value}
         disabled={props.disabled}
       >
-        <div
+        <button
+          type="button"
           className={tw(
-            'flex gap-3 rounded-xs py-2.5 focus-visible:axo-focus-ring'
+            'group/axo-radio-item',
+            'flex gap-3 rounded-xs py-2.5 text-start focus-visible:axo-focus-ring'
           )}
         >
           <AxoBaseRadioGroup.Indicator />
           {props.children}
-        </div>
+        </button>
       </AxoBaseRadioGroup.Item>
     );
   });
@@ -160,7 +162,12 @@ export namespace AxoRadioGroup {
   export const Label: FC<LabelProps> = memo(props => {
     return (
       <AxoBaseRadioGroup.Label asChild>
-        <span className={tw('truncate type-body-large text-primary')}>
+        <span
+          className={tw(
+            'truncate type-body-large text-primary',
+            'group-data-disabled/axo-radio-item:text-disabled'
+          )}
+        >
           {props.children}
         </span>
       </AxoBaseRadioGroup.Label>
