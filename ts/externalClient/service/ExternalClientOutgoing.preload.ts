@@ -21,6 +21,7 @@ import * as Bytes from '../../Bytes.std.ts';
 import { SignalService as Proto } from '../../protobuf/index.std.ts';
 import type {
   AttachmentType,
+  AttachmentDraftType,
   InMemoryAttachmentDraftType,
 } from '../../types/Attachment.std.ts';
 import { DurationInSeconds } from '../../util/durations/index.std.ts';
@@ -44,7 +45,7 @@ import { enqueuePollCreateForSend } from '../../util/enqueuePollCreateForSend.do
 import { maybeForwardMessages } from '../../util/maybeForwardMessages.preload.ts';
 import { isDirectConversation } from '../../util/whatTypeOfConversation.dom.ts';
 import { processAttachment } from '../../util/processAttachment.preload.ts';
-import { resolveAttachmentDraftData } from '../../util/resolveAttachmentDraftData.preload.ts';
+import { promoteDraftAttachment } from '../../util/promoteDraftAttachment.preload.ts';
 import { writeDraftAttachment } from '../../util/writeDraftAttachment.preload.ts';
 import type { ServiceResultType } from '../hostTypes.std.ts';
 import { toMessageDTO } from '../messageDto.std.ts';
@@ -220,9 +221,14 @@ export async function takeUploads(
   });
 
   const drafts: Array<AttachmentType> = [];
+  // Draft files on disk; promoting copies them (or reuses existing data).
+  const onDisk: Array<AttachmentDraftType> = [];
   const cleanup = () => {
-    for (const draft of drafts) {
+    for (const draft of onDisk) {
       drop(deleteDraftAttachment(draft));
+      if (draft.screenshot) {
+        drop(deleteDraftAttachment(draft.screenshot));
+      }
     }
   };
   try {
@@ -232,25 +238,29 @@ export async function takeUploads(
       }
       // A voice note goes as Signal's recorder makes one (completeRecording
       // in ducks/audioRecorder); anything else as the composer's files.
-      const inMemory = upload.voiceNote
-        ? toVoiceNote(upload, upload.voiceNote)
-        : // oxlint-disable-next-line no-await-in-loop
-          await processAttachment(
-            new File(upload.chunks, upload.fileName ?? 'file', {
-              type: upload.contentType,
-            }),
-            { generateScreenshot: true, flags: null }
-          );
-      if (!inMemory) {
+      let draft: AttachmentDraftType | undefined;
+      if (upload.voiceNote) {
+        // oxlint-disable-next-line no-await-in-loop
+        draft = await writeDraftAttachment(
+          toVoiceNote(upload, upload.voiceNote)
+        );
+      } else {
+        // oxlint-disable-next-line no-await-in-loop
+        draft = await processAttachment(
+          new File(upload.chunks, upload.fileName ?? 'file', {
+            type: upload.contentType,
+          }),
+          { generateScreenshot: true, flags: null, clientUuid: generateUuid() }
+        );
+      }
+      if (!draft) {
         throw new Error('processAttachment refused the file');
       }
+      onDisk.push(draft);
       // oxlint-disable-next-line no-await-in-loop
-      const draft = await writeDraftAttachment(inMemory);
-      // oxlint-disable-next-line no-await-in-loop
-      const resolved = await resolveAttachmentDraftData(draft);
+      const resolved = await promoteDraftAttachment(draft);
       if (!resolved) {
-        drop(deleteDraftAttachment(draft));
-        throw new Error('draft could not be read back');
+        throw new Error('draft could not be promoted');
       }
       drafts.push(resolved);
     }
