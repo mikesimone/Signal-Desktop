@@ -12,7 +12,7 @@ import {
 } from '../../util/blockSendUntilConversationsAreVerified.dom.ts';
 import { getRecipientsByConversation } from '../../util/getRecipientsByConversation.dom.ts';
 import { isConversationSMSOnly } from '../../util/isConversationSMSOnly.std.ts';
-import { isConversationEverUnregistered } from '../../util/isConversationUnregistered.dom.ts';
+import { isConversationEverUnregistered } from '../../util/isConversationEverUnregistered.std.ts';
 import { isSignalConversation } from '../../util/isSignalConversation.dom.ts';
 import { shouldShowInvalidMessageToast } from '../../util/shouldShowInvalidMessageToast.preload.ts';
 import { makeQuote } from '../../util/makeQuote.preload.ts';

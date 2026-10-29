@@ -4,11 +4,10 @@
 import { createLogger } from '../../logging/log.std.ts';
 import * as Errors from '../../types/errors.std.ts';
 import * as LinkPreview from '../../types/LinkPreview.std.ts';
-import type { LinkPreviewResult } from '../../types/LinkPreview.std.ts';
-import type { LinkPreviewWithHydratedData } from '../../types/message/LinkPreviews.std.ts';
+import type { LinkPreviewType } from '../../types/message/LinkPreviews.std.ts';
 import {
   getPreview,
-  sanitizeLinkPreview,
+  transferLinkPreviewDraftToDisk,
 } from '../../services/LinkPreview.preload.ts';
 import { getLinkPreviewSetting } from '../../util/Settings.preload.ts';
 import type { ServiceResultType } from '../hostTypes.std.ts';
@@ -20,6 +19,8 @@ import type {
 import { renderImageBlob } from './ExternalClientExtras.preload.ts';
 
 const log = createLogger('ExternalClientLinkPreviews');
+
+type LinkPreviewResult = NonNullable<Awaited<ReturnType<typeof getPreview>>>;
 
 // Fork addition (decision F27): link previews as Signal's composer makes
 // them. Signal fetches the page and its image with its own fetcher (the same
@@ -78,7 +79,7 @@ async function toPreviewImage(
   preview: LinkPreviewResult
 ): Promise<ComposerLinkPreviewDTO['image']> {
   const { image } = preview;
-  if (!image?.data) {
+  if (!image || image.pending || !image.data) {
     return null;
   }
   try {
@@ -134,7 +135,7 @@ export async function fetchLinkPreview({
 export async function getLinkPreviewsForSend(
   url: string | undefined,
   body: string
-): Promise<Array<LinkPreviewWithHydratedData>> {
+): Promise<Array<LinkPreviewType>> {
   if (
     !url ||
     !getLinkPreviewSetting() ||
@@ -144,5 +145,15 @@ export async function getLinkPreviewsForSend(
     return [];
   }
   const preview = await loadPreview(url);
-  return preview ? [sanitizeLinkPreview(preview)] : [];
+  return preview
+    ? [
+        await transferLinkPreviewDraftToDisk({
+          ...preview,
+          domain: undefined,
+          isStickerPack: false,
+          isCallLink: false,
+          callLinkRoomId: undefined,
+        }),
+      ]
+    : [];
 }
