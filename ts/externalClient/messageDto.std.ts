@@ -23,6 +23,7 @@ import type {
   QuoteDTO,
   ReactionDTO,
   StickerDTO,
+  EditVersionDTO,
   FormattingDTO,
   LinkPreviewDTO,
   PollDTO,
@@ -181,7 +182,7 @@ function toPoll(
 }
 
 function toMentions(
-  message: MessageSourceType,
+  message: Pick<MessageSourceType, 'bodyRanges'>,
   context: MessageDtoContextType
 ): Array<MentionDTO> {
   return (message.bodyRanges ?? []).filter(BodyRange.isMention).map(range => {
@@ -205,7 +206,9 @@ const FORMATTING_STYLES: Partial<
   [BodyRange.Style.SPOILER]: 'spoiler',
 };
 
-function toFormatting(message: MessageSourceType): Array<FormattingDTO> {
+function toFormatting(
+  message: Pick<MessageSourceType, 'bodyRanges'>
+): Array<FormattingDTO> {
   const result = new Array<FormattingDTO>();
   for (const range of message.bodyRanges ?? []) {
     if (!BodyRange.isFormatting(range)) {
@@ -328,6 +331,10 @@ function toQuote(
     sentAt: quote.id,
     // A quote of a view-once message must not reveal it.
     text: quote.isViewOnce ? null : (quote.text ?? null),
+    // Fork addition: @mentions and styles in the quoted text, so a mention
+    // shows as a name and not as Signal's placeholder character.
+    mentions: quote.isViewOnce ? [] : toMentions(quote, context),
+    formatting: quote.isViewOnce ? [] : toFormatting(quote),
     attachment: quote.isViewOnce ? null : toQuoteAttachment(quote),
   };
 }
@@ -356,6 +363,26 @@ function toQuoteAttachment(
 // Returns undefined for messages that are not shown as chat messages
 // (notifications, group updates, call history...) and for disappearing
 // messages that have already expired.
+// Fork addition (decision F39): Signal's "Edited" history, newest version
+// first, as its edit history dialog lists them. Empty for messages whose
+// content never crosses (deleted, view-once).
+export function toEditHistoryDTO(
+  message: MessageSourceType,
+  context: MessageDtoContextType
+): Array<EditVersionDTO> {
+  const dto = toMessageDTO(message, context);
+  if (!dto || dto.kind !== MessageKind.Text || message.isErased) {
+    return [];
+  }
+  return (message.editHistory ?? []).map(version => ({
+    sentAt: version.timestamp,
+    body: version.body ?? '',
+    mentions: toMentions(version, context),
+    formatting: toFormatting(version),
+    attachmentCount: version.attachments?.length ?? 0,
+  }));
+}
+
 export function toMessageDTO(
   message: MessageSourceType,
   context: MessageDtoContextType

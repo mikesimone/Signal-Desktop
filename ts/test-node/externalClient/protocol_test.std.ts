@@ -23,6 +23,7 @@ import {
   safetyNumbersChangedParamsSchema,
   safetyNumbersAcceptParamsSchema,
   contactsSyncParamsSchema,
+  messagesGetEditHistoryParamsSchema,
   Capability,
   Method,
   SERVICE_METHOD_CAPABILITIES,
@@ -451,6 +452,16 @@ describe('externalClient/protocol', () => {
           conversationId,
           contactIds: ['x'.repeat(65)],
         })
+      );
+    });
+
+    it("reads a message's edit history", () => {
+      const messageId = '0b9e2c1a-1111-4222-8333-944455556666';
+      assert.isTrue(accepts(messagesGetEditHistoryParamsSchema, { messageId }));
+      assert.isFalse(accepts(messagesGetEditHistoryParamsSchema, {}));
+      assert.strictEqual(
+        SERVICE_METHOD_CAPABILITIES[Method.MessagesGetEditHistory],
+        Capability.MessagesRead
       );
     });
 

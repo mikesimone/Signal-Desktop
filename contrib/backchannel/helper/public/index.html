@@ -292,6 +292,28 @@
         <ul class="scheduled-list" id="scheduled-list"></ul>
       </div>
     </div>
+    <div class="modal-backdrop" id="block-chooser" hidden>
+      <div class="modal" role="dialog" aria-labelledby="block-chooser-title">
+        <div class="modal-head">
+          <span id="block-chooser-title">Add blocked user or group</span>
+          <button
+            type="button"
+            class="icon-button"
+            id="block-chooser-close"
+            title="Close"
+            aria-label="Close"
+          ></button>
+        </div>
+        <input
+          id="block-chooser-search"
+          type="search"
+          placeholder="Search"
+          autocomplete="off"
+          spellcheck="false"
+        />
+        <ul class="forward-list" id="block-chooser-list"></ul>
+      </div>
+    </div>
     <div class="modal-backdrop" id="forward" hidden>
       <div class="modal" role="dialog" aria-labelledby="forward-title">
         <div class="modal-head">
@@ -470,6 +492,21 @@
           <button type="submit" id="poll-send" disabled>Send</button>
         </div>
       </form>
+    </div>
+    <div class="modal-backdrop" id="edit-history" hidden>
+      <div class="modal" role="dialog" aria-labelledby="edit-history-title">
+        <div class="modal-head">
+          <span id="edit-history-title">Edit history</span>
+          <button
+            type="button"
+            class="icon-button"
+            id="edit-history-close"
+            title="Close"
+            aria-label="Close"
+          ></button>
+        </div>
+        <div class="poll-votes-body" id="edit-history-body"></div>
+      </div>
     </div>
     <div class="modal-backdrop" id="poll-votes" hidden>
       <div class="modal" role="dialog" aria-labelledby="poll-votes-title">

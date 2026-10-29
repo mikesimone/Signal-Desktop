@@ -986,3 +986,24 @@ WHY: Mike: "Nobody goes to the trouble of setting an individual contact
 photo just to have it overwritten." New chats should look for the number
 in his contacts first.
 
+## F38. Fork only: block and unblock from Settings
+
+DECISION: as Signal 8.35's Settings > Privacy > Blocked, the page's
+Settings > Blocked lists who is blocked with an Unblock button each, and
+"Add blocked user or group" picks from Signal's contacts and the groups in
+the chat list. Both use conversations.update (block, accept), the same
+Redux actions Signal's settings page dispatches, so no new Allow; each asks
+first with Signal's own wording.
+
+WHY: the weekly parity check (2026-10-26) found upstream's "Support
+block/unblock from preferences".
+
+## F39. Fork only: edit history
+
+DECISION: "Edited" under a message opens its earlier versions, newest first,
+with their formatting and mentions, as Signal's edit history dialog.
+`messages.getEditHistory` (messages.read, so no new Allow) returns them, and
+nothing for deleted or view-once messages, whose content never crosses.
+
+WHY: next missing item on the parity list after the 2026-10-26 check.
+

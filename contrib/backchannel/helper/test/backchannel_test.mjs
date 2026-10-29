@@ -573,6 +573,31 @@ describe('backchannel helper', () => {
     assert.deepEqual(call.params, { conversationId, contactIds: ['c-1'] });
   });
 
+  it("returns a message's edit history", async () => {
+    const versions = [
+      {
+        sentAt: 2,
+        body: 'hi there',
+        mentions: [],
+        formatting: [],
+        attachmentCount: 0,
+      },
+      {
+        sentAt: 1,
+        body: 'hi',
+        mentions: [],
+        formatting: [],
+        attachmentCount: 0,
+      },
+    ];
+    bridge.editHistory = new Map([['m-1', versions]]);
+    const res = await http(port, {
+      path: `/${helper.token}/api/editHistory?messageId=m-1`,
+    });
+    assert.equal(res.status, 200);
+    assert.deepEqual(JSON.parse(res.text).versions, versions);
+  });
+
   it('imports contacts and sets which photo a chat shows', async () => {
     const before = bridge.contactSyncs ?? 0;
     const sync = await http(port, {
@@ -1567,4 +1592,3 @@ describe('contact photo refresh', () => {
     rmSync(dir, { recursive: true, force: true });
   });
 });
-
