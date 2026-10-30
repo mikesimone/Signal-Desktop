@@ -22,6 +22,9 @@ services:
     environment:
       BACKCHANNEL_ORIGIN: ${BACKCHANNEL_ORIGIN:-${RAMBOX_ORIGIN:-}}
       SIGNAL_EXTRA_ARGS: ${SIGNAL_EXTRA_ARGS:-}
+      # One-time history import: put a Signal local-backup snapshot folder at <data dir>/import/snapshot, then use
+      # File > Stage local backup for import in the not-yet-linked window (patches/0002). Unused otherwise.
+      BACKCHANNEL_LOCAL_BACKUP_DIR: /data/import/snapshot
     ports:
       # Host loopback only: a reverse proxy (or ssh -L) puts the chat page
       # in front of people, and VNC is for the one-time link and approval.

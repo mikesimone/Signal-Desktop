@@ -1,0 +1,72 @@
+diff --git a/app/main.main.ts b/app/main.main.ts
+index 73e94914d..7534712db 100644
+--- a/app/main.main.ts
++++ b/app/main.main.ts
+@@ -3344,6 +3344,15 @@ ipc.handle(
+       title?: string;
+     } = { useMainWindow: false }
+   ) => {
++    // Backchannel (contrib/backchannel): headless, so staging a local backup takes its folder from the
++    // environment instead of a file dialog nobody can drive.
++    if (
++      title === 'backchannel-stage-local-backup' &&
++      process.env.BACKCHANNEL_LOCAL_BACKUP_DIR
++    ) {
++      return { canceled: false, dirPath: process.env.BACKCHANNEL_LOCAL_BACKUP_DIR };
++    }
++
+     let canceled: boolean;
+     let selectedDirPaths: ReadonlyArray<string>;
+ 
+diff --git a/app/menu.std.ts b/app/menu.std.ts
+index a8eb0ad12..0b8359ed6 100644
+--- a/app/menu.std.ts
++++ b/app/menu.std.ts
+@@ -225,7 +225,8 @@ export const createTemplate = (
+ 
+     if (Array.isArray(fileMenu.submenu)) {
+       // These are in reverse order, since we're prepending them one at a time
+-      if (options.isNightly) {
++      // Backchannel: also offered when the container names a snapshot to import (contrib/backchannel).
++      if (options.isNightly || process.env.BACKCHANNEL_LOCAL_BACKUP_DIR) {
+         fileMenu.submenu.unshift({
+           label: i18n('icu:menuStageLocalBackupForImport'),
+           click: stageLocalBackupForImport,
+diff --git a/ts/services/backups/index.preload.ts b/ts/services/backups/index.preload.ts
+index e98e223d2..b69fb5919 100644
+--- a/ts/services/backups/index.preload.ts
++++ b/ts/services/backups/index.preload.ts
+@@ -726,7 +726,8 @@ export class BackupsService {
+ 
+   public async _internalStageLocalBackupForImport(): Promise<ValidateLocalBackupStructureResultType> {
+     const { canceled, dirPath: snapshotDir } = await ipcRenderer.invoke(
+-      'show-open-folder-dialog'
++      'show-open-folder-dialog',
++      { useMainWindow: false, title: 'backchannel-stage-local-backup' }
+     );
+     if (canceled || !snapshotDir) {
+       return {
+diff --git a/ts/util/isLocalBackupsEnabled.dom.ts b/ts/util/isLocalBackupsEnabled.dom.ts
+index bb0203448..e5edb148d 100644
+--- a/ts/util/isLocalBackupsEnabled.dom.ts
++++ b/ts/util/isLocalBackupsEnabled.dom.ts
+@@ -8,10 +8,19 @@ import {
+   isFeaturedEnabledSelector,
+ } from './isFeatureEnabled.dom.ts';
+ 
++const BACKCHANNEL_FORCE_LOCAL_BACKUPS: boolean = true;
++
+ export function isLocalBackupsEnabled(reduxArgs?: {
+   currentVersion: string;
+   remoteConfig: ReadonlyDeep<ConfigMapType> | undefined;
+ }): boolean {
++  // Backchannel (contrib/backchannel): Signal's remote config has not enabled local backups for this build, and the
++  // import of a local backup snapshot at link time needs it. Importing is still only started by the user, from
++  // File > Stage local backup for import.
++  if (BACKCHANNEL_FORCE_LOCAL_BACKUPS) {
++    return true;
++  }
++
+   if (reduxArgs) {
+     return isFeaturedEnabledSelector({
+       currentVersion: reduxArgs.currentVersion,
