@@ -10,6 +10,8 @@
 #   screen.sh type TEXT       type text
 #   screen.sh qr              print the link QR code on screen as text, to
 #                             scan from a phone without a screenshot
+#   screen.sh link            print that QR code's link as text, for apps
+#                             that link from a pasted link
 #   screen.sh url             print the chat page's address
 #   screen.sh vnc             serve the screen over VNC on port 5900, which
 #                             compose.yml publishes on the host's 127.0.0.1
@@ -23,11 +25,11 @@ case "${1:-}" in
   click) xdotool mousemove "$2" "$3" click 1 ;;
   key) xdotool key "$2" ;;
   type) xdotool type -- "$2" ;;
-  qr)
+  qr|link)
     import -window root /tmp/qr.png
     link=$(zbarimg --quiet --raw -Sdisable -Sqrcode.enable /tmp/qr.png | head -n1 || true)
     [ -n "$link" ] || { echo 'no QR code on screen' >&2; exit 1; }
-    qrencode -t UTF8 -m 2 "$link"
+    [ "$1" = link ] && echo "$link" || qrencode -t UTF8 -m 2 "$link"
     ;;
   url)
     origin="${BACKCHANNEL_ORIGIN:-${RAMBOX_ORIGIN:-}}"
@@ -36,5 +38,5 @@ case "${1:-}" in
     node /opt/backchannel/backchannel.mjs "${args[@]}"
     ;;
   vnc) exec x11vnc -nopw -forever -shared -rfbport 5900 ;;
-  *) sed -n '5,17p' "$0"; exit 2 ;;
+  *) sed -n '5,19p' "$0"; exit 2 ;;
 esac

@@ -95,7 +95,7 @@ for the build, and your phone with Signal on it.
    takes a while (about 20 minutes on a small server).
 
 4. Link it to your phone. `docker compose exec backchannel screen.sh qr`
-   prints the link QR code as text in your terminal. In Signal on your
+   prints the link QR code as text in your terminal (`screen.sh link` prints the link itself, for apps that take a pasted link). In Signal on your
    phone go to Settings > Linked devices > Link new device and scan it.
    Signal Desktop then asks for a device name: see the screen with
    `screen.sh shot` (it saves `screen.png` in the data folder), and answer
