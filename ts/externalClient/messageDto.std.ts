@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { ReadStatus } from '../messages/MessageReadStatus.std.ts';
-import type { MessageAttributesType } from '../model-types.d.ts';
+import type { MessageAttributesType } from '../model-types.std.ts';
 import { BodyRange } from '../types/BodyRange.std.ts';
 import type { AttachmentType } from '../types/Attachment.std.ts';
 import { isDownloaded } from '../util/Attachment.std.ts';

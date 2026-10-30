@@ -14,7 +14,7 @@ import {
   canForward,
   getMessagePropsSelector,
 } from '../../state/selectors/message.preload.ts';
-import type { MessageAttributesType } from '../../model-types.d.ts';
+import type { MessageAttributesType } from '../../model-types.std.ts';
 import type { ConversationModel } from '../../models/conversations.preload.ts';
 import type { HydratedBodyRangesType } from '../../types/BodyRange.std.ts';
 import * as Bytes from '../../Bytes.std.ts';
@@ -226,7 +226,7 @@ export async function takeUploads(
   const cleanup = () => {
     for (const draft of onDisk) {
       drop(deleteDraftAttachment(draft));
-      if (draft.screenshot) {
+      if (!draft.pending && draft.screenshot) {
         drop(deleteDraftAttachment(draft.screenshot));
       }
     }
@@ -281,7 +281,14 @@ export function shouldSendHighQualityImages(): boolean {
 async function getForwardDraft(
   messageId: string,
   keep?: ReadonlySet<number>
-): Promise<ForwardMessageData | SendBlockReasonType | 'notFound'> {
+): Promise<
+  | Readonly<{
+      draft: MessageForwardDraft;
+      originalMessage: MessageAttributesType;
+    }>
+  | SendBlockReasonType
+  | 'notFound'
+> {
   const message = await getMessageById(messageId);
   if (!message) {
     return 'notFound';
@@ -326,6 +333,33 @@ async function getForwardDraft(
     return SendBlockReason.NotDownloaded;
   }
   return { draft, originalMessage: attributes };
+}
+
+// As Signal's Forward dialog sends it (smart/ForwardMessagesModal): the
+// forwarded message's own link preview goes as the original.
+function toForwardData(
+  draft: MessageForwardDraft,
+  originalMessage: MessageAttributesType
+): ForwardMessageData {
+  const [first] = draft.previews;
+  return {
+    draft: {
+      ...draft,
+      // A preview image not saved yet goes without it.
+      previews: first
+        ? [
+            {
+              type: 'original',
+              preview:
+                first.image && !first.image.path
+                  ? { ...first, image: undefined }
+                  : first,
+            },
+          ]
+        : [],
+    },
+    originalMessage,
+  };
 }
 
 type ForwardEditType = NonNullable<MessagesForwardParamsType['edit']>;
@@ -408,10 +442,10 @@ export async function forwardMessage({
   // Chats that get the same text are sent together, as one forward.
   const batches = new Map<
     string,
-    { data: ForwardMessageData; ids: Array<string> }
+    { data: MessageForwardDraft; ids: Array<string> }
   >();
   for (const conversationId of allowed) {
-    let data: ForwardMessageData = forward;
+    let data: MessageForwardDraft = forward.draft;
     if (edit) {
       const model = getListedConversation(conversationId);
       const edited = model && editForChat(model, edit);
@@ -419,29 +453,29 @@ export async function forwardMessage({
         return { ok: false, code: ErrorCode.InvalidArgument };
       }
       data = {
-        ...forward,
-        draft: {
-          ...forward.draft,
-          messageBody: edited.body,
-          bodyRanges: edited.ranges,
-          // A link preview stays only while its link is in the text.
-          previews: forward.draft.previews.filter(p =>
-            edited.body.includes(p.url)
-          ),
-        },
+        ...forward.draft,
+        messageBody: edited.body,
+        bodyRanges: edited.ranges,
+        // A link preview stays only while its link is in the text.
+        previews: forward.draft.previews.filter(p =>
+          edited.body.includes(p.url)
+        ),
       };
-      if (!isDraftForwardable(data.draft)) {
+      if (!isDraftForwardable(data)) {
         return { ok: false, code: ErrorCode.InvalidArgument };
       }
     }
-    const key = JSON.stringify([data.draft.messageBody, data.draft.bodyRanges]);
+    const key = JSON.stringify([data.messageBody, data.bodyRanges]);
     const batch = batches.get(key) ?? { data, ids: [] };
     batch.ids.push(conversationId);
     batches.set(key, batch);
   }
   for (const { data, ids } of batches.values()) {
     // oxlint-disable-next-line no-await-in-loop
-    const sent = await maybeForwardMessages([data], ids);
+    const sent = await maybeForwardMessages(
+      [toForwardData(data, forward.originalMessage)],
+      ids
+    );
     for (const conversationId of ids) {
       results.push({
         conversationId,

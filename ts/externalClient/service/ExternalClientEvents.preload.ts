@@ -4,7 +4,7 @@
 import { ipcRenderer as ipc } from 'electron';
 
 import { createLogger } from '../../logging/log.std.ts';
-import type { MessageAttributesType } from '../../model-types.d.ts';
+import type { MessageAttributesType } from '../../model-types.std.ts';
 import * as Errors from '../../types/errors.std.ts';
 import { safeParseUnknown } from '../../util/schemas.std.ts';
 import { ConversationDiffer } from '../conversationDiff.std.ts';

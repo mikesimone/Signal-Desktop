@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { createLogger } from '../../logging/log.std.ts';
-import type { MessageAttributesType } from '../../model-types.d.ts';
+import type { MessageAttributesType } from '../../model-types.std.ts';
 import type { ConversationModel } from '../../models/conversations.preload.ts';
 import { isMissingRequiredProfileSharing } from '../../state/selectors/conversations.dom.ts';
 import { ToastType } from '../../types/Toast.dom.tsx';

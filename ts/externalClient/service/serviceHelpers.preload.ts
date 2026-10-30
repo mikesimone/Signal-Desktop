@@ -5,7 +5,7 @@ import type { ConversationModel } from '../../models/conversations.preload.ts';
 import type {
   LastMessageStatus,
   MessageAttributesType,
-} from '../../model-types.d.ts';
+} from '../../model-types.std.ts';
 import { DataReader } from '../../sql/Client.preload.ts';
 import { itemStorage } from '../../textsecure/Storage.preload.ts';
 import { areWeAdmin } from '../../util/areWeAdmin.preload.ts';

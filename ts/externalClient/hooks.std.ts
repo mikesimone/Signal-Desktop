@@ -1,7 +1,7 @@
 // Copyright 2026 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import type { MessageAttributesType } from '../model-types.d.ts';
+import type { MessageAttributesType } from '../model-types.std.ts';
 
 // The only part of the external-client bridge that Signal's message code
 // calls into. Deliberately free of imports so the call sites gain no
