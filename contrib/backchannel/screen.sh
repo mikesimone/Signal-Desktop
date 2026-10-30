@@ -25,7 +25,7 @@ case "${1:-}" in
   type) xdotool type -- "$2" ;;
   qr)
     import -window root /tmp/qr.png
-    link=$(zbarimg --quiet --raw -Sdisable -Sqrcode.enable /tmp/qr.png | head -n1)
+    link=$(zbarimg --quiet --raw -Sdisable -Sqrcode.enable /tmp/qr.png | head -n1 || true)
     [ -n "$link" ] || { echo 'no QR code on screen' >&2; exit 1; }
     qrencode -t UTF8 -m 2 "$link"
     ;;
