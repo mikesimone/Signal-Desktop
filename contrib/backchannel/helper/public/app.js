@@ -1476,7 +1476,7 @@ function quoteLabel(a) {
     return a.isVoiceMessage ? 'Voice message' : 'Audio';
   }
   if (type === 'image') {
-    return a.isGif ? 'GIF' : 'Photo';
+    return a.isGif || a.contentType === 'image/gif' ? 'GIF' : 'Photo';
   }
   if (type === 'video') {
     return 'Video';
@@ -1789,13 +1789,18 @@ function renderVisual(m, a, index, multiple) {
     box.append(video);
     return box;
   }
-  if (a.hasThumbnail) {
+  // A GIF file animates in the chat, as in Signal; a thumbnail would be
+  // its first frame only.
+  const animated = a.contentType === 'image/gif' && a.state === 'ready';
+  if (a.hasThumbnail || animated) {
     const img = el('img');
     img.alt = a.caption ?? '';
     img.loading = 'lazy';
-    img.src = `api/thumbnail?${attachmentParams(m, index, {
-      width: String(previewWidth(multiple ? 160 : 320)),
-    })}`;
+    img.src = animated
+      ? attachmentUrl(m, index, a)
+      : `api/thumbnail?${attachmentParams(m, index, {
+          width: String(previewWidth(multiple ? 160 : 320)),
+        })}`;
     box.append(img);
   } else {
     box.classList.add('placeholder');
