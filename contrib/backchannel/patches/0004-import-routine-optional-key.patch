@@ -1,0 +1,80 @@
+diff --git a/app/main.main.ts b/app/main.main.ts
+index 2e310f959..b0395a9c9 100644
+--- a/app/main.main.ts
++++ b/app/main.main.ts
+@@ -3397,16 +3397,26 @@ ipc.handle(
+ // container and is never logged. Returns null when the feature is not configured.
+ ipc.handle('backchannel-local-import-config', async () => {
+   const dir = process.env.BACKCHANNEL_LOCAL_IMPORT_DIR;
+-  const keyFile = process.env.BACKCHANNEL_RECOVERY_KEY_FILE;
+-  if (!dir || !keyFile) {
++  if (!dir) {
+     return null;
+   }
+-  const key = (await fsExtra.readFile(keyFile, 'utf8'))
+-    .toLowerCase()
+-    .replace(/[^a-z0-9]/g, '');
+-  if (key.length !== 64) {
+-    log.error('backchannel-local-import-config: the recovery key must be 64 characters');
+-    return null;
++  // The key file is optional: a device that already holds the account's recovery key (the phone sent it when
++  // linking) does not need one. An unreadable or malformed file is reported and treated as absent.
++  let key: string | undefined;
++  const keyFile = process.env.BACKCHANNEL_RECOVERY_KEY_FILE;
++  if (keyFile) {
++    try {
++      const candidate = (await fsExtra.readFile(keyFile, 'utf8'))
++        .toLowerCase()
++        .replace(/[^a-z0-9]/g, '');
++      if (candidate.length === 64) {
++        key = candidate;
++      } else {
++        log.error('backchannel-local-import-config: the recovery key must be 64 letters and digits; ignoring the file');
++      }
++    } catch (error) {
++      log.error('backchannel-local-import-config: cannot read the recovery key file; ignoring it');
++    }
+   }
+   const days = Number(process.env.BACKCHANNEL_IMPORT_DAYS || '7');
+   return { dir, key, days: Number.isFinite(days) && days > 0 ? days : 7 };
+diff --git a/ts/services/backups/index.preload.ts b/ts/services/backups/index.preload.ts
+index 53d4b13c3..150d93a8a 100644
+--- a/ts/services/backups/index.preload.ts
++++ b/ts/services/backups/index.preload.ts
+@@ -578,12 +578,17 @@ export class BackupsService {
+   public async backchannelImportLocalBackup(): Promise<boolean> {
+     const logId = 'backchannelImportLocalBackup';
+     try {
+-      const config: { dir: string; key: string; days: number } | null =
++      const config: { dir: string; key?: string; days: number } | null =
+         await ipcRenderer.invoke('backchannel-local-import-config');
+       if (!config) {
+         return false;
+       }
+ 
++      const have = itemStorage.get('accountEntropyPool');
++      log.info(
++        `${logId}: this device ${have ? 'already holds' : 'does not hold'} the account recovery key; key file ${config.key ? 'usable' : 'not provided'}`
++      );
++
+       const existing = await DataReader.getMessageCount();
+       if (existing > 0) {
+         log.info(`${logId}: database already has ${existing} messages, not importing`);
+@@ -596,12 +601,15 @@ export class BackupsService {
+         return false;
+       }
+ 
+-      const have = itemStorage.get('accountEntropyPool');
+-      if (have && have !== config.key) {
++      if (have && config.key && have !== config.key) {
+         log.error(`${logId}: the recovery key does not match this account's key, not importing`);
+         return false;
+       }
+       if (!have) {
++        if (!config.key) {
++          log.error(`${logId}: this device has no recovery key and none was provided, not importing`);
++          return false;
++        }
+         await itemStorage.put('accountEntropyPool', config.key);
+         log.info(`${logId}: stored the recovery key (this device had none)`);
+       }
