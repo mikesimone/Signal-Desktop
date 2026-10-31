@@ -214,3 +214,34 @@ image if the new one doesn't come up, and never prints the page's token.
 
 The first run only records where upstream is. The sync user needs `git`
 push access to your fork, `gh` signed in, Docker, and Claude Code signed in.
+
+## Importing history from a local backup
+
+A freshly linked Backchannel has no history (the phone does not send it). If you have a Signal local-backup
+snapshot (a `signal-backup-YYYY-MM-DD-HH-MM-SS` folder next to a `files/` folder, made by the phone), patches
+`0002`-`0004` can import the last few days of it into a linked account, once:
+
+1. Mount the folder that holds the snapshot and `files/` read-only, and set the variables, in a compose override
+   (not committed; the path is yours):
+
+       services:
+         backchannel:
+           environment:
+             BACKCHANNEL_LOCAL_IMPORT_DIR: /import/signal-backup-2026-10-30-23-12-43
+             BACKCHANNEL_IMPORT_DAYS: "7"          # default 7
+           volumes:
+             - /path/to/folder-with-snapshot-and-files:/import:ro
+
+2. The account must have **no messages** (the importer does not merge; the routine refuses otherwise). On a used
+   Backchannel: remove it from the phone's linked devices, click the Unlinked banner, choose Transfer then Delete
+   (this wipes Backchannel's local copy only), and link it again. Decline any history-transfer prompt on the phone.
+3. `docker compose -f compose.yml -f your-override.yml up -d`. When linking finishes, the startup routine imports
+   the last `BACKCHANNEL_IMPORT_DAYS` days. Watch the log: `backchannelImportLocalBackup: done`.
+4. Keep the mount until Desktop has downloaded the imported messages' media from the snapshot (watch
+   `attachments.noindex` stop growing, and the `AttachmentDownloadManager` jobs finish), then drop the override and
+   re-pair the web page (`rm /data/backchannel/key.json`, restart, click Allow).
+
+The snapshot is decrypted with the account recovery key, which a linked Desktop already holds (the phone sends it
+when linking). `BACKCHANNEL_RECOVERY_KEY_FILE` can supply one for a device that has none: a file with the
+64 letter-and-digit key, never the older 30-digit or passphrase style used by single-file `.backup` exports.
+Nothing happens unless `BACKCHANNEL_LOCAL_IMPORT_DIR` is set.
