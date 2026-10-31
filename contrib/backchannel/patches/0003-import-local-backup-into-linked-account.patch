@@ -1,0 +1,161 @@
+diff --git a/app/main.main.ts b/app/main.main.ts
+index 7534712db..2e310f959 100644
+--- a/app/main.main.ts
++++ b/app/main.main.ts
+@@ -3392,6 +3392,26 @@ ipc.handle(
+   }
+ );
+ 
++// Backchannel (contrib/backchannel): one-time import of a local backup snapshot into a freshly linked, still empty
++// account. Everything comes from the container's environment; the recovery key is read from a file mounted into the
++// container and is never logged. Returns null when the feature is not configured.
++ipc.handle('backchannel-local-import-config', async () => {
++  const dir = process.env.BACKCHANNEL_LOCAL_IMPORT_DIR;
++  const keyFile = process.env.BACKCHANNEL_RECOVERY_KEY_FILE;
++  if (!dir || !keyFile) {
++    return null;
++  }
++  const key = (await fsExtra.readFile(keyFile, 'utf8'))
++    .toLowerCase()
++    .replace(/[^a-z0-9]/g, '');
++  if (key.length !== 64) {
++    log.error('backchannel-local-import-config: the recovery key must be 64 characters');
++    return null;
++  }
++  const days = Number(process.env.BACKCHANNEL_IMPORT_DAYS || '7');
++  return { dir, key, days: Number.isFinite(days) && days > 0 ? days : 7 };
++});
++
+ ipc.handle('executeMenuRole', async ({ sender }, untypedRole) => {
+   const role = untypedRole as MenuItemConstructorOptions['role'];
+ 
+diff --git a/ts/background.preload.ts b/ts/background.preload.ts
+index 429fffe4c..de1c1e6c1 100644
+--- a/ts/background.preload.ts
++++ b/ts/background.preload.ts
+@@ -2003,7 +2003,9 @@ async function startApp(): Promise<void> {
+       backupsService.isLocalBackupStaged() && isLocalBackupsEnabled();
+ 
+     if (!isLocalBackupAvailable && !backupDownloadPath) {
+-      return { wasBackupImported: false };
++      // Backchannel (contrib/backchannel): optional one-time import from a mounted local backup snapshot.
++      const wasBackupImported = await backupsService.backchannelImportLocalBackup();
++      return { wasBackupImported };
+     }
+ 
+     tapToViewMessagesDeletionService.pause();
+diff --git a/ts/services/backups/import.preload.ts b/ts/services/backups/import.preload.ts
+index 961c3eb45..b0376b109 100644
+--- a/ts/services/backups/import.preload.ts
++++ b/ts/services/backups/import.preload.ts
+@@ -258,6 +258,13 @@ function addressToContactAddressType(
+   }
+ }
+ 
++// Backchannel (contrib/backchannel): when set, only chat items sent at or after this time (ms since epoch) are imported,
++// and a device that never received the media root key from the phone adopts the one in the snapshot.
++let backchannelImportSince: number | undefined;
++export function setBackchannelImportSince(since: number | undefined): void {
++  backchannelImportSince = since;
++}
++
+ export class BackupImportStream extends Writable {
+   readonly #options: BackupImportOptions;
+   readonly #now = Date.now();
+@@ -338,6 +345,12 @@ export class BackupImportStream extends Writable {
+         );
+ 
+         const theirKey = info.mediaRootBackupKey;
++        if (
++          backchannelImportSince != null &&
++          !itemStorage.get('backupMediaRootKey')
++        ) {
++          await itemStorage.put('backupMediaRootKey', theirKey);
++        }
+         const ourKey = getBackupMediaRootKey().serialize();
+         if (!constantTimeEqual(theirKey, ourKey)) {
+           // Use root key from integration test
+@@ -1672,6 +1685,10 @@ export class BackupImportStream extends Writable {
+     strictAssert(chatItem.dateSent != null, `${logId}: must have a dateSent`);
+     strictAssert(timestamp, `${logId}: must have a timestamp`);
+ 
++    if (backchannelImportSince != null && timestamp < backchannelImportSince) {
++      return;
++    }
++
+     if (this.#releaseNotesChatId === chatItem.chatId) {
+       // Drop release notes messages
+       return;
+diff --git a/ts/services/backups/index.preload.ts b/ts/services/backups/index.preload.ts
+index b69fb5919..53d4b13c3 100644
+--- a/ts/services/backups/index.preload.ts
++++ b/ts/services/backups/index.preload.ts
+@@ -52,7 +52,10 @@ import { signalProtocolStore } from '../../SignalProtocolStore.preload.ts';
+ import { isTestOrMockEnvironment } from '../../environment.std.ts';
+ import { runStorageServiceSyncJob } from '../storage.preload.ts';
+ import { BackupExportStream } from './export.preload.ts';
+-import { BackupImportStream } from './import.preload.ts';
++import {
++  BackupImportStream,
++  setBackchannelImportSince,
++} from './import.preload.ts';
+ import {
+   toPaddedGzipIterable,
+   toDelimitedIterable,
+@@ -569,6 +572,56 @@ export class BackupsService {
+     return result;
+   }
+ 
++  // Backchannel (contrib/backchannel): import a local backup snapshot into an already linked account, using the
++  // recovery key from a file. The importer is written for an empty database (link & sync / fresh install) and adds
++  // chats and messages without merging, so this refuses to run over existing history. Returns true if it imported.
++  public async backchannelImportLocalBackup(): Promise<boolean> {
++    const logId = 'backchannelImportLocalBackup';
++    try {
++      const config: { dir: string; key: string; days: number } | null =
++        await ipcRenderer.invoke('backchannel-local-import-config');
++      if (!config) {
++        return false;
++      }
++
++      const existing = await DataReader.getMessageCount();
++      if (existing > 0) {
++        log.info(`${logId}: database already has ${existing} messages, not importing`);
++        return false;
++      }
++
++      const { success, error } = await validateLocalBackupStructure(config.dir);
++      if (!success) {
++        log.error(`${logId}: ${config.dir} is not a usable snapshot: ${error}`);
++        return false;
++      }
++
++      const have = itemStorage.get('accountEntropyPool');
++      if (have && have !== config.key) {
++        log.error(`${logId}: the recovery key does not match this account's key, not importing`);
++        return false;
++      }
++      if (!have) {
++        await itemStorage.put('accountEntropyPool', config.key);
++        log.info(`${logId}: stored the recovery key (this device had none)`);
++      }
++
++      setBackchannelImportSince(Date.now() - config.days * 24 * 60 * 60 * 1000);
++      this.#localBackupSnapshotDir = config.dir;
++      log.info(`${logId}: importing the last ${config.days} days from ${config.dir}`);
++      try {
++        await this.importLocalBackup();
++      } finally {
++        setBackchannelImportSince(undefined);
++      }
++      log.info(`${logId}: done`);
++      return true;
++    } catch (error) {
++      log.error(`${logId}: failed, continuing without it: ${Errors.toLogFormat(error)}`);
++      return false;
++    }
++  }
++
+   public isLocalBackupStaged(): boolean {
+     return Boolean(this.#localBackupSnapshotDir);
+   }
