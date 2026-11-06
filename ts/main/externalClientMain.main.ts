@@ -14,6 +14,8 @@ import { safeParseUnknown } from '../util/schemas.std.ts';
 import { _isFeatureEnabledInner } from '../util/isFeatureEnabledInner.std.ts';
 import type { ConfigMapType } from '../RemoteConfig.dom.ts';
 import { getExternalClientEndpoint } from '../externalClient/endpoint.node.ts';
+// BACKCHANNEL: build-time switch for the Backchannel app.
+import { isBackchannelApp } from '../backchannel/config.main.ts';
 import { ExternalClientAuthority } from '../externalClient/ExternalClientAuthority.node.ts';
 import type { ApprovalPromptType } from '../externalClient/ExternalClientAuthority.node.ts';
 import { ExternalClientServer } from '../externalClient/ExternalClientServer.node.ts';
@@ -202,6 +204,12 @@ export class ExternalClientMain {
   async #isEnabled(): Promise<boolean> {
     // Unpackaged development builds can opt in without touching the database.
     if (!app.isPackaged && process.env.SIGNAL_ENABLE_EXTERNAL_CLIENTS === '1') {
+      return true;
+    }
+    // BACKCHANNEL: the Backchannel app turns the bridge on at build time
+    // (ts/backchannel/config.main.ts); every client still needs the user's
+    // approval in Signal's own dialog.
+    if (isBackchannelApp()) {
       return true;
     }
     // Both Signal (remote config) and the user must have turned it on.
