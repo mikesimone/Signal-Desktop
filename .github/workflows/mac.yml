@@ -1,0 +1,89 @@
+# Copyright 2026 Brian Reed
+# SPDX-License-Identifier: AGPL-3.0-only
+
+# Fork-only: checks that Backchannel for Mac (contrib/backchannel/mac/) still
+# builds and starts. It builds an ad-hoc signed app, starts it and checks
+# that the helper serves the page, and keeps the DMG and ZIP as a workflow
+# artifact for 14 days. Gatekeeper blocks that build on any Mac that
+# downloads it, so it's for testing only.
+#
+# Releases are signed and notarized on a Mac with release.sh, so no signing
+# secrets live on GitHub (contrib/backchannel/mac/RELEASING.md). Pushing a
+# release tag runs this workflow too, as a check of the same commit.
+name: Backchannel Mac
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'contrib/backchannel/**'
+      - 'ts/backchannel/**'
+      - '.github/workflows/mac.yml'
+    tags:
+      - 'backchannel-mac-v*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backchannel-mac-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build and smoke test
+    runs-on: macos-26
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          filter: blob:none
+
+      - name: Version
+        id: version
+        run: |
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            version="${GITHUB_REF_NAME#backchannel-mac-v}"
+          else
+            version=0
+          fi
+          if ! [[ "$version" =~ ^[0-9]+(\.[0-9]+){0,2}$ ]]; then
+            echo "::error::The version must look like 1.11, not '$version'"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+        shell: bash
+
+      - name: Setup environment
+        uses: ./.github/actions/setup
+        with:
+          cache-electron-builder: true
+
+      - name: Build
+        run: contrib/backchannel/mac/build.sh dmg zip
+        shell: bash
+        env:
+          BACKCHANNEL_VERSION: ${{ steps.version.outputs.version }}
+
+      - name: Expiry
+        run: |
+          expires="$(node -p 'new Date(require("./config/local-production.json").buildExpiration).toISOString().slice(0, 10)')"
+          echo "::notice title=Expires::A build of this commit stops working on $expires"
+        shell: bash
+
+      - name: Smoke test
+        run: contrib/backchannel/mac/smoke-test.sh
+        shell: bash
+
+      - name: Upload the build
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: backchannel-mac-${{ steps.version.outputs.version }}-unsigned
+          path: |
+            release/Backchannel-*-mac-arm64.dmg
+            release/Backchannel-*-mac-arm64.zip
+          if-no-files-found: error
+          retention-days: 14

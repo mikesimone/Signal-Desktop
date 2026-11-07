@@ -154,6 +154,9 @@ const bridge = new Bridge({
   displayName: 'Backchannel',
   log,
   onState(state) {
+    // Started inside the Backchannel app (an Electron utility process): the
+    // app switches windows on these (ts/backchannel/app.main.ts).
+    process.parentPort?.postMessage({ type: 'state', state });
     store.state = state === BridgeState.Ready ? 'loading' : state;
     if (state !== BridgeState.Ready) {
       store.clear();
