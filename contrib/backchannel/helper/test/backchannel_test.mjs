@@ -488,6 +488,18 @@ describe('backchannel helper', () => {
     assert.ok(reads.every(c => c.params.length <= 512 * 1024));
   });
 
+  it('gives a saved photo an extension from its type', async () => {
+    const res = await http(port, {
+      path: `/${helper.token}/api/attachment?messageId=m1&index=0&name=attachment`,
+    });
+    assert.equal(res.status, 200);
+    assert.match(res.headers['content-disposition'], /filename\*=UTF-8''attachment\.\w+$/);
+    const named = await http(port, {
+      path: `/${helper.token}/api/attachment?messageId=m1&index=0&name=cat.jpeg`,
+    });
+    assert.match(named.headers['content-disposition'], /''cat\.jpeg$/);
+  });
+
   it('never serves a chat file as a page', async () => {
     const res = await http(port, {
       path: `/${helper.token}/api/attachment?messageId=m1&index=1&name=x.html`,

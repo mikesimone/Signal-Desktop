@@ -55,6 +55,24 @@ export function parseRange(header, size) {
 
 // Only these types are shown inline; anything else is a download, so a file
 // from a chat can never run as a page on this origin.
+const EXTENSIONS = {
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/gif': 'gif',
+  'image/webp': 'webp',
+  'image/heic': 'heic',
+  'image/heif': 'heif',
+  'image/avif': 'avif',
+  'image/bmp': 'bmp',
+  'video/mp4': 'mp4',
+  'video/quicktime': 'mov',
+  'video/webm': 'webm',
+  'audio/mpeg': 'mp3',
+  'audio/aac': 'aac',
+  'audio/mp4': 'm4a',
+  'audio/ogg': 'ogg',
+  'application/pdf': 'pdf',
+};
 const INLINE_TYPES =
   /^(image\/(jpeg|png|gif|webp|avif|bmp)|video\/(mp4|webm|quicktime)|audio\/[a-z0-9.+-]+)$/i;
 
@@ -451,10 +469,15 @@ export function createWebServer({
     const type = first.contentType || 'application/octet-stream';
     const inline =
       INLINE_TYPES.test(type) && url.searchParams.get('download') !== '1';
-    const name = (url.searchParams.get('name') ?? 'attachment').replace(
+    let name = (url.searchParams.get('name') ?? 'attachment').replace(
       /[^\p{L}\p{N} ._()-]/gu,
       '_'
     );
+    // "Save image as" uses this name; give it an extension when it has none.
+    const ext = EXTENSIONS[type.split(';')[0].trim().toLowerCase()];
+    if (ext && !/\.[a-z0-9]{1,8}$/i.test(name)) {
+      name = `${name}.${ext}`;
+    }
     const range = parseRange(req.headers.range, size);
     if (range === 'unsatisfiable') {
       res.writeHead(416, {

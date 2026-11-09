@@ -1749,9 +1749,44 @@ function attachmentParams(m, index, extra = {}) {
   });
 }
 
+// A name to save an attachment under. Photos usually come without one, so
+// it gets the date and an extension from its type (signal-2026-11-09-...).
+const SAVE_EXTENSIONS = {
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/gif': 'gif',
+  'image/webp': 'webp',
+  'image/heic': 'heic',
+  'image/heif': 'heif',
+  'image/avif': 'avif',
+  'image/bmp': 'bmp',
+  'image/svg+xml': 'svg',
+  'video/mp4': 'mp4',
+  'video/quicktime': 'mov',
+  'video/webm': 'webm',
+  'audio/mpeg': 'mp3',
+  'audio/aac': 'aac',
+  'audio/mp4': 'm4a',
+  'audio/ogg': 'ogg',
+  'application/pdf': 'pdf',
+};
+
+function saveName(m, a) {
+  const ext = SAVE_EXTENSIONS[(a.contentType ?? '').toLowerCase()];
+  if (a.fileName) {
+    return /\.[a-z0-9]{1,8}$/i.test(a.fileName) || !ext
+      ? a.fileName
+      : `${a.fileName}.${ext}`;
+  }
+  const d = new Date(m.sentAt ?? m.timestamp ?? Date.now());
+  const pad = n => String(n).padStart(2, '0');
+  const stamp = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
+  return `signal-${stamp}${ext ? `.${ext}` : ''}`;
+}
+
 function attachmentUrl(m, index, a, extra = {}) {
   return `api/attachment?${attachmentParams(m, index, {
-    name: a.fileName ?? 'attachment',
+    name: saveName(m, a),
     ...extra,
   })}`;
 }
@@ -1893,7 +1928,7 @@ function renderFile(m, a, index) {
   row.append(badge, text);
   if (a.state === 'ready') {
     row.href = attachmentUrl(m, index, a, { download: '1' });
-    row.download = a.fileName ?? 'attachment';
+    row.download = saveName(m, a);
   } else {
     row.append(downloadState(m, a));
   }
@@ -1995,7 +2030,7 @@ function showLightboxItem() {
   $('lightbox-stage').replaceChildren(content);
   $('lightbox-caption').textContent = a.caption ?? '';
   $('lightbox-save').href = attachmentUrl(m, index, a, { download: '1' });
-  $('lightbox-save').download = a.fileName ?? 'attachment';
+  $('lightbox-save').download = saveName(m, a);
   $('lightbox-reply').hidden = !canSend() || !m.conversationId;
   const several = items.length > 1;
   $('lightbox-count').textContent = several
@@ -5654,6 +5689,7 @@ const WHATS_NEW = [
     '2026-11-09',
     [
       "GIFs: the GIF button by Stickers searches GIPHY, as in Signal, through Signal's proxy. A GIF you pick waits in the composer for a comment, and goes with a reply.",
+      'Saved photos and files get a real name and extension (signal-2026-11-09-143005.jpg) instead of "attachment".',
     ],
   ],
   [
