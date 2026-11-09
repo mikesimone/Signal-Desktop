@@ -9,7 +9,7 @@ Status: **done**, **partial**, **missing**, or **different** (on purpose).
 A weekly check compares new Signal releases against this list and adds
 what they bring.
 
-Last reviewed: 2026-11-02, against Signal 8.36.0-alpha.1 in fork main.
+Last reviewed: 2026-11-09, against Signal 8.37.0-alpha.1 in fork main (upstream main has nothing newer).
 
 ## Chat list
 
@@ -44,7 +44,7 @@ Last reviewed: 2026-11-02, against Signal 8.36.0-alpha.1 in fork main.
 | Long messages                                            | done      |                                                      |
 | Polls (vote, end, create, send to many chats)            | done      | F6                                                   |
 | Stickers (view and send)                                 | done      | F10                                                  |
-| Sticker favorites                                        | missing   | Signal beta, behind a remote flag                    |
+| Sticker favorites                                        | missing   | Signal beta, behind a remote flag; 8.37 adds favoriting from a sticker message and the picker's menu |
 | Link previews (view)                                     | done      |                                                      |
 | Mark read as you read, clears "mark as unread"           | done      | F13                                                  |
 | Unread line, jump-to-newest button with count            | done      | F18                                                  |
@@ -102,6 +102,7 @@ Last reviewed: 2026-11-02, against Signal 8.36.0-alpha.1 in fork main.
 | Notification profiles                               | missing   |                             |
 | Language                                            | missing   | the page is English         |
 | Linked devices, backups, change number, delete data | different | stay in Signal on the phone |
+| Allow sealed sender from anyone (8.37)              | different | only when Desktop is the primary device; Six is linked |
 | Window, tray, zoom, spell check, launch at login    | different | no screen on Six            |
 
 ## Everywhere
