@@ -90,6 +90,7 @@ type UploadType = {
   contentType: string;
   fileName: string | undefined;
   voiceNote: AttachmentsUploadBeginParamsType['voiceNote'];
+  gif: boolean;
   size: number;
   chunks: Array<Uint8Array<ArrayBuffer>>;
   received: number;
@@ -120,6 +121,7 @@ export function beginUpload({
   fileName,
   size,
   voiceNote,
+  gif,
 }: AttachmentsUploadBeginParamsType): ServiceResultType {
   pruneUploads();
   const limit = getAttachmentSizeLimit({
@@ -141,6 +143,8 @@ export function beginUpload({
     contentType,
     fileName,
     voiceNote,
+    // Signal's GIF picker sends MP4s only (decision F54).
+    gif: gif === true && contentType === 'video/mp4',
     size,
     chunks: [],
     received: 0,
@@ -250,7 +254,18 @@ export async function takeUploads(
           new File(upload.chunks, upload.fileName ?? 'file', {
             type: upload.contentType,
           }),
-          { generateScreenshot: true, flags: null, clientUuid: generateUuid() }
+          upload.gif
+            ? // As Signal's GIF picker (DraftGifMessageSendModal).
+              {
+                generateScreenshot: false,
+                flags: Proto.AttachmentPointer.Flags.GIF,
+                clientUuid: generateUuid(),
+              }
+            : {
+                generateScreenshot: true,
+                flags: null,
+                clientUuid: generateUuid(),
+              }
         );
       }
       if (!draft) {

@@ -42,6 +42,7 @@ import { updateGroup } from './ExternalClientGroups.preload.ts';
 import { locateQuote } from './ExternalClientQuotes.preload.ts';
 import { fetchLinkPreview } from './ExternalClientLinkPreviews.preload.ts';
 import { listMedia } from './ExternalClientMedia.preload.ts';
+import { readGifFile, searchGifs } from './ExternalClientGifs.preload.ts';
 import { searchMessages } from './ExternalClientSearch.preload.ts';
 import { listChatFolders } from './ExternalClientChatFolders.preload.ts';
 import { syncContacts } from './ExternalClientContactSync.preload.ts';
@@ -282,6 +283,14 @@ async function dispatch(
     case Method.MessagesGetEditHistory: {
       const params = safeParseUnknown(SERVICE_PARAM_SCHEMAS[method], rawParams);
       return params.success ? getEditHistory(params.data) : invalid;
+    }
+    case Method.GifsSearch: {
+      const params = safeParseUnknown(SERVICE_PARAM_SCHEMAS[method], rawParams);
+      return params.success ? searchGifs(params.data) : invalid;
+    }
+    case Method.GifsRead: {
+      const params = safeParseUnknown(SERVICE_PARAM_SCHEMAS[method], rawParams);
+      return params.success ? readGifFile(params.data) : invalid;
     }
     case Method.MessagesSendText: {
       if (!window.ConversationController.isInitialFetchComplete()) {

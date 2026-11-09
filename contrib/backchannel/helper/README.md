@@ -55,6 +55,7 @@ Photos, member labels, reactions and replies use fork-only bridge additions
 `messages.edit`, `messages.delete`, `attachments.uploadBegin`,
 `attachments.uploadChunk`, `messages.forward`, `emoji.getCatalog`, `polls.vote`, `polls.end`,
 `polls.send`, `conversations.getMembers`, mentions, formatting, `stickers.getPacks`, `stickers.getImage`,
+`gifs.search`, `gifs.read`, `gif` on `attachments.uploadBegin`,
 `messages.sendSticker`, `settings.get`, `settings.set`, `profile.get`,
 `profile.set`, `profile.setAvatar` (capability `settings.manage`),
 `conversations.setTyping` and the `typing` topic (`typing.send`,

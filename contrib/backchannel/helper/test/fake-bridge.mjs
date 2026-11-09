@@ -113,6 +113,8 @@ export class FakeBridge {
   // conversationId -> [{ conversationId, author }]
   members = new Map();
   stickers = { packs: [], recents: [] };
+  gifs = [];
+  gifFiles = new Map();
   // conversationId -> ConversationDetailsDTO
   details = new Map();
   #quoteOf(messageId) {
@@ -727,6 +729,28 @@ export class FakeBridge {
           messages.push(m);
         }
         this.#reply(session, id, { items, messages, nextCursor: next });
+        return;
+      }
+      case 'gifs.search': {
+        const q = params.query ?? '';
+        const gifs = this.gifs.filter(g => !q || g.title.includes(q));
+        this.#reply(session, id, { gifs, next: null });
+        return;
+      }
+      case 'gifs.read': {
+        const bytes = this.gifFiles.get(params.url);
+        if (!bytes) {
+          this.#error(session, id, 'NOT_FOUND');
+          return;
+        }
+        this.#reply(session, id, {
+          contentType: 'video/mp4',
+          size: bytes.length,
+          offset: params.offset,
+          data: bytes
+            .subarray(params.offset, params.offset + params.length)
+            .toString('base64'),
+        });
         return;
       }
       case 'linkPreviews.fetch': {

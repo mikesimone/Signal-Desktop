@@ -1286,6 +1286,57 @@ describe('backchannel helper', () => {
     assert.equal(tooBig.status, 413);
   });
 
+  it('searches GIFs, serves their MP4s and uploads one as a GIF', async () => {
+    const mp4 = Buffer.alloc(600 * 1024, 7);
+    bridge.gifs = [
+      {
+        id: 'g1',
+        title: 'cat dance',
+        description: '',
+        preview: {
+          url: 'https://media.giphy.com/p.mp4',
+          width: 200,
+          height: 150,
+        },
+        original: {
+          url: 'https://media.giphy.com/o.mp4',
+          width: 480,
+          height: 360,
+        },
+      },
+    ];
+    bridge.gifFiles.set('https://media.giphy.com/o.mp4', mp4);
+    const found = await http(port, {
+      path: `/${helper.token}/api/gifs?q=cat&offset=30`,
+    });
+    assert.equal(found.status, 200);
+    assert.equal(JSON.parse(found.text).gifs[0].id, 'g1');
+    assert.deepEqual(
+      bridge.calls.findLast(c => c.method === 'gifs.search').params,
+      { query: 'cat', offset: 30 }
+    );
+
+    const file = await http(port, {
+      path: `/${helper.token}/api/gif?url=${encodeURIComponent('https://media.giphy.com/o.mp4')}`,
+    });
+    assert.equal(file.status, 200);
+    assert.equal(file.headers['content-type'], 'video/mp4');
+    assert.equal(Number(file.headers['content-length']), mp4.length);
+
+    const up = await http(port, {
+      method: 'POST',
+      path: `/${helper.token}/api/upload?contentType=video%2Fmp4&name=gif.mp4&gif=1`,
+      headers: { 'Content-Type': 'application/octet-stream' },
+      body: Buffer.from('mp4'),
+    });
+    assert.equal(up.status, 200);
+    assert.equal(
+      bridge.calls.findLast(c => c.method === 'attachments.uploadBegin').params
+        .gif,
+      true
+    );
+  });
+
   it('lists sticker packs, serves their images and sends stickers', async () => {
     bridge.stickers = {
       packs: [

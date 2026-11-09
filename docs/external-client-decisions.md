@@ -1218,3 +1218,20 @@ first attachment, so pointing a quote at photo 7 isn't possible.
 
 WHY: Mike (2026-11-06): "This should let me respond with a .gif, a photo, a
 sticker, whatever, just like a normal comment."
+
+## F54. Fork only: GIF search
+
+DECISION: the composer has a GIF button next to Stickers, as Signal's has.
+The photo reply has one too. It opens Signal's GIF picker: GIPHY's trending
+GIFs, or a search. The bridge makes the same GIPHY calls as Signal's picker,
+through Signal's proxy, so GIPHY never sees the computer's address. Two new
+bridge methods do this, `gifs.search` and `gifs.read`. Both come under
+messages.send, so no new permission is needed. A GIF you pick becomes an
+attachment, as in Signal: an MP4 that `attachments.uploadBegin` marks with
+`gif`, and that Signal sends with its GIF flag. It waits in the composer, so
+it can take a comment, go with a reply, or be scheduled. Signal's picker
+sends from a little dialog instead, and it has no Recent GIFs list. The page
+has none either.
+
+WHY: Mike's parity rule. He asked for GIFs in photo replies (2026-11-06),
+and GIF search was the gap that blocked them.

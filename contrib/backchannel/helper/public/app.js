@@ -37,6 +37,8 @@ let markReadInFlight = false;
 // A mark-read was asked for while one was in flight: run again after.
 let markReadAgain = false;
 let replyTo = null;
+// The open GIF picker's state (decision F54).
+let gifPicker = null;
 // "Reply privately" links for the open chat (decision F23): group message
 // id -> link, and direct-chat reply id -> link.
 let privateLinks = { byGroupMessage: new Map(), byReply: new Map() };
@@ -2094,7 +2096,10 @@ function addPhotoReplyFiles(fileList) {
     }
     list.push({
       file,
-      url: file.type.startsWith('image/') ? URL.createObjectURL(file) : null,
+      url:
+        file.type.startsWith('image/') || file.isGif
+          ? URL.createObjectURL(file)
+          : null,
     });
   }
   setPhotoReplyFiles(list);
@@ -2113,7 +2118,15 @@ function setPhotoReplyFiles(list) {
   box.replaceChildren(
     ...list.map(draft => {
       const chip = el('div', 'lightbox-reply-extra');
-      if (draft.url) {
+      if (draft.url && draft.file.isGif) {
+        const video = el('video');
+        video.src = draft.url;
+        video.muted = true;
+        video.loop = true;
+        video.autoplay = true;
+        video.playsInline = true;
+        chip.append(video);
+      } else if (draft.url) {
         const img = el('img');
         img.src = draft.url;
         img.alt = draft.file.name;
@@ -4427,6 +4440,8 @@ function closePopovers() {
   $('mention-picker').hidden = true;
   $('format-menu').hidden = true;
   $('sticker-picker').hidden = true;
+  $('gif-picker').hidden = true;
+  gifPicker = null;
 }
 
 // anchor: an element, or a rect taken before its element was hidden.
@@ -5636,6 +5651,12 @@ $('immich').addEventListener('click', e => {
 // beginning shows, and the ones since your last look are marked New.
 const WHATS_NEW = [
   [
+    '2026-11-09',
+    [
+      "GIFs: the GIF button by Stickers searches GIPHY, as in Signal, through Signal's proxy. A GIF you pick waits in the composer for a comment, and goes with a reply.",
+    ],
+  ],
+  [
     '2026-11-06',
     [
       "Remind me: in a message's ⋯ menu, pick In 1 hour, In 3 hours, Tonight, Tomorrow or a time. It opens the chat at that message.",
@@ -6514,6 +6535,127 @@ async function openStickerPicker(anchorElement, onPick = sendSticker) {
     show(sources.find(source => source.key === stickerTab) ?? sources[0]);
   }
   placePopover(picker, anchor);
+}
+
+// --- GIFs (decision F54) ------------------------------------------------------
+
+// Signal's GIF picker: Giphy's trending GIFs, or a search, through Signal's
+// proxy. A GIF you pick becomes an attachment (an MP4 that Signal sends with
+// its GIF flag), so it can take a comment and goes with a reply, as in
+// Signal. onPick gets the File.
+const GIF_SEARCH_DELAY_MS = 300;
+
+function gifUrl(url) {
+  return `api/gif?${new URLSearchParams({ url })}`;
+}
+
+async function openGifPicker(anchorElement, onPick) {
+  const anchor = anchorElement.getBoundingClientRect();
+  closePopovers();
+  const picker = $('gif-picker');
+  const search = el('input', 'emoji-search');
+  search.type = 'search';
+  search.placeholder = 'Search GIPHY';
+  search.setAttribute('aria-label', 'Search GIFs');
+  const body = el('div', 'emoji-body');
+  const grid = el('div', 'gif-grid');
+  const status = el('p', 'sub');
+  body.append(grid, status);
+  const credit = el('div', 'gif-credit', 'Powered by GIPHY');
+  picker.replaceChildren(search, body, credit);
+  const state = { query: '', next: 0, loading: false, onPick, timer: null };
+  gifPicker = state;
+
+  const load = async reset => {
+    if (state.loading || (!reset && state.next === null)) {
+      return;
+    }
+    state.loading = true;
+    const query = state.query;
+    if (reset) {
+      state.next = 0;
+      grid.replaceChildren();
+    }
+    status.textContent = 'Loading…';
+    let data;
+    try {
+      data = await api(
+        `api/gifs?${new URLSearchParams({
+          q: query,
+          ...(state.next ? { offset: String(state.next) } : {}),
+        })}`
+      );
+    } catch (error) {
+      state.loading = false;
+      if (gifPicker === state) {
+        status.textContent = `Couldn't load GIFs (${error.code ?? error.message}).`;
+      }
+      return;
+    }
+    state.loading = false;
+    if (gifPicker !== state || query !== state.query) {
+      return;
+    }
+    state.next = data.next;
+    for (const gif of data.gifs) {
+      const cell = el('button', 'gif-cell');
+      cell.type = 'button';
+      cell.title = gif.title;
+      cell.setAttribute('aria-label', gif.title || 'GIF');
+      const video = el('video');
+      video.muted = true;
+      video.loop = true;
+      video.autoplay = true;
+      video.playsInline = true;
+      video.width = gif.preview.width;
+      video.height = gif.preview.height;
+      video.src = gifUrl(gif.preview.url);
+      cell.append(video);
+      cell.addEventListener('click', ev => {
+        ev.stopPropagation();
+        pickGif(state, gif, cell);
+      });
+      grid.append(cell);
+    }
+    status.textContent = grid.children.length === 0 ? 'No GIFs found.' : '';
+  };
+
+  search.addEventListener('input', () => {
+    clearTimeout(state.timer);
+    state.timer = setTimeout(() => {
+      state.query = search.value.trim();
+      load(true);
+    }, GIF_SEARCH_DELAY_MS);
+  });
+  body.addEventListener('scroll', () => {
+    if (body.scrollTop + body.clientHeight > body.scrollHeight - 200) {
+      load(false);
+    }
+  });
+  placePopover(picker, anchor);
+  search.focus();
+  await load(true);
+}
+
+async function pickGif(state, gif, cell) {
+  cell.classList.add('busy');
+  try {
+    const res = await fetch(gifUrl(gif.original.url));
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}`);
+    }
+    const file = new File([await res.blob()], 'gif.mp4', {
+      type: 'video/mp4',
+    });
+    file.isGif = true;
+    if (gifPicker === state) {
+      closePopovers();
+    }
+    state.onPick(file);
+  } catch (error) {
+    toast(`Couldn't get that GIF (${error.code ?? error.message}).`);
+    cell.classList.remove('busy');
+  }
 }
 
 // The composer's emoji button inserts at the cursor.
@@ -9710,9 +9852,10 @@ function addDrafts(fileList) {
       toast(`Up to ${MAX_DRAFTS} attachments at a time.`);
       break;
     }
-    const url = file.type.startsWith('image/')
-      ? URL.createObjectURL(file)
-      : null;
+    const url =
+      file.type.startsWith('image/') || file.isGif
+        ? URL.createObjectURL(file)
+        : null;
     list.push({ file, url });
   }
   drafts.set(selectedId, list);
@@ -9749,7 +9892,15 @@ function renderDrafts() {
   tray.replaceChildren(
     ...list.map(draft => {
       const tile = el('span', 'draft');
-      if (draft.url) {
+      if (draft.url && draft.file.isGif) {
+        const video = el('video', 'draft-gif');
+        video.src = draft.url;
+        video.muted = true;
+        video.loop = true;
+        video.autoplay = true;
+        video.playsInline = true;
+        tile.append(video);
+      } else if (draft.url) {
         const img = el('img', 'draft-image');
         img.alt = '';
         img.src = draft.url;
@@ -9781,6 +9932,7 @@ async function uploadFile(file) {
   const params = new URLSearchParams({
     contentType: file.type || 'application/octet-stream',
     ...(file.name ? { name: file.name } : {}),
+    ...(file.isGif ? { gif: '1' } : {}),
   });
   const res = await fetch(`api/upload?${params}`, {
     method: 'POST',
@@ -9856,6 +10008,14 @@ $('sticker-open').addEventListener('click', ev => {
     return;
   }
   openStickerPicker($('sticker-open'));
+});
+$('gif-open').addEventListener('click', ev => {
+  ev.stopPropagation();
+  if (!$('gif-picker').hidden) {
+    closePopovers();
+    return;
+  }
+  openGifPicker($('gif-open'), file => addDrafts([file]));
 });
 $('emoji-open').append(icon('react'));
 $('emoji-open').addEventListener('click', ev => {
@@ -10724,6 +10884,14 @@ $('lightbox-reply-sticker').addEventListener('click', ev => {
   openStickerPicker($('lightbox-reply-sticker'), (packId, stickerId) =>
     sendPhotoReply($('lightbox-reply-text').value, { packId, stickerId })
   );
+});
+$('lightbox-reply-gif').addEventListener('click', ev => {
+  ev.stopPropagation();
+  if (!$('gif-picker').hidden) {
+    closePopovers();
+    return;
+  }
+  openGifPicker($('lightbox-reply-gif'), file => addPhotoReplyFiles([file]));
 });
 $('lightbox-reply-emoji').append(icon('react'));
 $('lightbox-reply-emoji').addEventListener('click', ev => {

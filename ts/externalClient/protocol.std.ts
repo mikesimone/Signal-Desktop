@@ -180,6 +180,8 @@ export const Method = {
   SafetyNumbersAccept: 'safetyNumbers.accept',
   ContactsSync: 'contacts.sync',
   MessagesGetEditHistory: 'messages.getEditHistory',
+  GifsSearch: 'gifs.search',
+  GifsRead: 'gifs.read',
 } as const;
 export type MethodType = (typeof Method)[keyof typeof Method];
 
@@ -237,6 +239,9 @@ export const SERVICE_METHOD_CAPABILITIES = {
   [Method.SafetyNumbersAccept]: Capability.IdentityManage,
   [Method.ContactsSync]: Capability.SettingsManage,
   [Method.MessagesGetEditHistory]: Capability.MessagesRead,
+  // Part of sending, as Signal's GIF picker is part of its composer.
+  [Method.GifsSearch]: Capability.MessagesSend,
+  [Method.GifsRead]: Capability.MessagesSend,
 } as const satisfies Partial<Record<MethodType, CapabilityType>>;
 export type ServiceMethodType = keyof typeof SERVICE_METHOD_CAPABILITIES;
 
@@ -785,6 +790,48 @@ export type AttachmentsReadResultType = Readonly<{
   data: string;
 }>;
 
+// Fork addition (decision F54): Signal's GIF picker. Giphy's trending GIFs
+// (no query) or a search, fetched through Signal's proxy as Signal does, so
+// Giphy never sees the client's address.
+export const GIFS_PAGE_SIZE = 30;
+export const gifsSearchParamsSchema = z
+  .object({
+    query: z.string().max(200).optional(),
+    offset: z.number().int().min(0).max(5000).optional(),
+  })
+  .strict();
+export type GifsSearchParamsType = z.infer<typeof gifsSearchParamsSchema>;
+export type GifMediaDTO = Readonly<{
+  url: string;
+  width: number;
+  height: number;
+}>;
+export type GifDTO = Readonly<{
+  id: string;
+  title: string;
+  description: string;
+  // A small looping MP4 for the picker.
+  preview: GifMediaDTO;
+  // The MP4 to send.
+  original: GifMediaDTO;
+}>;
+export type GifsSearchResultType = Readonly<{
+  gifs: ReadonlyArray<GifDTO>;
+  // Pass as offset for the next page; null at the end.
+  next: number | null;
+}>;
+
+// Reads a GIF's MP4 (a url from gifs.search) through Signal's proxy, in
+// chunks like attachments.read.
+export const gifsReadParamsSchema = z
+  .object({
+    url: z.string().url().max(2048),
+    offset: z.number().int().min(0),
+    length: z.number().int().min(1).max(MAX_ATTACHMENT_CHUNK_BYTES),
+  })
+  .strict();
+export type GifsReadParamsType = z.infer<typeof gifsReadParamsSchema>;
+
 export const attachmentsDownloadParamsSchema = z
   .object({ messageId: messageIdSchema })
   .strict();
@@ -836,6 +883,10 @@ export const attachmentsUploadBeginParamsSchema = z
       })
       .strict()
       .optional(),
+    // Fork addition (decision F54): a GIF from gifs.search (video/mp4),
+    // sent with Signal's GIF flag so it loops without sound, as its GIF
+    // picker sends one.
+    gif: z.boolean().optional(),
   })
   .strict()
   .refine(
@@ -1681,6 +1732,8 @@ export const SERVICE_PARAM_SCHEMAS = {
   [Method.SafetyNumbersAccept]: safetyNumbersAcceptParamsSchema,
   [Method.ContactsSync]: contactsSyncParamsSchema,
   [Method.MessagesGetEditHistory]: messagesGetEditHistoryParamsSchema,
+  [Method.GifsSearch]: gifsSearchParamsSchema,
+  [Method.GifsRead]: gifsReadParamsSchema,
 } as const satisfies Record<ServiceMethodType, z.ZodType>;
 
 export type ConversationsListParamsType = z.infer<

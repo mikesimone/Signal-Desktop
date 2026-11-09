@@ -365,6 +365,8 @@ export function createWebServer({
     const size = Number(req.headers['content-length']);
     const contentType = url.searchParams.get('contentType') ?? '';
     const fileName = url.searchParams.get('name') || undefined;
+    // A GIF from the GIF picker (decision F54).
+    const gif = url.searchParams.get('gif') === '1';
     let voiceNote;
     try {
       voiceNote = JSON.parse(url.searchParams.get('voiceNote') ?? 'null');
@@ -385,6 +387,7 @@ export function createWebServer({
       contentType,
       fileName,
       voiceNote,
+      gif,
     });
     if (!uploadId) {
       sendJson(res, 400, { error: { code: 'INVALID_ARGUMENT' } });
@@ -397,13 +400,14 @@ export function createWebServer({
   // stream wasn't that long.
   async function uploadStream(
     stream,
-    { size, contentType, fileName, voiceNote }
+    { size, contentType, fileName, voiceNote, gif }
   ) {
     const { uploadId } = await bridge.call('attachments.uploadBegin', {
       contentType,
       size,
       ...(fileName ? { fileName: fileName.slice(0, 255) } : {}),
       ...(voiceNote ? { voiceNote } : {}),
+      ...(gif ? { gif: true } : {}),
     });
     let offset = 0;
     let pending = [];
@@ -673,6 +677,52 @@ export function createWebServer({
         note: note === true,
       });
       sendJson(res, 200, result);
+      return;
+    }
+    // Signal's GIF picker (decision F54): Giphy through Signal's proxy.
+    if (req.method === 'GET' && route === 'api/gifs') {
+      const query = (url.searchParams.get('q') ?? '').slice(0, 200);
+      const offset = Number(url.searchParams.get('offset'));
+      sendJson(
+        res,
+        200,
+        await bridge.call('gifs.search', {
+          ...(query.trim() ? { query } : {}),
+          ...(Number.isInteger(offset) && offset > 0 && offset <= 5000
+            ? { offset }
+            : {}),
+        })
+      );
+      return;
+    }
+    if (req.method === 'GET' && route === 'api/gif') {
+      const gifUrl = url.searchParams.get('url') ?? '';
+      const chunks = [];
+      let offset = 0;
+      let size = Infinity;
+      while (offset < size) {
+        // oxlint-disable-next-line no-await-in-loop
+        const chunk = await bridge.call('gifs.read', {
+          url: gifUrl,
+          offset,
+          length: ATTACHMENT_CHUNK_BYTES,
+        });
+        size = chunk.size;
+        const bytes = Buffer.from(chunk.data, 'base64');
+        if (bytes.length === 0) {
+          break;
+        }
+        chunks.push(bytes);
+        offset += bytes.length;
+      }
+      const body = Buffer.concat(chunks);
+      res.writeHead(200, {
+        ...SECURITY_HEADERS,
+        'Content-Type': 'video/mp4',
+        'Content-Length': String(body.length),
+        'Cache-Control': 'private, max-age=86400',
+      });
+      res.end(body);
       return;
     }
     if (req.method === 'GET' && route === 'api/attachment') {

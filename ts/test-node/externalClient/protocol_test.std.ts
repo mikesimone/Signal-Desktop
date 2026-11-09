@@ -27,6 +27,8 @@ import {
   Capability,
   Method,
   SERVICE_METHOD_CAPABILITIES,
+  gifsReadParamsSchema,
+  gifsSearchParamsSchema,
   messagesSearchParamsSchema,
   messagesSendTextParamsSchema,
   negotiateVersion,
@@ -452,6 +454,43 @@ describe('externalClient/protocol', () => {
           conversationId,
           contactIds: ['x'.repeat(65)],
         })
+      );
+    });
+
+    it('searches GIFs and reads them, as part of sending (F54)', () => {
+      assert.isTrue(accepts(gifsSearchParamsSchema, {}));
+      assert.isTrue(
+        accepts(gifsSearchParamsSchema, { query: 'cat', offset: 30 })
+      );
+      assert.isFalse(accepts(gifsSearchParamsSchema, { offset: -1 }));
+      assert.isTrue(
+        accepts(gifsReadParamsSchema, {
+          url: 'https://media.giphy.com/media/x/giphy.mp4',
+          offset: 0,
+          length: 1024,
+        })
+      );
+      assert.isFalse(
+        accepts(gifsReadParamsSchema, {
+          url: 'not a url',
+          offset: 0,
+          length: 1,
+        })
+      );
+      assert.isTrue(
+        accepts(attachmentsUploadBeginParamsSchema, {
+          contentType: 'video/mp4',
+          size: 10,
+          gif: true,
+        })
+      );
+      assert.strictEqual(
+        SERVICE_METHOD_CAPABILITIES[Method.GifsSearch],
+        Capability.MessagesSend
+      );
+      assert.strictEqual(
+        SERVICE_METHOD_CAPABILITIES[Method.GifsRead],
+        Capability.MessagesSend
       );
     });
 

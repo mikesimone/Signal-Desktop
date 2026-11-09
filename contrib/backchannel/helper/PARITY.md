@@ -81,7 +81,7 @@ Last reviewed: 2026-11-09, against Signal 8.37.0-alpha.1 in fork main (upstream 
 | Scheduled messages                                 | different | F29: Desktop has none; the helper sends them |
 | Record voice notes                                 | done      | F19                                          |
 | Send contact cards                                 | done      | F41: name, photo, number, as Signal 8.34     |
-| GIF search                                         | missing   |                                              |
+| GIF search                                         | done      | F54: GIPHY through Signal's proxy            |
 | Typing indicators (send them)                      | done      | F14                                          |
 | Safety number changed                              | different | F40: accepted by itself, never stops a send  |
 | Send view-once media                               | missing   |                                              |
@@ -134,7 +134,7 @@ should. Checked against Android's change list of 2026-11-04 (bc1 to bc9).
 | Your own photo for anyone                         | done      | F44: kept by the helper                                |
 | What's New after an update                        | done      | F45: all entries since the start, new ones marked      |
 | Immich picker                                     | done      | F48: the helper calls Immich; the key stays on the server |
-| Reply to one photo of an album                    | done      | F47, F53: with photos, GIFs, files, stickers           |
+| Reply to one photo of an album                    | done      | F47, F53, F54: with photos, GIFs, files, stickers      |
 | Remind me about a message                         | done      | F49: kept by the helper                                |
 | Keyword alerts in muted chats                     | done      | F50: on the page only                                  |
 | On-device translate                               | done      | F51: browser's own Translator API (Chrome)             |
