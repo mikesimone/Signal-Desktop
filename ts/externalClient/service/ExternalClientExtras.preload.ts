@@ -19,11 +19,11 @@ import { getAvatarVersion } from '../conversationDto.std.ts';
 import { sendEditedMessage } from '../../util/sendEditedMessage.preload.ts';
 import { sendDeleteForEveryoneMessage } from '../../util/sendDeleteForEveryoneMessage.preload.ts';
 import { getMessageSentTimestamp } from '../../util/getMessageSentTimestamp.std.ts';
+import { applyDeleteAttachmentFromMessage } from '../../util/deleteForMe.preload.ts';
 import {
-  applyDeleteAttachmentFromMessage,
   getAddressableMessage,
   getConversationIdentifier,
-} from '../../util/deleteForMe.preload.ts';
+} from '../../util/syncIdentifiers.preload.ts';
 import { getMessageById } from '../../messages/getMessageById.preload.ts';
 import { singleProtoJobQueue } from '../../jobs/singleProtoJobQueue.preload.ts';
 import { MessageSender } from '../../textsecure/SendMessage.preload.ts';
