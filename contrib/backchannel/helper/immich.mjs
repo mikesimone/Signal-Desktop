@@ -27,6 +27,30 @@ function extensionFor(contentType) {
   );
 }
 
+// What the key made at sign-in may do: browse, attach, and auto-save (F56).
+const KEY_PERMISSIONS = [
+  'asset.read',
+  'asset.view',
+  'asset.download',
+  'asset.upload',
+  'album.read',
+];
+
+// The address the user typed, without a trailing / or /api; null if it
+// isn't http(s).
+function normalizeUrl(url) {
+  let base;
+  try {
+    base = new URL(url);
+  } catch {
+    return null;
+  }
+  if (!['http:', 'https:'].includes(base.protocol)) {
+    return null;
+  }
+  return base.origin + base.pathname.replace(/\/+$/, '').replace(/\/api$/, '');
+}
+
 export class Immich {
   #file;
   #config = null;
@@ -52,6 +76,56 @@ export class Immich {
     return { connected: this.#config != null, url: this.#config?.url ?? null };
   }
 
+  // Sign in with your Immich email and password (decision F58), as the
+  // server's own login: the helper makes itself an API key with just what
+  // Backchannel uses, signs the session out, and never keeps the password.
+  async signIn(url, email, password) {
+    const base = normalizeUrl(url);
+    if (!base || !email || !password) {
+      return { ok: false, code: 'INVALID_ARGUMENT' };
+    }
+    const post = async (path, body, token) => {
+      let res;
+      try {
+        res = await this.#fetch(base + path, {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            ...(token ? { authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify(body),
+          signal: AbortSignal.timeout(TIMEOUT_MS),
+        });
+      } catch {
+        throw Object.assign(new Error('unreachable'), { code: 'UNREACHABLE' });
+      }
+      return res;
+    };
+    try {
+      const login = await post('/api/auth/login', { email, password });
+      if (login.status === 401 || login.status === 400) {
+        return { ok: false, code: 'BAD_LOGIN' };
+      }
+      if (!login.ok) {
+        return { ok: false, code: 'IMMICH_ERROR' };
+      }
+      const { accessToken } = await login.json();
+      const made = await post(
+        '/api/api-keys',
+        { name: 'Backchannel', permissions: KEY_PERMISSIONS },
+        accessToken
+      );
+      await post('/api/auth/logout', {}, accessToken).catch(() => {});
+      if (!made.ok) {
+        return { ok: false, code: 'IMMICH_ERROR' };
+      }
+      const { secret } = await made.json();
+      return this.configure(base, secret);
+    } catch (error) {
+      return { ok: false, code: error.code ?? 'UNREACHABLE' };
+    }
+  }
+
   // Checks the server and key before saving them. Empty url disconnects.
   async configure(url, apiKey) {
     if (!this.#file) {
@@ -62,20 +136,11 @@ export class Immich {
       this.#save();
       return { ok: true };
     }
-    let base;
-    try {
-      base = new URL(url);
-    } catch {
+    const base = normalizeUrl(url);
+    if (!base || !apiKey) {
       return { ok: false, code: 'INVALID_ARGUMENT' };
     }
-    if (!['http:', 'https:'].includes(base.protocol) || !apiKey) {
-      return { ok: false, code: 'INVALID_ARGUMENT' };
-    }
-    const config = {
-      url:
-        base.origin + base.pathname.replace(/\/+$/, '').replace(/\/api$/, ''),
-      apiKey: String(apiKey).trim(),
-    };
+    const config = { url: base, apiKey: String(apiKey).trim() };
     try {
       await this.#json(config, 'GET', '/api/albums');
     } catch (error) {

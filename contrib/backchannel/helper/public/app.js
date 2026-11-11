@@ -5636,7 +5636,9 @@ function closeImmich() {
 const IMMICH_ERRORS = {
   BAD_KEY: 'Immich refused that API key.',
   UNREACHABLE: "Couldn't reach that Immich server from Backchannel's server.",
-  INVALID_ARGUMENT: 'Enter the server address (https://…) and an API key.',
+  BAD_LOGIN: 'Immich refused that email or password.',
+  INVALID_ARGUMENT:
+    'Enter the server address (https://…) and your sign-in or an API key.',
   NOT_CONNECTED: 'Connect your Immich server first.',
 };
 
@@ -5653,18 +5655,42 @@ function showImmichConnect() {
   server.type = 'url';
   server.placeholder = 'Server address, like https://photos.example.com';
   server.value = immichState.status?.url ?? '';
+  // Sign in as on Immich's own login page (decision F58); an API key is
+  // the other way in.
+  let useKey = false;
+  const email = el('input', 'setting-input');
+  email.type = 'email';
+  email.placeholder = 'Email';
+  email.autocomplete = 'username';
+  const password = el('input', 'setting-input');
+  password.type = 'password';
+  password.placeholder = 'Password';
+  password.autocomplete = 'current-password';
   const key = el('input', 'setting-input');
   key.type = 'password';
   key.placeholder = 'API key (Immich: Account settings > API keys)';
   key.autocomplete = 'off';
+  key.hidden = true;
+  const swap = el('button', 'link-button', 'Use an API key instead');
+  swap.type = 'button';
+  swap.addEventListener('click', () => {
+    useKey = !useKey;
+    email.hidden = useKey;
+    password.hidden = useKey;
+    key.hidden = !useKey;
+    swap.textContent = useKey
+      ? 'Sign in with email and password instead'
+      : 'Use an API key instead';
+    (useKey ? key : email).focus();
+  });
   const note = el(
     'p',
     'setting-note',
-    "The key stays on Backchannel's server; this page never gets it back. Backchannel only reads your library."
+    "Backchannel's server signs in and keeps its own Immich key; your password isn't kept, and this page never sees the key. It browses your library and adds photos you choose to auto-save."
   );
   const save = el('button', 'setting-button primary', 'Connect');
   save.type = 'submit';
-  form.append(server, key, note, save);
+  form.append(server, email, password, key, swap, note, save);
   if (immichState.status?.connected) {
     const disconnect = el('button', 'setting-button', 'Disconnect');
     disconnect.type = 'button';
@@ -5679,10 +5705,16 @@ function showImmichConnect() {
     e.preventDefault();
     save.disabled = true;
     try {
-      immichState.status = await api('api/immich/config', {
-        url: server.value.trim(),
-        apiKey: key.value.trim(),
-      });
+      immichState.status = await api(
+        'api/immich/config',
+        useKey
+          ? { url: server.value.trim(), apiKey: key.value.trim() }
+          : {
+              url: server.value.trim(),
+              email: email.value.trim(),
+              password: password.value,
+            }
+      );
       showImmichView('recent');
     } catch (error) {
       toast(immichError(error));
@@ -5692,7 +5724,7 @@ function showImmichConnect() {
   $('immich-tabs').replaceChildren();
   $('immich-foot').replaceChildren();
   $('immich-body').replaceChildren(form);
-  setTimeout(() => (server.value ? key : server).focus());
+  setTimeout(() => (server.value ? email : server).focus());
 }
 
 function renderImmichTabs() {
@@ -5952,6 +5984,7 @@ const WHATS_NEW = [
       "Remove a contact from a chat's ⋯ menu, as Signal's Remove. The chat stays.",
       'Auto-reply (Settings, Chats): a new message in a 1:1 chat gets your away text, sent from the server even with this page closed.',
       "Save received photos and videos to your Immich, from every chat (Settings, Chats) or chosen ones (the chat's ⋯ menu).",
+      'Connect Immich with your email and password; an API key still works.',
       'Send silently: hold or right-click Send. Other Backchannel users get no alert; other Signal apps still notify.',
     ],
   ],

@@ -1550,6 +1550,28 @@ describe('backchannel helper', () => {
     const seen = [];
     const immich = createServer((req, res) => {
       seen.push({ method: req.method, url: req.url });
+      if (req.url.startsWith('/api/auth/') || req.url === '/api/api-keys') {
+        let raw = '';
+        req.on('data', d => (raw += d));
+        req.on('end', () => {
+          const body = raw ? JSON.parse(raw) : {};
+          res.setHeader('content-type', 'application/json');
+          if (req.url === '/api/auth/login') {
+            if (body.password !== 'pw') {
+              res.writeHead(401).end('{}');
+              return;
+            }
+            res.end(JSON.stringify({ accessToken: 'tok' }));
+          } else if (req.url === '/api/api-keys') {
+            assert.equal(req.headers.authorization, 'Bearer tok');
+            assert.ok(body.permissions.includes('asset.upload'));
+            res.end(JSON.stringify({ secret: 'secret-key' }));
+          } else {
+            res.end('{}');
+          }
+        });
+        return;
+      }
       if (req.headers['x-api-key'] !== 'secret-key') {
         res.writeHead(401).end();
         return;
@@ -1599,6 +1621,18 @@ describe('backchannel helper', () => {
           headers: json,
           body: { url: `${server}/api/`, apiKey },
         });
+      const signIn = password =>
+        http(port, {
+          method: 'POST',
+          path: `/${helper.token}/api/immich/config`,
+          headers: json,
+          body: { url: server, email: 'me@example.com', password },
+        });
+      const refused = await signIn('nope');
+      assert.equal(JSON.parse(refused.text).error.code, 'BAD_LOGIN');
+      const signedIn = await signIn('pw');
+      assert.equal(signedIn.status, 200);
+      assert.ok(seen.some(r => r.url === '/api/auth/logout'));
       const bad = await configure('wrong');
       assert.equal(bad.status, 400);
       assert.equal(JSON.parse(bad.text).error.code, 'BAD_KEY');

@@ -1309,3 +1309,22 @@ other Signal apps don't show (proposed by the Android thread, 2026-11-11):
 
 WHY: Mike's v14 list ("send silently, with a note that it only works with
 other Backchannel users") and auto-reply on both sides at once.
+
+## F58. Fork only: sign in to Immich with email and password
+
+DECISION: the Immich setup asks for the server address plus your Immich
+email and password, as Immich's own login page does. Pasting an API key
+is still there ("Use an API key instead"). Mike said on 2026-11-11 that
+either is fine on the web. The helper logs in (`/api/auth/login`), makes
+itself a "Backchannel" API key with only the permissions it needs (asset
+read, view, download and upload, and album read), logs that session out,
+and keeps just the key in immich.json. It never stores the password.
+- No SSO on the web: Immich's OAuth needs each redirect address registered
+  on the server, and the helper's address differs for every kit.
+- One address only. The helper runs on the server and never changes
+  networks, so it needs no internal-or-external switch; the user enters
+  whatever address that server can reach. No addresses are built in (Mike,
+  2026-11-11: never hardcode his server names).
+
+WHY: Mike asked for Immich to plug in through the usual sign-in, as
+Backchannel Android v14 does.

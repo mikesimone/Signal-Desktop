@@ -4286,3 +4286,17 @@ label.poll-option {
   font: inherit;
   resize: vertical;
 }
+
+/* Immich sign-in (decision F58). */
+.immich-form [hidden] {
+  display: none;
+}
+.immich-form .link-button {
+  align-self: flex-start;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--accent, #2c6bed);
+  font: inherit;
+  cursor: pointer;
+}

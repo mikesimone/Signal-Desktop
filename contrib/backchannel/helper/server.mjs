@@ -313,11 +313,16 @@ export function createWebServer({
       if (req.method === 'GET' && action === 'status') {
         sendJson(res, 200, immich.status());
       } else if (req.method === 'POST' && action === 'config') {
-        const { url: server, apiKey } = await readJson(req);
-        const result = await immich.configure(
-          String(server ?? '').trim(),
-          String(apiKey ?? '')
-        );
+        const { url: server, apiKey, email, password } = await readJson(req);
+        const address = String(server ?? '').trim();
+        const result =
+          address && email != null
+            ? await immich.signIn(
+                address,
+                String(email).trim(),
+                String(password ?? '')
+              )
+            : await immich.configure(address, String(apiKey ?? ''));
         sendJson(
           res,
           result.ok ? 200 : 400,
