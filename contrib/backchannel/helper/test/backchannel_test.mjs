@@ -6,7 +6,13 @@
 
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { createServer, request } from 'node:http';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -15,6 +21,7 @@ import { fileURLToPath } from 'node:url';
 
 import { AUTO_REPLY_MARKER, AutoReply } from '../autoReply.mjs';
 import { AutoSave, savedName } from '../autoSave.mjs';
+import { Immich, localIso } from '../immich.mjs';
 import { ContactPhotoRefresh } from '../contactPhotos.mjs';
 import { Reminders } from '../reminders.mjs';
 import { FakeBridge, makeConversation, makeMessage } from './fake-bridge.mjs';
@@ -2063,6 +2070,52 @@ describe('auto-reply', () => {
     });
     assert.equal(again.get().enabled, true);
     assert.equal(await again.handle({ ...m, sentAt: now }, direct), false);
+    rmSync(dir, { recursive: true, force: true });
+  });
+});
+
+describe('Immich local time', () => {
+  it('writes the instant in the owner time zone, winter and summer', () => {
+    assert.equal(
+      localIso(Date.UTC(2026, 10, 11, 21, 37, 38, 66), 'America/Los_Angeles'),
+      '2026-11-11T13:37:38.066-08:00'
+    );
+    assert.equal(
+      localIso(Date.UTC(2026, 6, 4, 3, 5, 9, 0), 'America/Los_Angeles'),
+      '2026-07-03T20:05:09.000-07:00'
+    );
+    assert.equal(localIso(Date.UTC(2026, 0, 1), 'UTC'), '2026-01-01T00:00:00.000+00:00');
+  });
+
+  it('sets the time after an upload, and survives a refused edit', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'bc-im-'));
+    writeFileSync(
+      join(dir, 'immich.json'),
+      JSON.stringify({ url: 'http://immich.test', apiKey: 'k' })
+    );
+    const calls = [];
+    for (const editStatus of [200, 403]) {
+      calls.length = 0;
+      const im = new Immich(dir, async (url, init) => {
+        calls.push([init.method, url, init.body]);
+        if (init.method === 'PUT') {
+          return new Response('{}', { status: editStatus });
+        }
+        return new Response(JSON.stringify({ id: 'a1', status: 'created' }), {
+          status: 201,
+        });
+      });
+      const made = await im.upload(Buffer.from('x'), {
+        deviceAssetId: 'signal-m:0',
+        fileName: 'Chat_2026-11-11_133738.jpg',
+        contentType: 'image/jpeg',
+        createdAt: Date.UTC(2026, 10, 11, 21, 37, 38, 66),
+      });
+      assert.equal(made.id, 'a1');
+      assert.equal(calls[1][0], 'PUT');
+      assert.equal(calls[1][1], 'http://immich.test/api/assets/a1');
+      assert.match(calls[1][2], /2026-11-11T13:37:38\.066-08:00/);
+    }
     rmSync(dir, { recursive: true, force: true });
   });
 });

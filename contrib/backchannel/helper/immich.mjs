@@ -27,12 +27,31 @@ export function extensionFor(contentType) {
   );
 }
 
+// "2026-11-11T13:37:38.066-08:00": the instant written in a time zone, which
+// is what makes Immich show the local time (Signal sends no EXIF zone, so it
+// would otherwise treat the send time as UTC). BACKCHANNEL_TZ, default Pacific.
+export function localIso(ms, timeZone = process.env.BACKCHANNEL_TZ || 'America/Los_Angeles') {
+  const at = new Date(ms);
+  const zone = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    timeZoneName: 'longOffset',
+  })
+    .formatToParts(at)
+    .find(p => p.type === 'timeZoneName')?.value;
+  const offset = /GMT([+-]\d\d:\d\d)/.exec(zone ?? '')?.[1] ?? '+00:00';
+  const sign = offset[0] === '-' ? -1 : 1;
+  const [h, m] = offset.slice(1).split(':').map(Number);
+  const shifted = new Date(ms + sign * (h * 60 + m) * 60_000);
+  return `${shifted.toISOString().slice(0, 23)}${offset}`;
+}
+
 // What the key made at sign-in may do: browse, attach, and auto-save (F56).
 const KEY_PERMISSIONS = [
   'asset.read',
   'asset.view',
   'asset.download',
   'asset.upload',
+  'asset.update',
   'album.read',
 ];
 
@@ -237,7 +256,21 @@ export class Immich {
         code: 'IMMICH_ERROR',
       });
     }
-    return res.json().catch(() => ({}));
+    const made = await res.json().catch(() => ({}));
+    // Best effort: show the time where Mike took it, not in UTC. A key that
+    // may not edit assets just leaves the UTC time.
+    if (made?.id && made.status !== 'duplicate') {
+      await this.#fetch(`${this.#config.url}/api/assets/${made.id}`, {
+        method: 'PUT',
+        headers: {
+          'x-api-key': this.#config.apiKey,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({ dateTimeOriginal: localIso(createdAt) }),
+        signal: AbortSignal.timeout(TIMEOUT_MS),
+      }).catch(() => {});
+    }
+    return made;
   }
 
   #assets(result) {
