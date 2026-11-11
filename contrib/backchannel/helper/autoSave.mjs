@@ -74,13 +74,13 @@ export class AutoSave {
     return this.#settings.all || this.#settings.chats.includes(conversationId);
   }
 
-  // m: a message.added or message.updated MessageDTO; conversation: its
-  // ConversationDTO. Returns the work, so tests can wait for it. Chats with
-  // disappearing messages are skipped, as Backchannel Android does.
-  handle(m, conversation) {
+  // m: a message.added or message.updated MessageDTO. Returns the work, so
+  // tests can wait for it. Chats with disappearing messages are saved too
+  // (Mike's call: the timer is there to save phone space, not for privacy).
+  // View-once media never reaches the helper: the bridge hides its content.
+  handle(m) {
     if (
       m?.direction !== 'incoming' ||
-      conversation?.disappearingSeconds > 0 ||
       !this.wants(m.conversationId) ||
       !this.#immich?.status().connected
     ) {

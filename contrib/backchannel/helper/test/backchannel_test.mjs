@@ -2101,8 +2101,9 @@ describe('auto-save', () => {
     await as.handle(m);
     await as.handle(m);
     await as.handle({ ...m, id: 'm2', conversationId: 'c2' });
+    // A chat with disappearing messages is saved too.
     await as.handle({ ...m, id: 'm3' }, { disappearingSeconds: 3600 });
-    assert.equal(uploads.length, 1);
+    assert.equal(uploads.length, 2);
     assert.equal(uploads[0][0], 'photo');
     assert.equal(uploads[0][1].deviceAssetId, 'signal-m1:0');
     rmSync(dir, { recursive: true, force: true });

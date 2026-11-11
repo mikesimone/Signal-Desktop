@@ -190,7 +190,7 @@ const bridge = new Bridge({
       autoReply.handle(event.data, store.get(event.data.conversationId));
     }
     if (event.event === 'message.added' || event.event === 'message.updated') {
-      autoSave.handle(event.data, store.get(event.data.conversationId));
+      autoSave.handle(event.data);
     }
   },
 });
