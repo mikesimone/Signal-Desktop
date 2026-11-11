@@ -855,8 +855,20 @@ export const messagesDeleteParamsSchema = z
     messageId: messageIdSchema,
     // False deletes from this device and the user's linked devices only.
     forEveryone: z.boolean(),
+    // Fork addition (decision F55): delete just this attachment for me,
+    // keeping the message and its text, as Signal's All media "Delete"
+    // does for one item of an album. Synced to linked devices.
+    attachmentIndex: z
+      .number()
+      .int()
+      .min(0)
+      .max(MAX_SEND_ATTACHMENTS)
+      .optional(),
   })
-  .strict();
+  .strict()
+  .refine(
+    params => !(params.forEveryone && params.attachmentIndex !== undefined)
+  );
 export type MessagesDeleteParamsType = z.infer<
   typeof messagesDeleteParamsSchema
 >;
@@ -1287,6 +1299,10 @@ const conversationChangeSchema = z.discriminatedUnion('action', [
     familyName: z.string().max(128),
     note: z.string().max(240),
   }),
+  // Fork addition (decision F55): Signal's "Remove" for a person. They
+  // leave your contact lists and stop getting your profile; the chat stays.
+  // Synced as Signal's own Remove is. Messaging them again restores them.
+  z.object({ action: z.literal('remove') }),
 ]);
 
 export const conversationsUpdateParamsSchema = z

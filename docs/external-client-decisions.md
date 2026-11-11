@@ -1235,3 +1235,31 @@ has none either.
 
 WHY: Mike's parity rule. He asked for GIFs in photo replies (2026-11-06),
 and GIF search was the gap that blocked them.
+
+## F55. Fork only: blur media, delete just the attachment, media search, Remove
+
+DECISION: these come from Backchannel Android v14's list (Mike, 2026-11-11):
+- **Blur.** Photos and videos can stay blurred until clicked: everywhere
+  (Settings, Chats) or per chat (the chat's ⋯ menu). A click shows them
+  until the page reloads. The helper keeps the choices (view-prefs.json).
+  Signal never sees them.
+- **Delete just the attachment.** The viewer has Delete for the photo
+  you're looking at. A message with text and attachments has "Delete
+  attachments, keep text" in its ⋯ menu. `messages.delete` takes
+  `attachmentIndex` for this, for me only. It uses Signal's own
+  single-attachment delete and its `delete-single-attachment` sync, as
+  Signal's All media does for one item of an album. Unlike Signal, the
+  message stays even when its last attachment goes.
+- **Search inside All media.** A box under the tabs filters by sender,
+  text, caption, file name and link. While searching, the page reads the
+  whole chat's list.
+- **Remove contact.** A direct chat's ⋯ menu has Signal's Remove
+  (`conversations.update` action `remove`). The person leaves your
+  contact lists and stops getting your profile, and Signal syncs it. The
+  chat stays, and messaging them again restores them.
+- Not ported: hiding group system messages, because the page never shows
+  them. Voice-note transcripts, because Mike said no on 2026-11-06. The
+  phone-only items, and EXIF, which Signal strips when it sends.
+
+WHY: Mike's cross-platform parity rule. He approved these for Android v14
+on 2026-11-11.

@@ -493,7 +493,10 @@ describe('backchannel helper', () => {
       path: `/${helper.token}/api/attachment?messageId=m1&index=0&name=attachment`,
     });
     assert.equal(res.status, 200);
-    assert.match(res.headers['content-disposition'], /filename\*=UTF-8''attachment\.\w+$/);
+    assert.match(
+      res.headers['content-disposition'],
+      /filename\*=UTF-8''attachment\.\w+$/
+    );
     const named = await http(port, {
       path: `/${helper.token}/api/attachment?messageId=m1&index=0&name=cat.jpeg`,
     });
@@ -1296,6 +1299,34 @@ describe('backchannel helper', () => {
       body: Buffer.alloc(700 * 1024),
     });
     assert.equal(tooBig.status, 413);
+  });
+
+  it('keeps blur choices and deletes just one attachment', async () => {
+    const saved = await http(port, {
+      method: 'POST',
+      path: `/${helper.token}/api/viewPrefs`,
+      headers: json,
+      body: { blurAll: true, blurChats: [alice.id, alice.id, 7] },
+    });
+    assert.equal(saved.status, 200);
+    assert.deepEqual(JSON.parse(saved.text), {
+      blurAll: true,
+      blurChats: [alice.id],
+    });
+    const read = await http(port, { path: `/${helper.token}/api/viewPrefs` });
+    assert.equal(JSON.parse(read.text).blurAll, true);
+
+    const del = await http(port, {
+      method: 'POST',
+      path: `/${helper.token}/api/delete`,
+      headers: json,
+      body: { messageId: 'm1', forEveryone: false, attachmentIndex: 2 },
+    });
+    assert.equal(del.status, 200);
+    assert.deepEqual(
+      bridge.calls.findLast(c => c.method === 'messages.delete').params,
+      { messageId: 'm1', forEveryone: false, attachmentIndex: 2 }
+    );
   });
 
   it('searches GIFs, serves their MP4s and uploads one as a GIF', async () => {

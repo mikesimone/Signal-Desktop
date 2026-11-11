@@ -50,6 +50,12 @@ Backchannel does. Each new one is added here when it ships.
 - **Reply to one photo of an album.** Signal can only quote the whole
   message; Backchannel's photo viewer sends your comment with
   that one photo, plus any photos, GIFs, files or sticker you add.
+- **Blur photos and videos** until you click them, in every chat or just
+  the ones you pick.
+- **Delete just the attachment.** Remove one photo from the viewer, or all
+  of a message's attachments, and keep its text. Signal only does this
+  from All media, and deletes the whole message when it was the last one.
+- **Search inside All media** by name, caption, file name or link.
 - **Your own photo for anyone.** Pick a picture for a person in their
   chat details; it beats their profile photo, only you see it.
 - **Emoticons and double-click.** Typing :) or <3 makes the emoji, and

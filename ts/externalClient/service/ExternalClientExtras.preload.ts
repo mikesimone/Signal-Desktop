@@ -19,6 +19,15 @@ import { getAvatarVersion } from '../conversationDto.std.ts';
 import { sendEditedMessage } from '../../util/sendEditedMessage.preload.ts';
 import { sendDeleteForEveryoneMessage } from '../../util/sendDeleteForEveryoneMessage.preload.ts';
 import { getMessageSentTimestamp } from '../../util/getMessageSentTimestamp.std.ts';
+import {
+  applyDeleteAttachmentFromMessage,
+  getAddressableMessage,
+  getConversationIdentifier,
+} from '../../util/deleteForMe.preload.ts';
+import { getMessageById } from '../../messages/getMessageById.preload.ts';
+import { singleProtoJobQueue } from '../../jobs/singleProtoJobQueue.preload.ts';
+import { MessageSender } from '../../textsecure/SendMessage.preload.ts';
+import type { ConversationModel } from '../../models/conversations.preload.ts';
 import type { ServiceResultType } from '../hostTypes.std.ts';
 import { toMessageDTO } from '../messageDto.std.ts';
 import type {
@@ -482,11 +491,65 @@ export async function editMessage({
   return { ok: true, value: {} };
 }
 
+// Fork addition (decision F55): one attachment, for me, keeping the message
+// and its text even when it was the last one. Signal's All media "Delete"
+// does the same for one item of an album (MediaContextMenu), with the same
+// sync to linked devices.
+async function deleteOneAttachment(
+  messageId: string,
+  index: number,
+  model: ConversationModel
+): Promise<ServiceResultType> {
+  const message = await getMessageById(messageId);
+  const attachment = message?.get('attachments')?.[index];
+  if (!message || !attachment) {
+    return notFound;
+  }
+  const addressable = getAddressableMessage(message.attributes);
+  if (!addressable) {
+    return { ok: false, code: ErrorCode.PreconditionFailed };
+  }
+  const attachmentData = {
+    clientUuid: attachment.clientUuid,
+    fallbackDigest: attachment.digest,
+    fallbackPlaintextHash: attachment.plaintextHash,
+  };
+  const found = await applyDeleteAttachmentFromMessage(
+    message,
+    attachmentData,
+    {
+      shouldSave: true,
+      logId: 'ExternalClient.deleteOneAttachment',
+    }
+  );
+  if (!found) {
+    return notFound;
+  }
+  if (
+    window.ConversationController.doWeHaveOtherDevices() &&
+    !isSignalConversation(model.attributes)
+  ) {
+    await singleProtoJobQueue.add(
+      MessageSender.getDeleteForMeSyncMessage([
+        {
+          type: 'delete-single-attachment',
+          conversation: getConversationIdentifier(model.attributes),
+          message: addressable,
+          ...attachmentData,
+          timestamp: Date.now(),
+        },
+      ])
+    );
+  }
+  return { ok: true, value: {} };
+}
+
 // Delete for me (this device and linked devices) or for everyone, as the
 // message menu offers them.
 export async function deleteMessage({
   messageId,
   forEveryone,
+  attachmentIndex,
 }: MessagesDeleteParamsType): Promise<ServiceResultType> {
   const message = await loadMessage(messageId);
   if (!message) {
@@ -495,6 +558,9 @@ export async function deleteMessage({
   const model = getListedConversation(message.conversationId);
   if (!model) {
     return notFound;
+  }
+  if (attachmentIndex !== undefined) {
+    return deleteOneAttachment(messageId, attachmentIndex, model);
   }
   if (forEveryone) {
     if (!getDtoContext().getActions(message).canDeleteForEveryone) {

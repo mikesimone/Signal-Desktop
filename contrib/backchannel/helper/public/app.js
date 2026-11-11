@@ -158,6 +158,9 @@ const ICONS = {
   play: 'M8 5v14l11-7z',
   edit: 'M4 20h4L19 9l-4-4L4 16zM14 6l4 4',
   trash: 'M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6',
+  eye: 'M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z',
+  'person-remove':
+    'M15 19c0-2.8-2.7-5-6-5s-6 2.2-6 5M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7M16 11h6',
   download: 'M12 4v11M7 10l5 5 5-5M5 20h14',
   filter: 'M4 7h16M7 12h10M10 17h4',
   attach:
@@ -1850,7 +1853,65 @@ function mediaBox(a, multiple) {
   return box;
 }
 
+// Blur media until clicked (decision F55), as Backchannel Android: in every
+// chat or in chosen ones. A click shows it, for as long as the page is open.
+let viewPrefs = { blurAll: false, blurChats: [] };
+const revealedMedia = new Set();
+
+function isBlurred(conversationId) {
+  return viewPrefs.blurAll || viewPrefs.blurChats.includes(conversationId);
+}
+
+async function loadViewPrefs() {
+  try {
+    viewPrefs = await api('api/viewPrefs');
+  } catch {
+    viewPrefs = { blurAll: false, blurChats: [] };
+  }
+}
+
+async function saveViewPrefs(next) {
+  try {
+    viewPrefs = await api('api/viewPrefs', next);
+  } catch (error) {
+    toast(`Not saved (${error.code ?? error.message}).`);
+    return;
+  }
+  renderMessages();
+}
+
+function toggleChatBlur(conversationId) {
+  const chats = new Set(viewPrefs.blurChats);
+  if (chats.has(conversationId)) {
+    chats.delete(conversationId);
+  } else {
+    chats.add(conversationId);
+  }
+  saveViewPrefs({ ...viewPrefs, blurChats: [...chats] });
+}
+
 function renderVisual(m, a, index, multiple) {
+  const box = renderVisualContent(m, a, index, multiple);
+  const key = `${m.id}:${index}`;
+  if (isBlurred(m.conversationId) && !revealedMedia.has(key)) {
+    box.classList.add('blurred');
+    box.title = 'Click to show';
+    const reveal = ev => {
+      if (!box.classList.contains('blurred')) {
+        return;
+      }
+      ev.preventDefault();
+      ev.stopImmediatePropagation();
+      revealedMedia.add(key);
+      box.classList.remove('blurred');
+      box.removeAttribute('title');
+    };
+    box.addEventListener('click', reveal, { capture: true });
+  }
+  return box;
+}
+
+function renderVisualContent(m, a, index, multiple) {
   const box = mediaBox(a, multiple);
   const kind = kindOf(a);
   if (kind === 'gif' && a.state === 'ready') {
@@ -1995,6 +2056,56 @@ function lightboxItems(m) {
   );
 }
 
+// Delete just this photo for me, keeping the message and its text
+// (decision F55). Synced to your linked devices, as Signal's All media
+// "Delete" is.
+async function deleteLightboxItem() {
+  if (!lightbox) {
+    return;
+  }
+  const { m, items, pos } = lightbox;
+  const index = items[pos];
+  const what = kindOf(m.attachments[index]) === 'image' ? 'photo' : 'item';
+  if (
+    !window.confirm(
+      `Delete this ${what} for you? The message${m.body ? ' and its text' : ''} stay${m.body ? '' : 's'}.`
+    )
+  ) {
+    return;
+  }
+  try {
+    await api('api/delete', {
+      messageId: m.id,
+      forEveryone: false,
+      attachmentIndex: index,
+    });
+  } catch (error) {
+    toast(`Not deleted (${error.code ?? error.message}).`);
+    return;
+  }
+  closeLightbox();
+  toast('Deleted.');
+}
+
+// Deletes every attachment of a message for me, keeping its text.
+async function deleteAttachmentsOnly(m) {
+  if (!window.confirm('Delete the attachments for you? The text stays.')) {
+    return;
+  }
+  try {
+    for (let i = m.attachments.length - 1; i >= 0; i -= 1) {
+      // oxlint-disable-next-line no-await-in-loop
+      await api('api/delete', {
+        messageId: m.id,
+        forEveryone: false,
+        attachmentIndex: i,
+      });
+    }
+  } catch (error) {
+    toast(`Not deleted (${error.code ?? error.message}).`);
+  }
+}
+
 function openLightbox(m, index) {
   const items = lightboxItems(m);
   lightbox = {
@@ -2004,6 +2115,7 @@ function openLightbox(m, index) {
     gallery: null,
   };
   $('lightbox-goto').hidden = true;
+  $('lightbox-delete').hidden = !m.id || m.kind !== 'text';
   closePhotoReply();
   renderLightboxStrip();
   showLightboxItem();
@@ -2266,6 +2378,7 @@ function openGallery(conversationId) {
   closePopovers();
   closeDetails();
   gallery = { conversationId, kind: 'media' };
+  $('gallery-search').value = '';
   $('gallery-title').textContent = `All media · ${displayTitle(c)}`;
   $('gallery').hidden = false;
   showGalleryTab('media');
@@ -2277,8 +2390,37 @@ function closeGallery() {
   $('gallery-body').replaceChildren();
 }
 
+// Search inside All media (decision F55): names, captions, message text,
+// file names and links, over everything the chat has (pages load as needed).
+function galleryMatches(g, item) {
+  const query = g.query;
+  if (!query) {
+    return true;
+  }
+  const m = g.messages.get(item.messageId);
+  if (!m) {
+    return false;
+  }
+  const a = m.attachments?.[item.index];
+  const p = g.kind === 'links' ? m.previews?.[item.index] : null;
+  const who =
+    m.direction === 'outgoing' ? 'You' : nameOf(m.authorConversationId);
+  return [
+    who,
+    m.body,
+    a?.fileName,
+    a?.caption,
+    p?.url,
+    p?.title,
+    p?.description,
+  ]
+    .filter(Boolean)
+    .some(text => text.toLowerCase().includes(query));
+}
+
 function showGalleryTab(kind) {
   gallery = {
+    query: $('gallery-search').value.trim().toLowerCase(),
     conversationId: gallery.conversationId,
     kind,
     items: [],
@@ -2325,9 +2467,9 @@ async function loadGalleryPage() {
     g.loading = false;
   }
   renderGallery();
-  // Fill the window before waiting for a scroll.
+  // Fill the window before waiting for a scroll; a search reads it all.
   const body = $('gallery-body');
-  if (!g.done && body.scrollHeight <= body.clientHeight + 200) {
+  if (!g.done && (g.query || body.scrollHeight <= body.clientHeight + 200)) {
     loadGalleryPage();
   }
 }
@@ -2399,7 +2541,7 @@ function renderGallery() {
   let current = null;
   for (const item of g.items) {
     const m = g.messages.get(item.messageId);
-    if (!m) {
+    if (!m || !galleryMatches(g, item)) {
       continue;
     }
     const month = galleryMonth(m.sentAt);
@@ -2430,14 +2572,16 @@ function renderGallery() {
       el(
         'p',
         'gallery-empty sub',
-        g.done
-          ? {
-              media: 'No photos or videos in this chat',
-              audio: 'No audio in this chat',
-              links: 'No links in this chat',
-              files: 'No files in this chat',
-            }[g.kind]
-          : 'Loading…'
+        g.done && g.query
+          ? 'Nothing matches'
+          : g.done
+            ? {
+                media: 'No photos or videos in this chat',
+                audio: 'No audio in this chat',
+                links: 'No links in this chat',
+                files: 'No files in this chat',
+              }[g.kind]
+            : 'Loading…'
       )
     );
   }
@@ -2787,6 +2931,7 @@ function cachedMessage(m, prev, next) {
     formatTime(m.sentAt),
     starredIds.has(m.id),
     translations.get(m.id)?.text,
+    isBlurred(m.conversationId),
   ]);
   const cached = messageCache.get(m.id);
   if (cached && cached.key === key) {
@@ -3194,10 +3339,35 @@ function openChatMenu(conversationId, anchor, page = null) {
         confirmBlock(c, !blocked)
       );
     }
+    if (c.type === 'direct' && !c.noteToSelf) {
+      add('person-remove', 'Remove contact', () => confirmRemoveContact(c));
+    }
     add('trash', 'Delete chat', () => confirmDelete(c));
   }
+  // The page's own (decision F55): works without chat management.
+  items.push(el('div', 'menu-separator'));
+  add(
+    'eye',
+    viewPrefs.blurChats.includes(c.id)
+      ? 'Stop blurring media here'
+      : 'Blur media until clicked',
+    () => toggleChatBlur(c.id)
+  );
   menu.replaceChildren(...items);
   placePopover(menu, anchor);
+}
+
+// Signal's Remove (decision F55): they leave your contact lists and stop
+// getting your profile. The chat stays; messaging them again restores them.
+async function confirmRemoveContact(c) {
+  if (
+    !window.confirm(
+      `Remove ${displayTitle(c)}? You won't see them when you search, and they won't get your profile. Your chat stays, and messaging them again adds them back.`
+    )
+  ) {
+    return;
+  }
+  await changeConversation(c.id, { action: 'remove' });
 }
 
 function confirmBlock(c, block) {
@@ -5327,6 +5497,11 @@ $('starred').addEventListener('click', e => {
 loadStarredIds();
 loadCustomPhotos();
 loadKeywords();
+loadViewPrefs().then(() => {
+  if (selectedId) {
+    renderMessages();
+  }
+});
 
 // --- Immich picker (decision F48) ------------------------------------------
 
@@ -5685,6 +5860,15 @@ $('immich').addEventListener('click', e => {
 // Newest first. As Backchannel Android for now: every entry since the
 // beginning shows, and the ones since your last look are marked New.
 const WHATS_NEW = [
+  [
+    '2026-11-11',
+    [
+      "Blur photos and videos until you click them: everywhere (Settings, Chats) or per chat (the chat's ⋯ menu).",
+      "Delete just one photo from the viewer, or a message's attachments from its ⋯ menu, and keep the text. Your linked devices follow.",
+      'Search inside All media: names, captions, file names and links.',
+      "Remove a contact from a chat's ⋯ menu, as Signal's Remove. The chat stays.",
+    ],
+  ],
   [
     '2026-11-09',
     [
@@ -6184,6 +6368,13 @@ function settingsSections() {
           'Muted chats that are archived will remain archived when a new message arrives.',
           settingSwitch(s.keepMutedChatsArchived, v =>
             set('keepMutedChatsArchived', v)
+          )
+        ),
+        settingRow(
+          'Blur photos and videos',
+          "In every chat, until you click them. A chat's ⋯ menu blurs just that chat. Only on this page.",
+          settingSwitch(viewPrefs.blurAll, v =>
+            saveViewPrefs({ ...viewPrefs, blurAll: v })
           )
         ),
         settingRow(
@@ -6867,6 +7058,11 @@ function openMoreMenu(m, anchor) {
     add('star', starred ? 'Unstar' : 'Star', () => setStar(m, !starred));
     add('clock', 'Remind me', () => openReminderMenu(m, anchor));
   }
+  if (m.kind === 'text' && m.body && m.attachments.length > 0) {
+    add('trash', 'Delete attachments, keep text', () =>
+      deleteAttachmentsOnly(m)
+    );
+  }
   add('trash', 'Delete for me', () => deleteMessage(m, false));
   if (m.canDeleteForEveryone) {
     add('trash', 'Delete for everyone', () => deleteMessage(m, true));
@@ -7355,6 +7551,12 @@ function connectEvents() {
   on('reminder.due', showReminder);
   on('keywords.changed', ({ words }) => {
     keywordAlerts = words;
+  });
+  on('viewPrefs.changed', prefs => {
+    viewPrefs = prefs;
+    if (selectedId) {
+      renderMessages();
+    }
   });
   on('conversation.updated', c => {
     conversations.set(c.id, c);
@@ -10891,6 +11093,8 @@ $('compose-preview-close').append(icon('close'));
 $('compose-preview-close').addEventListener('click', dismissLinkPreview);
 $('lightbox-close').append(icon('close'));
 $('lightbox-save').append(icon('download'));
+$('lightbox-delete').append(icon('trash'));
+$('lightbox-delete').addEventListener('click', deleteLightboxItem);
 $('lightbox-close').addEventListener('click', closeLightbox);
 $('lightbox-reply').append(icon('reply'));
 $('lightbox-reply').addEventListener('click', openPhotoReply);
@@ -10967,6 +11171,20 @@ $('gallery').addEventListener('click', e => {
   if (e.target === $('gallery')) {
     closeGallery();
   }
+});
+let gallerySearchTimer = null;
+$('gallery-search').addEventListener('input', () => {
+  clearTimeout(gallerySearchTimer);
+  gallerySearchTimer = setTimeout(() => {
+    if (!gallery) {
+      return;
+    }
+    gallery.query = $('gallery-search').value.trim().toLowerCase();
+    renderGallery();
+    if (gallery.query) {
+      loadGalleryPage();
+    }
+  }, 250);
 });
 $('gallery-tabs').replaceChildren(
   ...GALLERY_TABS.map(([kind, label]) => {

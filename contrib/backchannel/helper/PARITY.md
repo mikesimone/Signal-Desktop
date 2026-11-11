@@ -141,4 +141,12 @@ should. Checked against Android's change list of 2026-11-04 (bc1 to bc9).
 | On-device voice-note transcription                | skipped   | Mike 2026-11-06: no (would need a model on Six)        |
 | Lock a chat                                       | different | the page is behind its own token; no fingerprint here  |
 | Link someone to a phone contact                   | different | F46: phone links sync over; on the web, nickname + own photo |
+| v14: blur media until tapped, everywhere or per chat | done   | F55: kept by the helper                                |
+| v14: delete just the attachment, keep the text    | done      | F55: synced to linked devices                          |
+| v14: search inside All media                      | done      | F55                                                    |
+| v14: hide or delete contacts                      | done      | F55: Signal's Remove; Delete chat was already there    |
+| v14: hide group system messages                   | different | the page never shows them (only real messages cross the bridge) |
+| v14: voice note transcript                        | skipped   | Mike 2026-11-06: no transcription on the web           |
+| v14: mute or auto-delete voice notes              | missing   |                                                        |
+| v14: auto-save to gallery, keep EXIF, batched notifications, sticker favorite, Android Auto, connection dot | different | phone-only or Signal does it (EXIF is stripped by Signal's own send) |
 | Notifications, screenshots, passphrase, push, icon, Photo apps, Open links | different | phone-only |

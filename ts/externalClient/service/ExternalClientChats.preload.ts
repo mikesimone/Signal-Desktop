@@ -86,6 +86,13 @@ export function updateConversation({
       case 'delete':
         actions.destroyMessages(conversationId);
         break;
+      // Fork addition (decision F55): Signal's Remove, direct chats only.
+      case 'remove':
+        if (model.get('type') !== 'private' || model.isMe()) {
+          return { ok: false, code: ErrorCode.InvalidArgument };
+        }
+        actions.removeConversation(conversationId);
+        break;
       // Fork addition (decision F36): stored with the chat on this computer
       // only; nothing syncs to the phone.
       case 'photoSource':

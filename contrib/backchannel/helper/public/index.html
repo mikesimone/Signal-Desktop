@@ -268,6 +268,13 @@
           ></button>
         </div>
         <div class="gallery-tabs" id="gallery-tabs" role="tablist"></div>
+        <input
+          type="search"
+          class="emoji-search gallery-search"
+          id="gallery-search"
+          placeholder="Search names, captions, links"
+          aria-label="Search this chat's media"
+        />
         <div class="gallery-body" id="gallery-body"></div>
       </div>
     </div>
@@ -649,6 +656,14 @@
           id="lightbox-reply"
           title="Reply to this photo"
           aria-label="Reply to this photo"
+          hidden
+        ></button>
+        <button
+          type="button"
+          class="icon-button"
+          id="lightbox-delete"
+          title="Delete this photo for me (keeps the message)"
+          aria-label="Delete this photo for me"
           hidden
         ></button>
         <a

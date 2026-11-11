@@ -237,6 +237,7 @@ export function createWebServer({
   immich = null,
   reminders = null,
   keywords = null,
+  viewPrefs = null,
   scheduled = null,
   contactPhotos = null,
   log,
@@ -1189,6 +1190,21 @@ export function createWebServer({
       sendJson(res, 200, { words: saved });
       return;
     }
+    // Blur media until clicked (decision F55).
+    if (req.method === 'GET' && route === 'api/viewPrefs') {
+      sendJson(res, 200, viewPrefs?.get() ?? { blurAll: false, blurChats: [] });
+      return;
+    }
+    if (req.method === 'POST' && route === 'api/viewPrefs') {
+      const saved = viewPrefs?.set(await readJson(req)) ?? null;
+      if (!saved) {
+        sendJson(res, 400, { error: { code: 'INVALID_ARGUMENT' } });
+        return;
+      }
+      broadcast('viewPrefs.changed', saved);
+      sendJson(res, 200, saved);
+      return;
+    }
     if (req.method === 'GET' && route === 'api/starIds') {
       sendJson(res, 200, { ids: stars?.ids() ?? [] });
       return;
@@ -1292,10 +1308,12 @@ export function createWebServer({
       return;
     }
     if (req.method === 'POST' && route === 'api/delete') {
-      const { messageId, forEveryone } = await readJson(req);
+      const { messageId, forEveryone, attachmentIndex } = await readJson(req);
       const result = await bridge.call('messages.delete', {
         messageId,
         forEveryone: forEveryone === true,
+        // Just this attachment, keeping the message (decision F55).
+        ...(Number.isInteger(attachmentIndex) ? { attachmentIndex } : {}),
       });
       sendJson(res, 200, result);
       return;

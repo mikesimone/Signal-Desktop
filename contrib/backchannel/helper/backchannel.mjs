@@ -48,6 +48,7 @@ import { Stars } from './stars.mjs';
 import { CustomPhotos } from './customPhotos.mjs';
 import { Immich } from './immich.mjs';
 import { KeywordAlerts } from './keywords.mjs';
+import { ViewPrefs } from './viewPrefs.mjs';
 import { Reminders } from './reminders.mjs';
 import { ScheduledMessages } from './scheduled.mjs';
 import { allowedOrigins, createWebServer } from './server.mjs';
@@ -260,6 +261,7 @@ web = createWebServer({
   immich: new Immich(configDir ?? null),
   reminders,
   keywords: new KeywordAlerts(join(configDir, 'keywords.json')),
+  viewPrefs: new ViewPrefs(join(configDir, 'view-prefs.json')),
   customPhotos: new CustomPhotos(
     configDir ? join(configDir, 'custom-photos') : null
   ),

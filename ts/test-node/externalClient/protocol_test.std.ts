@@ -27,6 +27,7 @@ import {
   Capability,
   Method,
   SERVICE_METHOD_CAPABILITIES,
+  messagesDeleteParamsSchema,
   gifsReadParamsSchema,
   gifsSearchParamsSchema,
   messagesSearchParamsSchema,
@@ -453,6 +454,30 @@ describe('externalClient/protocol', () => {
         accepts(safetyNumbersAcceptParamsSchema, {
           conversationId,
           contactIds: ['x'.repeat(65)],
+        })
+      );
+    });
+
+    it('deletes one attachment for me, and removes a contact (F55)', () => {
+      const messageId = '0b9e2c1a-1111-4222-8333-944455556666';
+      assert.isTrue(
+        accepts(messagesDeleteParamsSchema, {
+          messageId,
+          forEveryone: false,
+          attachmentIndex: 1,
+        })
+      );
+      assert.isFalse(
+        accepts(messagesDeleteParamsSchema, {
+          messageId,
+          forEveryone: true,
+          attachmentIndex: 1,
+        })
+      );
+      assert.isTrue(
+        accepts(conversationsUpdateParamsSchema, {
+          conversationId: messageId,
+          change: { action: 'remove' },
         })
       );
     });

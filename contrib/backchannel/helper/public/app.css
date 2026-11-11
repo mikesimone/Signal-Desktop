@@ -4259,3 +4259,17 @@ label.poll-option {
   height: 100%;
   object-fit: cover;
 }
+
+/* Blur media until clicked (decision F55). */
+.blurred {
+  cursor: pointer;
+  overflow: hidden;
+}
+.blurred > img,
+.blurred > video {
+  filter: blur(24px);
+  transform: scale(1.1);
+}
+.gallery-search {
+  margin: 0 16px 8px;
+}
