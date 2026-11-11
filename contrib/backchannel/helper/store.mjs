@@ -29,6 +29,10 @@ export class Store {
     this.#conversations = next;
   }
 
+  get(conversationId) {
+    return this.#conversations.get(conversationId);
+  }
+
   has(conversationId) {
     return this.#conversations.has(conversationId);
   }

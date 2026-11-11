@@ -1263,3 +1263,31 @@ DECISION: these come from Backchannel Android v14's list (Mike, 2026-11-11):
 
 WHY: Mike's cross-platform parity rule. He approved these for Android v14
 on 2026-11-11.
+
+## F56. Fork only: auto-reply and auto-save to Immich
+
+DECISION: two more items from Backchannel Android v14's final list (Mike,
+2026-11-11 11:15 PT). The helper on the server does both, so they work with
+no page open:
+- **Auto-reply.** Settings, Chats: a switch, your text (up to 1000
+  characters) and how long before the same chat gets another one (every
+  message, 1 hour, 12 hours, 1 day). It answers only an incoming message in
+  a 1:1 chat that isn't Note to Self, blocked or a message request, and was
+  sent in the last 10 minutes, so Signal catching up after being offline
+  sends nothing. It sends with `messages.sendText`, which the helper
+  already holds, so no new Allow prompt. Kept in auto-reply.json.
+- **Auto-save received photos and videos.** Android saves to the phone's
+  gallery; here the gallery is Mike's Immich (F48). Settings, Chats saves
+  from every chat; a chat's ⋯ menu saves just that chat. When Signal has a
+  received photo or video ready, the helper reads it (`attachments.read`)
+  and uploads it to Immich's `/api/assets` with `deviceAssetId`
+  `signal-<message>:<index>`, so a repeat is a duplicate Immich ignores. It
+  remembers what it saved in auto-save.json. Nothing happens while Immich
+  isn't connected.
+- Not built: multiple accounts (each account is its own Signal and kit on
+  Six, so it would be a second kit). Send silently waits on Android's
+  marker so both sides read the same thing. Voice-note transcripts wait on
+  Mike's answer about running Whisper on Six (he asked for them on
+  2026-11-11, after the 2026-11-06 no).
+
+WHY: Mike's cross-platform parity rule, and his final v14 list.

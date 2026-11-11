@@ -146,7 +146,11 @@ should. Checked against Android's change list of 2026-11-04 (bc1 to bc9).
 | v14: search inside All media                      | done      | F55                                                    |
 | v14: hide or delete contacts                      | done      | F55: Signal's Remove; Delete chat was already there    |
 | v14: hide group system messages                   | different | the page never shows them (only real messages cross the bridge) |
-| v14: voice note transcript                        | skipped   | Mike 2026-11-06: no transcription on the web           |
+| v14: voice note transcript                        | missing   | waiting on Mike: run Whisper on Six? (asked 2026-11-11) |
+| v14: auto-reply                                   | done      | F56: sent by the helper, page closed or not            |
+| v14: auto-save received photos and videos, per chat | done    | F56: saved to Immich instead of a phone gallery        |
+| v14: send silently                                | missing   | waiting on Android's marker                            |
+| v14: multiple accounts                            | different | each account is its own Signal; a second kit on Six    |
 | v14: mute or auto-delete voice notes              | missing   |                                                        |
-| v14: auto-save to gallery, keep EXIF, batched notifications, sticker favorite, Android Auto, connection dot | different | phone-only or Signal does it (EXIF is stripped by Signal's own send) |
+| v14: keep EXIF, batched notifications, sticker favorite, Android Auto, connection dot | different | phone-only or Signal does it (EXIF is stripped by Signal's own send) |
 | Notifications, screenshots, passphrase, push, icon, Photo apps, Open links | different | phone-only |

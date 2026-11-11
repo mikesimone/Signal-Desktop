@@ -13,6 +13,8 @@ import { dirname, join } from 'node:path';
 import { after, before, describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
+import { AutoReply } from '../autoReply.mjs';
+import { AutoSave } from '../autoSave.mjs';
 import { ContactPhotoRefresh } from '../contactPhotos.mjs';
 import { Reminders } from '../reminders.mjs';
 import { FakeBridge, makeConversation, makeMessage } from './fake-bridge.mjs';
@@ -1301,6 +1303,36 @@ describe('backchannel helper', () => {
     assert.equal(tooBig.status, 413);
   });
 
+  it('keeps auto-reply and auto-save choices', async () => {
+    const reply = await http(port, {
+      method: 'POST',
+      path: `/${helper.token}/api/autoReply`,
+      headers: json,
+      body: { enabled: true, text: 'Away', cooldownHours: 999 },
+    });
+    assert.equal(reply.status, 200);
+    assert.deepEqual(JSON.parse(reply.text), {
+      enabled: true,
+      text: 'Away',
+      cooldownHours: 12,
+    });
+    const save = await http(port, {
+      method: 'POST',
+      path: `/${helper.token}/api/autoSave`,
+      headers: json,
+      body: { all: false, chats: [alice.id, alice.id, 3] },
+    });
+    assert.deepEqual(JSON.parse(save.text), { all: false, chats: [alice.id] });
+    const read = await http(port, { path: `/${helper.token}/api/autoSave` });
+    assert.deepEqual(JSON.parse(read.text).chats, [alice.id]);
+    await http(port, {
+      method: 'POST',
+      path: `/${helper.token}/api/autoReply`,
+      headers: json,
+      body: { enabled: false, text: 'Away', cooldownHours: 12 },
+    });
+  });
+
   it('keeps blur choices and deletes just one attachment', async () => {
     const saved = await http(port, {
       method: 'POST',
@@ -1936,5 +1968,89 @@ describe('reminders', () => {
     again.stop();
     assert.equal(due.length, 1);
     assert.equal(again.list()[0].due, true);
+  });
+});
+
+describe('auto-reply', () => {
+  const direct = { id: 'c1', type: 'direct' };
+  it('answers a fresh 1:1 message once per quiet period', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'bc-ar-'));
+    let now = 1_000_000_000;
+    const sent = [];
+    const ar = new AutoReply(join(dir, 'auto-reply.json'), {
+      send: async (id, text) => sent.push([id, text]),
+      now: () => now,
+    });
+    ar.set({ enabled: true, text: ' Away ', cooldownHours: 1 });
+    const m = { direction: 'incoming', sentAt: now - 1000 };
+    assert.equal(await ar.handle(m, direct), true);
+    assert.equal(await ar.handle(m, direct), false);
+    assert.equal(await ar.handle(m, { ...direct, type: 'group' }), false);
+    assert.equal(
+      await ar.handle({ ...m, direction: 'outgoing' }, { ...direct, id: 'c2' }),
+      false
+    );
+    assert.equal(
+      await ar.handle(
+        { ...m, sentAt: now - 3_600_000 },
+        { ...direct, id: 'c3' }
+      ),
+      false
+    );
+    now += 3_600_001;
+    assert.equal(await ar.handle({ ...m, sentAt: now }, direct), true);
+    assert.deepEqual(sent, [
+      ['c1', 'Away'],
+      ['c1', 'Away'],
+    ]);
+    // Kept across restarts.
+    const again = new AutoReply(join(dir, 'auto-reply.json'), {
+      send: async () => {},
+      now: () => now,
+    });
+    assert.equal(again.get().enabled, true);
+    assert.equal(await again.handle({ ...m, sentAt: now }, direct), false);
+    rmSync(dir, { recursive: true, force: true });
+  });
+});
+
+describe('auto-save', () => {
+  it('uploads ready photos once, only from chosen chats', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'bc-as-'));
+    const uploads = [];
+    const immich = {
+      status: () => ({ connected: true }),
+      upload: async (bytes, meta) => uploads.push([bytes.toString(), meta]),
+    };
+    const bridge = {
+      call: async (method, { offset }) => {
+        assert.equal(method, 'attachments.read');
+        const all = Buffer.from('photo');
+        return {
+          size: all.length,
+          data: all.subarray(offset).toString('base64'),
+        };
+      },
+    };
+    const as = new AutoSave(join(dir, 'auto-save.json'), { bridge, immich });
+    as.set({ all: false, chats: ['c1'] });
+    const m = {
+      id: 'm1',
+      conversationId: 'c1',
+      direction: 'incoming',
+      sentAt: 0,
+      attachments: [
+        { contentType: 'image/jpeg', state: 'ready', fileName: 'a.jpg' },
+        { contentType: 'application/pdf', state: 'ready' },
+        { contentType: 'video/mp4', state: 'pending' },
+      ],
+    };
+    await as.handle(m);
+    await as.handle(m);
+    await as.handle({ ...m, id: 'm2', conversationId: 'c2' });
+    assert.equal(uploads.length, 1);
+    assert.equal(uploads[0][0], 'photo');
+    assert.equal(uploads[0][1].deviceAssetId, 'signal-m1:0');
+    rmSync(dir, { recursive: true, force: true });
   });
 });

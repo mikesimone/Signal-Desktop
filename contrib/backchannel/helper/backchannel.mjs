@@ -49,6 +49,8 @@ import { CustomPhotos } from './customPhotos.mjs';
 import { Immich } from './immich.mjs';
 import { KeywordAlerts } from './keywords.mjs';
 import { ViewPrefs } from './viewPrefs.mjs';
+import { AutoReply } from './autoReply.mjs';
+import { AutoSave } from './autoSave.mjs';
 import { Reminders } from './reminders.mjs';
 import { ScheduledMessages } from './scheduled.mjs';
 import { allowedOrigins, createWebServer } from './server.mjs';
@@ -183,6 +185,13 @@ const bridge = new Bridge({
     }
     store.apply(event);
     web.broadcast(event.event, event.data);
+    // Auto-reply and auto-save (decision F56).
+    if (event.event === 'message.added') {
+      autoReply.handle(event.data, store.get(event.data.conversationId));
+    }
+    if (event.event === 'message.added' || event.event === 'message.updated') {
+      autoSave.handle(event.data);
+    }
   },
 });
 
@@ -233,6 +242,18 @@ const reminders = new Reminders(join(configDir, 'reminders.json'), {
   },
 });
 
+const immich = new Immich(configDir ?? null);
+const autoReply = new AutoReply(join(configDir, 'auto-reply.json'), {
+  send: (conversationId, body) =>
+    bridge.call('messages.sendText', { conversationId, body }),
+  log,
+});
+const autoSave = new AutoSave(join(configDir, 'auto-save.json'), {
+  bridge,
+  immich,
+  log,
+});
+
 const contactPhotos = new ContactPhotoRefresh(configDir, {
   sync: () => bridge.call('contacts.sync', {}),
   ready: () =>
@@ -258,7 +279,9 @@ web = createWebServer({
   bridge,
   privateReplies: new PrivateReplies(join(configDir, 'private-replies.json')),
   stars: new Stars(join(configDir, 'stars.json')),
-  immich: new Immich(configDir ?? null),
+  immich,
+  autoReply,
+  autoSave,
   reminders,
   keywords: new KeywordAlerts(join(configDir, 'keywords.json')),
   viewPrefs: new ViewPrefs(join(configDir, 'view-prefs.json')),

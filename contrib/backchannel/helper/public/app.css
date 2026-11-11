@@ -4273,3 +4273,16 @@ label.poll-option {
 .gallery-search {
   margin: 0 16px 8px;
 }
+
+/* Auto-reply message (decision F56). */
+.auto-reply-text {
+  flex: 1 1 60%;
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  resize: vertical;
+}

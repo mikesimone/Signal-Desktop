@@ -20,6 +20,13 @@ const SENDABLE_IMAGES = new Set([
 ]);
 const TIMEOUT_MS = 30_000;
 
+function extensionFor(contentType) {
+  const sub = String(contentType ?? '').split('/')[1] ?? 'bin';
+  return (
+    { jpeg: 'jpg', quicktime: 'mov' }[sub] ?? sub.replace(/[^a-z0-9]/g, '')
+  );
+}
+
 export class Immich {
   #file;
   #config = null;
@@ -125,6 +132,47 @@ export class Immich {
         ? `/api/assets/${encodeURIComponent(id)}/thumbnail?size=preview`
         : `/api/assets/${encodeURIComponent(id)}/original`;
     return this.#binary(path);
+  }
+
+  // Auto-save (decision F56): adds a received photo or video to Immich.
+  // deviceAssetId keeps Immich from taking the same file twice.
+  async upload(bytes, { deviceAssetId, fileName, contentType, createdAt }) {
+    if (!this.#config) {
+      throw Object.assign(new Error('not connected'), {
+        code: 'NOT_CONNECTED',
+      });
+    }
+    const when = new Date(createdAt).toISOString();
+    const form = new FormData();
+    form.set('deviceAssetId', deviceAssetId);
+    form.set('deviceId', 'backchannel');
+    form.set('fileCreatedAt', when);
+    form.set('fileModifiedAt', when);
+    form.set(
+      'assetData',
+      new Blob([bytes], { type: contentType || 'application/octet-stream' }),
+      fileName || `${deviceAssetId}.${extensionFor(contentType)}`
+    );
+    let res;
+    try {
+      res = await this.#fetch(`${this.#config.url}/api/assets`, {
+        method: 'POST',
+        headers: { 'x-api-key': this.#config.apiKey },
+        body: form,
+        signal: AbortSignal.timeout(5 * TIMEOUT_MS),
+      });
+    } catch {
+      throw Object.assign(new Error('unreachable'), { code: 'UNREACHABLE' });
+    }
+    if (res.status === 401 || res.status === 403) {
+      throw Object.assign(new Error('bad key'), { code: 'BAD_KEY' });
+    }
+    if (!res.ok) {
+      throw Object.assign(new Error(`HTTP ${res.status}`), {
+        code: 'IMMICH_ERROR',
+      });
+    }
+    return res.json().catch(() => ({}));
   }
 
   #assets(result) {

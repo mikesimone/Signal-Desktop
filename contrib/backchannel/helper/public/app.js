@@ -1880,6 +1880,61 @@ async function saveViewPrefs(next) {
   renderMessages();
 }
 
+// Auto-reply and auto-save (decision F56), as Backchannel Android v14. The
+// helper on the server does both, so they work with no page open.
+let autoReplySettings = { enabled: false, text: '', cooldownHours: 12 };
+let autoSaveSettings = { all: false, chats: [] };
+
+async function loadAutomation() {
+  try {
+    [autoReplySettings, autoSaveSettings] = await Promise.all([
+      api('api/autoReply'),
+      api('api/autoSave'),
+    ]);
+  } catch {
+    // Older helper: both stay off.
+  }
+}
+
+async function saveAutoReply(change) {
+  try {
+    autoReplySettings = await api('api/autoReply', {
+      ...autoReplySettings,
+      ...change,
+    });
+  } catch (error) {
+    toast(`Not saved (${error.code ?? error.message}).`);
+  }
+}
+
+async function saveAutoSave(next) {
+  try {
+    autoSaveSettings = await api('api/autoSave', next);
+  } catch (error) {
+    toast(`Not saved (${error.code ?? error.message}).`);
+  }
+}
+
+function toggleChatAutoSave(conversationId) {
+  const chats = new Set(autoSaveSettings.chats);
+  if (chats.has(conversationId)) {
+    chats.delete(conversationId);
+  } else {
+    chats.add(conversationId);
+  }
+  saveAutoSave({ ...autoSaveSettings, chats: [...chats] });
+}
+
+function autoReplyText() {
+  const text = el('textarea', 'auto-reply-text');
+  text.rows = 3;
+  text.maxLength = 1000;
+  text.placeholder = "I'm away right now and will reply when I'm back.";
+  text.value = autoReplySettings.text;
+  text.addEventListener('change', () => saveAutoReply({ text: text.value }));
+  return text;
+}
+
 function toggleChatBlur(conversationId) {
   const chats = new Set(viewPrefs.blurChats);
   if (chats.has(conversationId)) {
@@ -3346,6 +3401,15 @@ function openChatMenu(conversationId, anchor, page = null) {
   }
   // The page's own (decision F55): works without chat management.
   items.push(el('div', 'menu-separator'));
+  if (!autoSaveSettings.all) {
+    add(
+      'media',
+      autoSaveSettings.chats.includes(c.id)
+        ? 'Stop saving media to Immich'
+        : 'Save media to Immich',
+      () => toggleChatAutoSave(c.id)
+    );
+  }
   add(
     'eye',
     viewPrefs.blurChats.includes(c.id)
@@ -5497,6 +5561,7 @@ $('starred').addEventListener('click', e => {
 loadStarredIds();
 loadCustomPhotos();
 loadKeywords();
+loadAutomation();
 loadViewPrefs().then(() => {
   if (selectedId) {
     renderMessages();
@@ -5867,6 +5932,8 @@ const WHATS_NEW = [
       "Delete just one photo from the viewer, or a message's attachments from its ⋯ menu, and keep the text. Your linked devices follow.",
       'Search inside All media: names, captions, file names and links.',
       "Remove a contact from a chat's ⋯ menu, as Signal's Remove. The chat stays.",
+      'Auto-reply (Settings, Chats): a new message in a 1:1 chat gets your away text, sent from the server even with this page closed.',
+      "Save received photos and videos to your Immich, from every chat (Settings, Chats) or chosen ones (the chat's ⋯ menu).",
     ],
   ],
   [
@@ -6375,6 +6442,35 @@ function settingsSections() {
           "In every chat, until you click them. A chat's ⋯ menu blurs just that chat. Only on this page.",
           settingSwitch(viewPrefs.blurAll, v =>
             saveViewPrefs({ ...viewPrefs, blurAll: v })
+          )
+        ),
+        settingRow(
+          'Auto-reply',
+          'Answers a new message in a 1:1 chat with your text below. Sent from the server, even with this page closed.',
+          settingSwitch(autoReplySettings.enabled, v =>
+            saveAutoReply({ enabled: v })
+          )
+        ),
+        settingRow('Auto-reply message', '', autoReplyText()),
+        settingRow(
+          'Auto-reply again after',
+          'Each chat gets one auto-reply in this time.',
+          settingSelect(
+            autoReplySettings.cooldownHours,
+            [
+              [0, 'Every message'],
+              [1, '1 hour'],
+              [12, '12 hours'],
+              [24, '1 day'],
+            ],
+            v => saveAutoReply({ cooldownHours: Number(v) })
+          )
+        ),
+        settingRow(
+          'Save received photos and videos',
+          "To your Immich, from every chat. A chat's ⋯ menu saves just that chat. Needs Immich connected (Attach, Immich).",
+          settingSwitch(autoSaveSettings.all, v =>
+            saveAutoSave({ ...autoSaveSettings, all: v })
           )
         ),
         settingRow(
@@ -7551,6 +7647,12 @@ function connectEvents() {
   on('reminder.due', showReminder);
   on('keywords.changed', ({ words }) => {
     keywordAlerts = words;
+  });
+  on('autoReply.changed', value => {
+    autoReplySettings = value;
+  });
+  on('autoSave.changed', value => {
+    autoSaveSettings = value;
   });
   on('viewPrefs.changed', prefs => {
     viewPrefs = prefs;

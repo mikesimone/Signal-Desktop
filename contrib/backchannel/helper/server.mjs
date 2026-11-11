@@ -238,6 +238,8 @@ export function createWebServer({
   reminders = null,
   keywords = null,
   viewPrefs = null,
+  autoReply = null,
+  autoSave = null,
   scheduled = null,
   contactPhotos = null,
   log,
@@ -1202,6 +1204,39 @@ export function createWebServer({
         return;
       }
       broadcast('viewPrefs.changed', saved);
+      sendJson(res, 200, saved);
+      return;
+    }
+    // Auto-reply and auto-save to Immich (decision F56).
+    if (req.method === 'GET' && route === 'api/autoReply') {
+      sendJson(
+        res,
+        200,
+        autoReply?.get() ?? { enabled: false, text: '', cooldownHours: 12 }
+      );
+      return;
+    }
+    if (req.method === 'POST' && route === 'api/autoReply') {
+      const saved = autoReply?.set(await readJson(req)) ?? null;
+      if (!saved) {
+        sendJson(res, 400, { error: { code: 'INVALID_ARGUMENT' } });
+        return;
+      }
+      broadcast('autoReply.changed', saved);
+      sendJson(res, 200, saved);
+      return;
+    }
+    if (req.method === 'GET' && route === 'api/autoSave') {
+      sendJson(res, 200, autoSave?.get() ?? { all: false, chats: [] });
+      return;
+    }
+    if (req.method === 'POST' && route === 'api/autoSave') {
+      const saved = autoSave?.set(await readJson(req)) ?? null;
+      if (!saved) {
+        sendJson(res, 400, { error: { code: 'INVALID_ARGUMENT' } });
+        return;
+      }
+      broadcast('autoSave.changed', saved);
       sendJson(res, 200, saved);
       return;
     }

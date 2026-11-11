@@ -56,6 +56,10 @@ Backchannel does. Each new one is added here when it ships.
   of a message's attachments, and keep its text. Signal only does this
   from All media, and deletes the whole message when it was the last one.
 - **Search inside All media** by name, caption, file name or link.
+- **Auto-reply.** An away message for new 1:1 messages, sent from the
+  server even with no page open, at most once per chat in the time you pick.
+- **Auto-save to Immich.** Received photos and videos go to your Immich,
+  from every chat or just the ones you pick.
 - **Your own photo for anyone.** Pick a picture for a person in their
   chat details; it beats their profile photo, only you see it.
 - **Emoticons and double-click.** Typing :) or <3 makes the emoji, and
