@@ -14,7 +14,7 @@ import { after, before, describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 import { AUTO_REPLY_MARKER, AutoReply } from '../autoReply.mjs';
-import { AutoSave } from '../autoSave.mjs';
+import { AutoSave, savedName } from '../autoSave.mjs';
 import { ContactPhotoRefresh } from '../contactPhotos.mjs';
 import { Reminders } from '../reminders.mjs';
 import { FakeBridge, makeConversation, makeMessage } from './fake-bridge.mjs';
@@ -2106,6 +2106,26 @@ describe('auto-save', () => {
     assert.equal(uploads.length, 2);
     assert.equal(uploads[0][0], 'photo');
     assert.equal(uploads[0][1].deviceAssetId, 'signal-m1:0');
+    // The file keeps the chat and the date, not "attachment".
+    assert.match(uploads[0][1].fileName, /^Signal_\d{4}-\d\d-\d\d_\d{6}\.jpg$/);
     rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('names saved files Chat_date.ext', () => {
+    const t = Date.UTC(2026, 10, 11, 21, 43, 55); // 13:43:55 Pacific
+    process.env.BACKCHANNEL_TZ = 'America/Los_Angeles';
+    assert.equal(
+      savedName('Tards Я Us', t, 0, { contentType: 'image/jpeg' }),
+      'Tards-Я-Us_2026-11-11_134355.jpg'
+    );
+    assert.equal(
+      savedName('Chris Cossin', t, 2, { contentType: 'video/quicktime' }),
+      'Chris-Cossin_2026-11-11_134355-3.mov'
+    );
+    assert.equal(
+      savedName('（_◉_）', t, 0, { contentType: 'image/png', fileName: 'x.PNG' }),
+      'Signal_2026-11-11_134355.png'
+    );
+    assert.equal(savedName(null, t, 0, {}), 'Signal_2026-11-11_134355.bin');
   });
 });

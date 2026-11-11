@@ -8,6 +8,7 @@
 // already saved are kept in the config folder (auto-save.json, mode 0600).
 
 import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { extensionFor } from './immich.mjs';
 
 const MAX_CHATS = 2000;
 const MAX_DONE = 20_000;
@@ -23,6 +24,38 @@ export function cleanAutoSave(value) {
       ),
     ].slice(0, MAX_CHATS),
   };
+}
+
+// What Immich shows for a saved file: ChatName_2026-11-11_134355.jpg, in the
+// owner's time zone (BACKCHANNEL_TZ, default Pacific). A message with several
+// attachments gets -2, -3 on the later ones. Signal sends no file name for
+// most photos, so this replaces "attachment".
+export function savedName(title, sentAt, index, a) {
+  const chat =
+    String(title ?? '')
+      .normalize('NFC')
+      .replace(/[^\p{L}\p{N}]+/gu, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 40)
+      .replace(/-+$/, '') || 'Signal';
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat('en-CA', {
+      timeZone: process.env.BACKCHANNEL_TZ || 'America/Los_Angeles',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hourCycle: 'h23',
+    })
+      .formatToParts(new Date(sentAt))
+      .map(p => [p.type, p.value])
+  );
+  const stamp = `${parts.year}-${parts.month}-${parts.day}_${parts.hour}${parts.minute}${parts.second}`;
+  const own = /\.([A-Za-z0-9]{1,5})$/.exec(a?.fileName ?? '')?.[1];
+  const ext = (own ?? extensionFor(a?.contentType)).toLowerCase();
+  return `${chat}_${stamp}${index > 0 ? `-${index + 1}` : ''}.${ext}`;
 }
 
 function isMedia(a) {
@@ -74,11 +107,11 @@ export class AutoSave {
     return this.#settings.all || this.#settings.chats.includes(conversationId);
   }
 
-  // m: a message.added or message.updated MessageDTO. Returns the work, so
-  // tests can wait for it. Chats with disappearing messages are saved too
+  // m: a message.added or message.updated MessageDTO; conversation: its
+  // ConversationDTO (for the file name). Returns the work, so tests can wait. Chats with disappearing messages are saved too
   // (Mike's call: the timer is there to save phone space, not for privacy).
   // View-once media never reaches the helper: the bridge hides its content.
-  handle(m) {
+  handle(m, conversation) {
     if (
       m?.direction !== 'incoming' ||
       !this.wants(m.conversationId) ||
@@ -98,13 +131,13 @@ export class AutoSave {
       }
       this.#pending.add(key);
       this.#queue = this.#queue
-        .then(() => this.#saveOne(m, index, a, key))
+        .then(() => this.#saveOne(m, index, a, key, conversation))
         .finally(() => this.#pending.delete(key));
     });
     return this.#queue;
   }
 
-  async #saveOne(m, index, a, key) {
+  async #saveOne(m, index, a, key, conversation) {
     try {
       const chunks = [];
       let offset = 0;
@@ -127,7 +160,7 @@ export class AutoSave {
       }
       await this.#immich.upload(Buffer.concat(chunks), {
         deviceAssetId: `signal-${key}`,
-        fileName: a.fileName ?? null,
+        fileName: savedName(conversation?.title, m.sentAt ?? Date.now(), index, a),
         contentType: a.contentType,
         createdAt: m.sentAt ?? Date.now(),
       });

@@ -20,7 +20,7 @@ const SENDABLE_IMAGES = new Set([
 ]);
 const TIMEOUT_MS = 30_000;
 
-function extensionFor(contentType) {
+export function extensionFor(contentType) {
   const sub = String(contentType ?? '').split('/')[1] ?? 'bin';
   return (
     { jpeg: 'jpg', quicktime: 'mov' }[sub] ?? sub.replace(/[^a-z0-9]/g, '')
