@@ -13,7 +13,7 @@ import { dirname, join } from 'node:path';
 import { after, before, describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
-import { AutoReply } from '../autoReply.mjs';
+import { AUTO_REPLY_MARKER, AutoReply } from '../autoReply.mjs';
 import { AutoSave } from '../autoSave.mjs';
 import { ContactPhotoRefresh } from '../contactPhotos.mjs';
 import { Reminders } from '../reminders.mjs';
@@ -2000,9 +2000,28 @@ describe('auto-reply', () => {
     now += 3_600_001;
     assert.equal(await ar.handle({ ...m, sentAt: now }, direct), true);
     assert.deepEqual(sent, [
-      ['c1', 'Away'],
-      ['c1', 'Away'],
+      ['c1', `Away${AUTO_REPLY_MARKER}`],
+      ['c1', `Away${AUTO_REPLY_MARKER}`],
     ]);
+    // Another device's auto-reply (a sync transcript) counts as ours.
+    ar.observe({
+      direction: 'outgoing',
+      conversationId: 'c4',
+      body: `Phone away${AUTO_REPLY_MARKER}`,
+      sentAt: now,
+    });
+    assert.equal(
+      await ar.handle({ ...m, sentAt: now }, { ...direct, id: 'c4' }),
+      false
+    );
+    // Someone else's auto-reply gets none back.
+    assert.equal(
+      await ar.handle(
+        { ...m, sentAt: now, body: `Away${AUTO_REPLY_MARKER}` },
+        { ...direct, id: 'c5' }
+      ),
+      false
+    );
     // Kept across restarts.
     const again = new AutoReply(join(dir, 'auto-reply.json'), {
       send: async () => {},

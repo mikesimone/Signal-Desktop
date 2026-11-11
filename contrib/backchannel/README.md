@@ -58,6 +58,8 @@ Backchannel does. Each new one is added here when it ships.
 - **Search inside All media** by name, caption, file name or link.
 - **Auto-reply.** An away message for new 1:1 messages, sent from the
   server even with no page open, at most once per chat in the time you pick.
+- **Send silently.** Hold or right-click Send; other Backchannel users get
+  no alert (other Signal apps still notify).
 - **Auto-save to Immich.** Received photos and videos go to your Immich,
   from every chat or just the ones you pick.
 - **Your own photo for anyone.** Pick a picture for a person in their

@@ -12,6 +12,10 @@ const MAX_TEXT = 1000;
 // Older messages (Signal catching up after being offline) get no reply.
 const FRESH_MS = 10 * 60 * 1000;
 const HOUR_MS = 60 * 60 * 1000;
+// Backchannel's auto-reply marker (decision F57), agreed with Backchannel
+// Android: an invisible ending other Signal apps don't show. It lets the web
+// and the phone see each other's auto-replies, so only one goes out.
+export const AUTO_REPLY_MARKER = '\u2063\u2062';
 
 export function cleanAutoReply(value) {
   const hours = Number(value?.cooldownHours);
@@ -70,14 +74,36 @@ export class AutoReply {
     return this.get();
   }
 
+  // An auto-reply this account sent from any device (sync transcripts
+  // included) starts that chat's quiet period here too.
+  observe(m) {
+    if (
+      m?.direction !== 'outgoing' ||
+      !m.body?.endsWith(AUTO_REPLY_MARKER) ||
+      !m.conversationId
+    ) {
+      return;
+    }
+    const at = Math.min(m.sentAt ?? this.#now(), this.#now());
+    if (at > (this.#lastSent[m.conversationId] ?? 0)) {
+      this.#lastSent[m.conversationId] = at;
+      if (this.#file) {
+        this.#save();
+      }
+    }
+  }
+
   // m: a message.added MessageDTO; conversation: its ConversationDTO.
   async handle(m, conversation) {
+    this.observe(m);
     const { enabled, text, cooldownHours } = this.#settings;
     const now = this.#now();
     if (
       !enabled ||
       !text.trim() ||
       m?.direction !== 'incoming' ||
+      // Never answer someone else's auto-reply.
+      m.body?.endsWith(AUTO_REPLY_MARKER) ||
       !conversation ||
       conversation.type !== 'direct' ||
       conversation.noteToSelf ||
@@ -94,7 +120,7 @@ export class AutoReply {
     this.#lastSent[conversation.id] = now;
     this.#save();
     try {
-      await this.#send(conversation.id, text.trim());
+      await this.#send(conversation.id, text.trim() + AUTO_REPLY_MARKER);
       return true;
     } catch (error) {
       this.#log(`auto-reply failed: ${error.code ?? error.message}`);

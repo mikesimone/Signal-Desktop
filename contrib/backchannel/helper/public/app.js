@@ -3130,7 +3130,25 @@ function scheduleExpiry(m) {
   );
 }
 
-function putMessage(m) {
+// Backchannel's markers (decision F57), agreed with Backchannel Android:
+// invisible endings other Signal apps don't show. "Send silently" asks
+// Backchannel receivers not to notify; the other marks an auto-reply.
+const SILENT_MARKER = '\u2063\u2064';
+const AUTO_REPLY_MARKER = '\u2063\u2062';
+
+function isSilent(m) {
+  return Boolean(m.body?.endsWith(SILENT_MARKER));
+}
+
+function withoutMarkers(m) {
+  const body = m.body ?? '';
+  return body.endsWith(SILENT_MARKER) || body.endsWith(AUTO_REPLY_MARKER)
+    ? { ...m, body: body.slice(0, -2) }
+    : m;
+}
+
+function putMessage(message) {
+  const m = withoutMarkers(message);
   rememberAuthors(m);
   if (m.expiresAt !== null && m.expiresAt <= Date.now()) {
     messages.delete(m.id);
@@ -5934,6 +5952,7 @@ const WHATS_NEW = [
       "Remove a contact from a chat's ⋯ menu, as Signal's Remove. The chat stays.",
       'Auto-reply (Settings, Chats): a new message in a 1:1 chat gets your away text, sent from the server even with this page closed.',
       "Save received photos and videos to your Immich, from every chat (Settings, Chats) or chosen ones (the chat's ⋯ menu).",
+      'Send silently: hold or right-click Send. Other Backchannel users get no alert; other Signal apps still notify.',
     ],
   ],
   [
@@ -7516,7 +7535,7 @@ function keywordsInput() {
 
 function notify(m) {
   const c = conversations.get(m.conversationId);
-  if (!c || m.direction !== 'incoming') {
+  if (!c || m.direction !== 'incoming' || isSilent(m)) {
     return;
   }
   // Keyword alerts (F50) get through a muted chat.
@@ -7776,12 +7795,13 @@ function prepareCompose() {
   return { conversationId, body, files, withMentions };
 }
 
-async function sendCurrent() {
+async function sendCurrent({ silent = false } = {}) {
   const prepared = prepareCompose();
   if (!prepared) {
     return;
   }
-  const { conversationId, body, files, withMentions } = prepared;
+  const { conversationId, files, withMentions } = prepared;
+  const body = silent ? prepared.body + SILENT_MARKER : prepared.body;
   $('send').disabled = true;
   $('send-error').hidden = true;
   // As Signal: sending goes back to the newest messages.
@@ -7924,7 +7944,9 @@ function openSchedule(item = null) {
       return;
     }
     if (!prepareCompose()) {
-      toast('Write a message first, then hold Send to schedule it.');
+      toast(
+        'Write a message first, then hold Send to schedule it or send it silently.'
+      );
       return;
     }
   }
@@ -7932,7 +7954,20 @@ function openSchedule(item = null) {
   $('schedule-title').textContent = item
     ? 'Reschedule message'
     : 'Schedule message';
+  const silent = el(
+    'button',
+    'schedule-option',
+    'Send now, silently (no alert for Backchannel users)'
+  );
+  silent.type = 'button';
+  silent.title =
+    "Backchannel won't notify the people who get it. Other Signal apps still do.";
+  silent.addEventListener('click', () => {
+    closeSchedule();
+    sendCurrent({ silent: true });
+  });
   $('schedule-options').replaceChildren(
+    ...(item ? [] : [silent]),
     ...schedulePresets().map(at => {
       const option = el('button', 'schedule-option', formatScheduleTime(at));
       option.type = 'button';

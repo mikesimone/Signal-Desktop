@@ -1292,3 +1292,20 @@ no page open:
   2026-11-11, after the 2026-11-06 no).
 
 WHY: Mike's cross-platform parity rule, and his final v14 list.
+
+## F57. Fork only: send silently, and Backchannel's markers
+
+DECISION: Backchannel web and Android agree on two invisible endings that
+other Signal apps don't show (proposed by the Android thread, 2026-11-11):
+- **Send silently** ends the body with U+2063 U+2064. A Backchannel
+  receiver strips it and doesn't notify. On the web it's "Send now,
+  silently" at the top of the hold or right-click menu on Send, which says
+  only Backchannel users get no alert. Other Signal apps still notify.
+- **Auto-reply** (F56) ends its body with U+2063 U+2062. The helper starts
+  a chat's quiet period when it sees one this account sent from any device,
+  sync transcripts included, so the web and the phone don't both reply.
+  It never answers someone else's auto-reply.
+- The page strips both endings from what it shows.
+
+WHY: Mike's v14 list ("send silently, with a note that it only works with
+other Backchannel users") and auto-reply on both sides at once.
