@@ -1283,7 +1283,8 @@ no page open:
   and uploads it to Immich's `/api/assets` with `deviceAssetId`
   `signal-<message>:<index>`, so a repeat is a duplicate Immich ignores. It
   remembers what it saved in auto-save.json. Nothing happens while Immich
-  isn't connected.
+  isn't connected. Chats with disappearing messages are skipped, as on
+  Android (Android also skips locked chats; the web has no chat lock).
 - Not built: multiple accounts (each account is its own Signal and kit on
   Six, so it would be a second kit). Send silently waits on Android's
   marker so both sides read the same thing. Voice-note transcripts wait on

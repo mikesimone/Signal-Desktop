@@ -74,11 +74,13 @@ export class AutoSave {
     return this.#settings.all || this.#settings.chats.includes(conversationId);
   }
 
-  // m: a message.added or message.updated MessageDTO. Returns the work, so
-  // tests can wait for it.
-  handle(m) {
+  // m: a message.added or message.updated MessageDTO; conversation: its
+  // ConversationDTO. Returns the work, so tests can wait for it. Chats with
+  // disappearing messages are skipped, as Backchannel Android does.
+  handle(m, conversation) {
     if (
       m?.direction !== 'incoming' ||
+      conversation?.disappearingSeconds > 0 ||
       !this.wants(m.conversationId) ||
       !this.#immich?.status().connected
     ) {

@@ -2048,6 +2048,7 @@ describe('auto-save', () => {
     await as.handle(m);
     await as.handle(m);
     await as.handle({ ...m, id: 'm2', conversationId: 'c2' });
+    await as.handle({ ...m, id: 'm3' }, { disappearingSeconds: 3600 });
     assert.equal(uploads.length, 1);
     assert.equal(uploads[0][0], 'photo');
     assert.equal(uploads[0][1].deviceAssetId, 'signal-m1:0');
