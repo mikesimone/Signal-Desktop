@@ -81,6 +81,7 @@ export class AutoSave {
   handle(m) {
     if (
       m?.direction !== 'incoming' ||
+      m.kind === 'viewOnce' ||
       !this.wants(m.conversationId) ||
       !this.#immich?.status().connected
     ) {
