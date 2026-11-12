@@ -14,15 +14,23 @@ const MAX_CHATS = 2000;
 const MAX_DONE = 20_000;
 const CHUNK = 512 * 1024;
 
+function cleanIds(list) {
+  return [
+    ...new Set(
+      (Array.isArray(list) ? list : []).filter(
+        id => typeof id === 'string' && id && id.length <= 128
+      )
+    ),
+  ].slice(0, MAX_CHATS);
+}
+
+// all: every chat; chats: picked ones; skip: chats left out of "every chat".
 export function cleanAutoSave(value) {
-  const chats = Array.isArray(value?.chats) ? value.chats : [];
+  const skip = cleanIds(value?.skip);
   return {
     all: value?.all === true,
-    chats: [
-      ...new Set(
-        chats.filter(id => typeof id === 'string' && id && id.length <= 128)
-      ),
-    ].slice(0, MAX_CHATS),
+    chats: cleanIds(value?.chats).filter(id => !skip.includes(id)),
+    skip,
   };
 }
 
@@ -91,7 +99,11 @@ export class AutoSave {
   }
 
   get() {
-    return { ...this.#settings, chats: [...this.#settings.chats] };
+    return {
+      ...this.#settings,
+      chats: [...this.#settings.chats],
+      skip: [...this.#settings.skip],
+    };
   }
 
   set(value) {
@@ -106,6 +118,9 @@ export class AutoSave {
   // A chat picked in its ⋯ menu is always saved. "Every chat" leaves out
   // archived and muted groups (Mike, 2026-11-11).
   wants(conversationId, conversation = null) {
+    if (this.#settings.skip.includes(conversationId)) {
+      return false;
+    }
     if (this.#settings.chats.includes(conversationId)) {
       return true;
     }

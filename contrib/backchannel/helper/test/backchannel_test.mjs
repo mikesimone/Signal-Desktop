@@ -1329,7 +1329,11 @@ describe('backchannel helper', () => {
       headers: json,
       body: { all: false, chats: [alice.id, alice.id, 3] },
     });
-    assert.deepEqual(JSON.parse(save.text), { all: false, chats: [alice.id] });
+    assert.deepEqual(JSON.parse(save.text), {
+      all: false,
+      chats: [alice.id],
+      skip: [],
+    });
     const read = await http(port, { path: `/${helper.token}/api/autoSave` });
     assert.deepEqual(JSON.parse(read.text).chats, [alice.id]);
     await http(port, {
@@ -2184,6 +2188,11 @@ describe('auto-save', () => {
       uploads.slice(2).map(u => u[1].deviceAssetId),
       ['signal-m6:0', 'signal-m7:0']
     );
+    // A chat left out of "every chat" is never saved.
+    as.set({ all: true, chats: ['g1'], skip: ['g1'] });
+    assert.deepEqual(as.get().chats, []);
+    await as.handle({ ...m, id: 'm8', conversationId: 'g1' }, group);
+    assert.equal(uploads.length, 4);
     rmSync(dir, { recursive: true, force: true });
   });
 

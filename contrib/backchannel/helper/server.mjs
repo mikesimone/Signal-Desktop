@@ -1232,7 +1232,11 @@ export function createWebServer({
       return;
     }
     if (req.method === 'GET' && route === 'api/autoSave') {
-      sendJson(res, 200, autoSave?.get() ?? { all: false, chats: [] });
+      sendJson(
+        res,
+        200,
+        autoSave?.get() ?? { all: false, chats: [], skip: [] }
+      );
       return;
     }
     if (req.method === 'POST' && route === 'api/autoSave') {

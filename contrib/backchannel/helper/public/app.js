@@ -1883,7 +1883,7 @@ async function saveViewPrefs(next) {
 // Auto-reply and auto-save (decision F56), as Backchannel Android v14. The
 // helper on the server does both, so they work with no page open.
 let autoReplySettings = { enabled: false, text: '', cooldownHours: 12 };
-let autoSaveSettings = { all: false, chats: [] };
+let autoSaveSettings = { all: false, chats: [], skip: [] };
 
 async function loadAutomation() {
   try {
@@ -1915,14 +1915,38 @@ async function saveAutoSave(next) {
   }
 }
 
-function toggleChatAutoSave(conversationId) {
-  const chats = new Set(autoSaveSettings.chats);
-  if (chats.has(conversationId)) {
-    chats.delete(conversationId);
-  } else {
-    chats.add(conversationId);
+// As the helper decides (autoSave.mjs wants()).
+function savedByAll(c) {
+  return (
+    autoSaveSettings.all && !(c.type === 'group' && (c.archived || c.muted))
+  );
+}
+
+function savesMedia(c) {
+  const { chats, skip = [] } = autoSaveSettings;
+  if (skip.includes(c.id)) {
+    return false;
   }
-  saveAutoSave({ ...autoSaveSettings, chats: [...chats] });
+  return chats.includes(c.id) || savedByAll(c);
+}
+
+// On: pick the chat (and stop leaving it out). Off: with "every chat" on,
+// leave it out; otherwise just unpick it.
+function setChatAutoSave(c, on) {
+  const chats = new Set(autoSaveSettings.chats);
+  const skip = new Set(autoSaveSettings.skip ?? []);
+  if (on) {
+    skip.delete(c.id);
+    if (!savedByAll(c)) {
+      chats.add(c.id);
+    }
+  } else {
+    chats.delete(c.id);
+    if (autoSaveSettings.all) {
+      skip.add(c.id);
+    }
+  }
+  saveAutoSave({ ...autoSaveSettings, chats: [...chats], skip: [...skip] });
 }
 
 function autoReplyText() {
@@ -3419,15 +3443,12 @@ function openChatMenu(conversationId, anchor, page = null) {
   }
   // The page's own (decision F55): works without chat management.
   items.push(el('div', 'menu-separator'));
-  if (!autoSaveSettings.all) {
-    add(
-      'media',
-      autoSaveSettings.chats.includes(c.id)
-        ? 'Stop saving media to Immich'
-        : 'Save media to Immich',
-      () => toggleChatAutoSave(c.id)
-    );
-  }
+  const saving = savesMedia(c);
+  add(
+    'media',
+    saving ? 'Stop saving media to Immich' : 'Save media to Immich',
+    () => setChatAutoSave(c, !saving)
+  );
   add(
     'eye',
     viewPrefs.blurChats.includes(c.id)
@@ -6579,7 +6600,7 @@ function settingsSections() {
         ),
         settingRow(
           'Save received photos and videos',
-          "To your Immich, from every chat except archived or muted groups. A chat's ⋯ menu saves just that chat, even those. Needs Immich connected (Attach, Immich).",
+          "To your Immich, from every chat except archived or muted groups. A chat's ⋯ menu turns it on or off for that chat. Needs Immich connected (Attach, Immich).",
           settingSwitch(autoSaveSettings.all, v =>
             saveAutoSave({ ...autoSaveSettings, all: v })
           )

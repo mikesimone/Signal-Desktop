@@ -1287,7 +1287,9 @@ no page open:
   2026-11-11: the timer is there to save phone space). View-once media is
   never saved: the bridge never hands its content over.
   "Every chat" leaves out archived and muted groups (Mike, 2026-11-11);
-  a chat picked in its ⋯ menu is saved anyway. Android also
+  a chat picked in its ⋯ menu is saved anyway. With "every chat" on, a
+  chat's ⋯ menu can also leave that chat out (kept as `skip`, Mike
+  2026-11-12). Android also
   skips locked chats; the web has no chat lock.
 - Not built: multiple accounts (each account is its own Signal and kit on
   Six, so it would be a second kit). Send silently waits on Android's
