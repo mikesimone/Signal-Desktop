@@ -125,6 +125,7 @@ allowBuilds:
   '@signalapp/ringrtc': true
   '@signalapp/sqlcipher': true
   '@signalapp/windows-ucv': true
+  '@signalapp/windows-local-pipe': true
   # Enabled Builds: Use specific version
   #   ex: 'package@0.0.0': true
   '@indutny/mac-screen-share@1.0.13': true

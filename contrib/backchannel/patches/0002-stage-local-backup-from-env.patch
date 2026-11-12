@@ -46,27 +46,3 @@ index e98e223d2..b69fb5919 100644
      );
      if (canceled || !snapshotDir) {
        return {
-diff --git a/ts/util/isLocalBackupsEnabled.dom.ts b/ts/util/isLocalBackupsEnabled.dom.ts
-index bb0203448..e5edb148d 100644
---- a/ts/util/isLocalBackupsEnabled.dom.ts
-+++ b/ts/util/isLocalBackupsEnabled.dom.ts
-@@ -8,10 +8,19 @@ import {
-   isFeaturedEnabledSelector,
- } from './isFeatureEnabled.dom.ts';
- 
-+const BACKCHANNEL_FORCE_LOCAL_BACKUPS: boolean = true;
-+
- export function isLocalBackupsEnabled(reduxArgs?: {
-   currentVersion: string;
-   remoteConfig: ReadonlyDeep<ConfigMapType> | undefined;
- }): boolean {
-+  // Backchannel (contrib/backchannel): Signal's remote config has not enabled local backups for this build, and the
-+  // import of a local backup snapshot at link time needs it. Importing is still only started by the user, from
-+  // File > Stage local backup for import.
-+  if (BACKCHANNEL_FORCE_LOCAL_BACKUPS) {
-+    return true;
-+  }
-+
-   if (reduxArgs) {
-     return isFeaturedEnabledSelector({
-       currentVersion: reduxArgs.currentVersion,
