@@ -42,7 +42,11 @@ import { drop } from '../util/drop.std.ts';
 import { isNotNil } from '../util/isNotNil.std.ts';
 import { encryptLegacyAttachment } from '../util/encryptLegacyAttachment.preload.ts';
 import { AttachmentDisposition } from '../util/getLocalAttachmentUrl.std.ts';
-import { isPackIdValid, redactPackId } from '../util/Stickers.std.ts';
+import {
+  isPackIdValid,
+  MAX_STICKERS_PER_PACK,
+  redactPackId,
+} from '../util/Stickers.std.ts';
 import { getPlaintextHashForInMemoryAttachment } from '../AttachmentCrypto.node.ts';
 import {
   isOnline,
@@ -54,8 +58,6 @@ import { Emoji } from '../axo/emoji.std.ts';
 import { updateFavoriteStickersAlreadyInstalled } from '../util/stickers.preload.ts';
 
 const { isNumber, groupBy, values, chunk } = lodash;
-
-export const MAX_STICKERS_PER_PACK = 1024;
 
 const log = createLogger('Stickers');
 
@@ -221,11 +223,29 @@ export async function load(): Promise<void> {
     blessedPacks[key] = true;
   }
 
+  const packFavoritesToDownload =
+    getPackFavoritesToDownload(allFavoriteStickers);
+
+  initialState = {
+    packs,
+    recentStickers,
+    blessedPacks,
+    favoriteStickers: installedFavoriteStickers,
+    installedPack: null,
+    stickerManagerTab: 'all',
+  };
+
+  packsToDownload = capturePacksToDownload(packs, packFavoritesToDownload);
+}
+
+function getPackFavoritesToDownload(
+  favoriteStickers: ReadonlyArray<FavoriteStickerType>
+): Record<string, { key: string; stickerIds: Array<number> }> {
   const packFavoritesToDownload: Record<
     string,
     { key: string; stickerIds: Array<number> }
   > = Object.create(null);
-  for (const favoriteSticker of allFavoriteStickers) {
+  for (const favoriteSticker of favoriteStickers) {
     const { packId, packKey, status, stickerId } = favoriteSticker;
     if (status === 'deleted' || status === 'installed' || packKey == null) {
       continue;
@@ -242,20 +262,12 @@ export async function load(): Promise<void> {
     }
   }
 
-  initialState = {
-    packs,
-    recentStickers,
-    blessedPacks,
-    favoriteStickers: installedFavoriteStickers,
-    installedPack: null,
-    stickerManagerTab: 'all',
-  };
-
-  packsToDownload = capturePacksToDownload(packs, packFavoritesToDownload);
+  return packFavoritesToDownload;
 }
 
 export async function createPacksFromBackup(
-  packs: ReadonlyArray<StickerPackPointerType>
+  packs: ReadonlyArray<StickerPackPointerType>,
+  favoriteStickers: ReadonlyArray<FavoriteStickerType>
 ): Promise<void> {
   const known = new Set(packs.map(({ id }) => id));
   const pairs = packs.slice();
@@ -290,7 +302,12 @@ export async function createPacksFromBackup(
   await DataWriter.createOrUpdateStickerPacks(packsToStore);
   await DataWriter.addUninstalledStickerPacks(uninstalled);
 
-  packsToDownload = capturePacksToDownload(makeLookup(packsToStore, 'id'));
+  const packFavoritesToDownload = getPackFavoritesToDownload(favoriteStickers);
+
+  packsToDownload = capturePacksToDownload(
+    makeLookup(packsToStore, 'id'),
+    packFavoritesToDownload
+  );
 }
 
 export async function getInstalledStickerPacksForBackup(): Promise<

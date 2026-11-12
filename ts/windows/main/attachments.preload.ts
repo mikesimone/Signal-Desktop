@@ -10,8 +10,10 @@ import {
   basename,
   parse as pathParse,
 } from 'node:path';
-import { existsSync } from 'node:fs';
-import { mkdir } from 'node:fs/promises';
+import { existsSync, createWriteStream } from 'node:fs';
+import { mkdir, unlink } from 'node:fs/promises';
+import { Readable } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
 import { clonefile } from '@signalapp/clonefile';
 import fse from 'fs-extra';
 import { v4 as getGuid } from 'uuid';
@@ -207,9 +209,20 @@ const showSaveDialog = (
 
 async function writeWithAttributes(
   target: string,
-  data: Uint8Array<ArrayBuffer>
+  data: Readable
 ): Promise<void> {
-  await fse.writeFile(target, Buffer.from(data));
+  try {
+    await using outStream = createWriteStream(target);
+    await pipeline(data, outStream);
+  } catch (error) {
+    log.error('Failed to write data to disk, unlinking');
+    try {
+      await unlink(target);
+    } catch {
+      // Ignore
+    }
+    throw error;
+  }
 
   if (process.platform === 'darwin') {
     const xattr = await import('fs-xattr');
@@ -242,7 +255,15 @@ export const saveAttachmentToDisk = async ({
   name,
   baseDir,
 }: {
-  data: Uint8Array<ArrayBuffer>;
+  data:
+    | {
+        type: 'bytes';
+        bytes: Iterable<Uint8Array<ArrayBuffer>>;
+      }
+    | {
+        type: 'stream';
+        stream: Readable;
+      };
   name: string;
   /**
    * Base directory for saving the attachment.
@@ -251,6 +272,9 @@ export const saveAttachmentToDisk = async ({
   baseDir?: string;
 }): Promise<null | { fullPath: string; name: string }> => {
   let filePath;
+
+  await using stream =
+    data.type === 'bytes' ? Readable.from(data.bytes) : data.stream;
 
   if (!baseDir) {
     const { canceled, filePath: dialogFilePath } = await showSaveDialog(name);
@@ -271,7 +295,7 @@ export const saveAttachmentToDisk = async ({
     }
   }
 
-  await writeWithAttributes(filePath, data);
+  await writeWithAttributes(filePath, stream);
 
   const fileBasename = basename(filePath);
 

@@ -30,14 +30,19 @@ import type { BoundActionCreatorsMapObject } from '../../hooks/useBoundActions.s
 import { useBoundActions } from '../../hooks/useBoundActions.std.ts';
 import { strictAssert } from '../../util/assert.std.ts';
 import type { Emoji } from '../../axo/emoji.std.ts';
-import { getPacks } from '../selectors/stickers.std.ts';
+import { getFavorites, getPacks } from '../selectors/stickers.std.ts';
 import type { AsyncStateThunk } from '../types.std.ts';
 import { createLogger } from '../../logging/log.std.ts';
-import { redactPackId } from '../../util/Stickers.std.ts';
+import {
+  MAX_FAVORITE_STICKERS,
+  redactPackId,
+} from '../../util/Stickers.std.ts';
 import {
   uninstallFavoriteSticker,
   installFavoriteSticker,
 } from '../../util/stickers.preload.ts';
+import { showToast, type ShowToastActionType } from './toast.preload.ts';
+import { ToastType } from '../../types/Toast.dom.tsx';
 
 const log = createLogger('ducks/stickers');
 
@@ -476,15 +481,23 @@ function markStickerAsFavorite(
     stickerId: number;
   },
   markAsFavorite: boolean
-): AsyncStateThunk<AddFavoriteStickerAction | RemoveFavoriteStickerAction> {
+): AsyncStateThunk<
+  AddFavoriteStickerAction | RemoveFavoriteStickerAction | ShowToastActionType
+> {
   const logId = `markStickerAsFavorite(${redactPackId(packId)})`;
   const stickerRef: StickerReferenceType = {
     packId,
     stickerId,
   };
 
-  return async () => {
+  return async (dispatch, getState) => {
     if (markAsFavorite) {
+      const favorites = getFavorites(getState());
+      if (favorites.length >= MAX_FAVORITE_STICKERS) {
+        dispatch(showToast({ toastType: ToastType.StickerFavoritesTooMany }));
+        return;
+      }
+
       const favoriteSticker =
         await DataWriter.addFavoriteStickerFromStickerRef(stickerRef);
       if (!favoriteSticker) {
@@ -499,6 +512,7 @@ function markStickerAsFavorite(
       if (favoriteSticker.storageNeedsSync) {
         runStorageServiceUploadJob({ reason: 'markStickerAsFavorite(true)' });
       }
+      dispatch(showToast({ toastType: ToastType.StickerFavoriteAdded }));
     } else {
       const { deletedAtTimestampMs, storageNeedsSync } =
         (await DataWriter.markFavoriteStickerDeleted(stickerRef)) ?? {};
@@ -511,6 +525,7 @@ function markStickerAsFavorite(
       if (storageNeedsSync) {
         runStorageServiceUploadJob({ reason: 'markStickerAsFavorite(false)' });
       }
+      dispatch(showToast({ toastType: ToastType.StickerFavoriteRemoved }));
     }
   };
 }

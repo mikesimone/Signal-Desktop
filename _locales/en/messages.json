@@ -3930,9 +3930,37 @@
     "messageformat": "Sticker without an emoji",
     "description": "Accessibility label for sticker without an assigned emoji in the sticker pack preview modal."
   },
+  "icu:stickers--StickerPreview--SeeStickerDetails": {
+    "messageformat": "See sticker details",
+    "description": "Accessibility label for a sticker to open a popover showing a large preview of the sticker and sticker-specific actions in the sticker pack preview modal."
+  },
+  "icu:stickers--StickerPreview--StickerDetailsTitle": {
+    "messageformat": "Sticker details",
+    "description": "Accessibility label for a specific sticker's preview popover which shows a large preview and sticker-specific actions in the sticker pack preview modal."
+  },
+  "icu:stickers--StickerPreview--AddFavorite": {
+    "messageformat": "Add to Favorites",
+    "description": "Button to add a sticker to favorite stickers in the sticker pack preview modal."
+  },
+  "icu:stickers--StickerPreview--RemoveFavorite": {
+    "messageformat": "Remove from Favorites",
+    "description": "Button to remove a sticker from favorite stickers in the sticker pack preview modal."
+  },
   "icu:stickers--StickerPackLinkPreviewDescription": {
     "messageformat": "Sticker Pack by {author}",
     "description": "Description for a sticker pack preview in the chat, when someone sends a link to a sticker pack. Shown next to the title of the sticker pack."
+  },
+  "icu:stickers--Toast--StickerFavoriteAdded": {
+    "messageformat": "Sticker added to Favorites",
+    "description": "Toast text shown after adding a sticker to the favorite stickers list."
+  },
+  "icu:stickers--Toast--StickerFavoriteRemoved": {
+    "messageformat": "Sticker removed from Favorites",
+    "description": "Toast text shown after removing a sticker from the favorite stickers list."
+  },
+  "icu:stickers--Toast--StickerFavoritesTooMany": {
+    "messageformat": "You can only add {count, plural, one {# sticker} other {# stickers}} to Favorites",
+    "description": "Toast text shown after atttempting to add a favorite sticker when you already have the maximum allowed favorite sticker count."
   },
   "icu:stickers--ViewPack": {
     "messageformat": "View Pack",
@@ -12529,14 +12557,6 @@
     "description": "Release notes for releases that only include bug fixes",
     "ignoreUnused": true
   },
-  "icu:WhatsNew__8.30--0": {
-    "messageformat": "Thanks to a few performance improvements, your CPU will be slightly happier during video calls (even if you're not smiling).",
-    "description": "(Deleted 2026/10/07)  Release notes for 8.30"
-  },
-  "icu:WhatsNew__8.30--1": {
-    "messageformat": "We also added a convenient shortcut to open your system settings on Windows if you try to join a video call and Signal doesn't have permission to access the camera. Now it's easier to see what you need to do so that people can see you.",
-    "description": "(Deleted 2026/10/07)  Release notes for 8.30"
-  },
   "icu:WhatsNew__8.32--0": {
     "messageformat": "The unread filter is now also supported in message folders and the search interface, so you can easily see what you've been missing.",
     "description": "(Deleted 2026/10/20) Release notes for 8.32"
@@ -12556,5 +12576,9 @@
   "icu:WhatsNew__8.34--1": {
     "messageformat": "Improved handling and performance for connected audio devices.",
     "description": "(Deleted 2026/11/05) Release notes for 8.34"
+  },
+  "icu:WhatsNew__8.36--0": {
+    "messageformat": "Your top stickers now have a place to remain stuck. Add any sticker pack to your list of favorites so it's easy to stick with the ones you love.",
+    "description": "Release notes for 8.36"
   }
 }

@@ -4,29 +4,29 @@
 import assert from 'assert';
 import { Buffer } from 'buffer';
 import { Http2ServerRequest } from 'http2';
-import { timingSafeEqual, randomBytes } from 'crypto';
+import { randomBytes } from 'crypto';
 import createDebug from 'debug';
 import {
   CreateCallLinkCredentialRequest,
   ProfileKeyCommitment,
   ProfileKeyCredentialRequest,
 } from '@signalapp/libsignal-client/zkgroup';
-import { stringify as stringifyUuid, v4 as uuidv4 } from 'uuid';
+import { v4 as uuidv4 } from 'uuid';
 import { KEMPublicKey, PublicKey } from '@signalapp/libsignal-client';
 
 import WebSocket from 'ws';
 
 import { signalservice as Proto } from '../../../protos/compiled';
+import { getLegacyProfileCapabilities } from '../../data/capabilities';
 import { Device } from '../../data/device';
 import {
   AccountAttributesSchema,
+  CapabilitiesSchema,
   AtomicLinkingDataSchema,
   CreateCallLinkAuthSchema,
   CreateVerificationSessionSchema,
-  DeviceKeysSchema,
   MessageListSchema,
   ModifyVerificationSessionSchema,
-  PutRegistrationLockSchema,
   RegisterAccountResponse,
   RegisterAccountSchema,
   RequestVerificationCodeSchema,
@@ -34,7 +34,6 @@ import {
   SubmitVerificationCodeSchema,
   UpdateProfileSchema,
   UploadProfileResponse,
-  UsernameConfirmationSchema,
   VerificationSession,
 } from '../../data/schemas';
 import {
@@ -48,7 +47,6 @@ import {
 } from '../../types';
 import {
   decodeKyberPreKey,
-  decodePreKey,
   decodeSignedPreKey,
   generateAccessKeyVerifier,
   hashRemoteConfig,
@@ -56,9 +54,11 @@ import {
 import { Server } from '../base';
 import {
   booleanFromQuery,
+  fromBase64,
+  fromOptionalBase64,
   getDevicesKeysResult,
+  isValidAccessKey,
   parseAuthHeader,
-  serviceIdKindFromQuery,
   toBase64,
 } from '../../util';
 
@@ -89,15 +89,20 @@ export class Connection extends Service {
       headers,
       { credentialType } = {},
     ) => {
+      if (params.request && credentialType !== 'expiringProfileKey') {
+        return [400, { error: 'Unsupported credential type' }];
+      }
+
       const serviceId = params.serviceId as ServiceIdString;
 
       const target = await this.server.getDeviceByServiceId(serviceId);
-      if (!target) {
-        return [404, { error: 'Device not found' }];
-      }
-
-      if (this.server.isUnregistered(serviceId)) {
-        return [404, { error: 'Unregistered' }];
+      if (!target || this.server.isUnregistered(serviceId)) {
+        // Only authenticated and group send token requests learn whether an
+        // account exists
+        if (this.device || headers['group-send-token']) {
+          return [404, { error: 'Not found' }];
+        }
+        return [401, { error: 'Not authenticated' }];
       }
 
       const accessError = this.checkAccessKey(target, headers);
@@ -105,35 +110,49 @@ export class Connection extends Service {
         return [401, { error: accessError }];
       }
 
+      const { version } = params;
+      const profile =
+        version === undefined
+          ? undefined
+          : this.server.getProfile(target.aci, version);
+      const isCurrentVersion =
+        profile !== undefined &&
+        profile.version === this.server.getCurrentProfileVersion(target.aci);
+
+      // Credentials are only issued for the current version
       let credential: Buffer<ArrayBuffer> | undefined;
-      if (params.request) {
-        const request = new ProfileKeyCredentialRequest(
-          Buffer.from(params.request, 'hex'),
-        );
-        if (credentialType === 'expiringProfileKey') {
-          credential = await this.server.issueExpiringProfileKeyCredential({
-            aci: target.aci,
-            profileKeyCommitment: target.profileKeyCommitment,
-            request,
-          });
-        } else {
-          return [400, { error: 'Unsupported credential type' }];
-        }
+      if (params.request && isCurrentVersion) {
+        credential = await this.server.issueExpiringProfileKeyCredential({
+          aci: target.aci,
+          profileKeyCommitment: profile.commitment,
+          request: new ProfileKeyCredentialRequest(
+            Buffer.from(params.request, 'hex'),
+          ),
+        });
       }
 
       const serviceIdKind = target.getServiceIdKind(serviceId);
       const identityKey = await target.getIdentityKey(serviceIdKind);
 
+      const devices = await this.server.getAllDevicesByServiceId(target.aci);
+      const capabilities = getLegacyProfileCapabilities(devices);
+
       return [
         200,
         {
-          name: target.profileName?.toString('base64'),
           identityKey: Buffer.from(identityKey.serialize()).toString('base64'),
           unrestrictedUnidentifiedAccess: false,
           unidentifiedAccess: target.accessKey
             ? generateAccessKeyVerifier(target.accessKey).toString('base64')
             : undefined,
-          capabilities: target.capabilities,
+          capabilities,
+          name: profile?.name.toString('base64'),
+          about: profile?.about?.toString('base64'),
+          aboutEmoji: profile?.aboutEmoji?.toString('base64'),
+          phoneNumberSharing: profile?.phoneNumberSharing?.toString('base64'),
+          paymentAddress: isCurrentVersion
+            ? profile.paymentAddress?.toString('base64')
+            : undefined,
           credential: credential?.toString('base64'),
         },
       ];
@@ -168,23 +187,26 @@ export class Connection extends Service {
           return [400, { error: 'body is malformed' }];
         }
 
-        const primaryDevice = this.device;
-        if (!primaryDevice) {
+        const device = this.device;
+        if (!device) {
           return [400, { error: 'missing device!' }];
         }
 
-        const { data } = parsedResult;
-        const { name, commitment } = data;
-
-        primaryDevice.profileName = name
-          ? Buffer.from(name, 'base64')
-          : undefined;
-        if (commitment) {
-          primaryDevice.profileKeyCommitment = new ProfileKeyCommitment(
-            Buffer.from(commitment, 'base64'),
-          );
+        // Accounts with profiles v2 must write profiles with gRPC SetProfile
+        if (this.server.hasAccountCapability(device.aci, 'profiles_v2')) {
+          return [412, {}];
         }
-        // Note: The other fields on UpdateProfileSchema are currently not saved on device
+
+        const { data } = parsedResult;
+        this.server.setProfile(device.aci, {
+          version: data.version,
+          commitment: new ProfileKeyCommitment(fromBase64(data.commitment)),
+          name: fromBase64(data.name),
+          about: fromOptionalBase64(data.about),
+          aboutEmoji: fromOptionalBase64(data.aboutEmoji),
+          paymentAddress: fromOptionalBase64(data.paymentAddress),
+          phoneNumberSharing: fromOptionalBase64(data.phoneNumberSharing),
+        });
 
         const result: UploadProfileResponse = 'ok';
         return [200, result];
@@ -309,13 +331,6 @@ export class Connection extends Service {
     );
 
     this.router.put(
-      '/v1/devices/capabilities',
-      requireAuth(async () => {
-        return [200, { ok: true }];
-      }),
-    );
-
-    this.router.put(
       '/v1/devices/unauthenticated_delivery',
       requireAuth(async () => {
         return [200, { ok: true }];
@@ -338,37 +353,6 @@ export class Connection extends Service {
             ),
           },
         ];
-      }),
-    );
-
-    this.router.put(
-      '/v2/keys',
-      requireAuth(async (_params, rawBody, _headers, query) => {
-        if (!rawBody) {
-          return [422, { error: 'Missing body' }];
-        }
-
-        const serviceIdKind = serviceIdKindFromQuery(query);
-
-        const body = DeviceKeysSchema.parse(JSON.parse(rawBody.toString()));
-        try {
-          await server.updateDeviceKeys(this.getDevice(), serviceIdKind, {
-            preKeys: body.preKeys.map(decodePreKey),
-            kyberPreKeys: body.pqPreKeys?.map(decodeKyberPreKey),
-            lastResortKey: body.pqLastResortPreKey
-              ? decodeKyberPreKey(body.pqLastResortPreKey)
-              : undefined,
-            signedPreKey: body.signedPreKey
-              ? decodeSignedPreKey(body.signedPreKey)
-              : undefined,
-          });
-        } catch (error) {
-          assert(error instanceof Error);
-          debug('updateDeviceKeys error', error.stack);
-          return [400, { error: error.message }];
-        }
-
-        return [200, { ok: true }];
       }),
     );
 
@@ -438,7 +422,9 @@ export class Connection extends Service {
         provisioningCode: verificationCode as ProvisioningCode,
         registrationId,
         pniRegistrationId,
+        capabilities: accountAttributes.capabilities,
       });
+      device.encryptedName = Buffer.from(accountAttributes.name, 'base64');
 
       const primary = await server.getDeviceByServiceId(device.aci);
       if (!primary) {
@@ -732,6 +718,7 @@ export class Connection extends Service {
           // TODO(inutny): take as an input
           authCredentialSalt: randomBytes(16),
           unidentifiedAccessKey: Buffer.from(unidentifiedAccessKey),
+          capabilities: accountAttributes.capabilities,
         });
       } catch (error) {
         if (error instanceof Error && error.name === 'RegistrationLock') {
@@ -947,23 +934,18 @@ export class Connection extends Service {
     );
 
     this.router.put(
-      '/v1/accounts/registration_lock',
+      '/v1/devices/capabilities',
       requireAuth(async (_params, body) => {
         const device = this.getDevice();
         if (!body) {
           return [400, { error: 'Missing body' }];
         }
 
-        const { registrationLock } = PutRegistrationLockSchema.parse(
+        device.capabilities = CapabilitiesSchema.parse(
           JSON.parse(body.toString()),
         );
-        if (registrationLock.length !== 64) {
-          return [400, { error: 'registrationLock should be 64 characters' }];
-        }
 
-        this.server.setRegistrationLockToken(device.aci, registrationLock);
-
-        return [200, {}];
+        return [204, {}];
       }),
     );
 
@@ -975,8 +957,10 @@ export class Connection extends Service {
           return [400, { error: 'Missing body' }];
         }
 
-        const { registrationLock, unidentifiedAccessKey } =
+        const { registrationLock, unidentifiedAccessKey, capabilities } =
           AccountAttributesSchema.parse(JSON.parse(body.toString()));
+
+        device.capabilities = capabilities;
 
         if (registrationLock?.length) {
           this.server.setRegistrationLockToken(device.aci, registrationLock);
@@ -987,16 +971,6 @@ export class Connection extends Service {
         }
 
         return [204, {}];
-      }),
-    );
-
-    this.router.del(
-      '/v1/accounts/registration_lock',
-      requireAuth(async () => {
-        const device = this.getDevice();
-        this.server.setRegistrationLockToken(device.aci, undefined);
-
-        return [200, {}];
       }),
     );
 
@@ -1032,21 +1006,6 @@ export class Connection extends Service {
       }),
     );
 
-    //
-    // Captcha
-    //
-    this.router.put(
-      '/v1/challenge',
-      requireAuth(async () => {
-        const response = server.getResponseForChallenges();
-        if (response) {
-          return [response.code, response.data ?? {}];
-        }
-
-        return [200, { ok: true }];
-      }),
-    );
-
     this.router.get(
       '/v2/calling/relays',
       requireAuth(async () => [
@@ -1064,45 +1023,6 @@ export class Connection extends Service {
           ],
         },
       ]),
-    );
-
-    // Temporary endpoint until gRPC migration is completed
-    this.router.put(
-      '/v1/accounts/username_hash/confirm',
-      requireAuth(async (_params, rawBody) => {
-        if (!rawBody) {
-          return [422, { error: 'Missing body' }];
-        }
-
-        const {
-          usernameHash,
-          zkProof,
-          encryptedUsername: usernameCiphertext,
-        } = UsernameConfirmationSchema.parse(JSON.parse(rawBody.toString()));
-
-        const result = await server.confirmUsername(this.getDevice().aci, {
-          usernameHash,
-          zkProof,
-          usernameCiphertext,
-        });
-
-        if (!result) {
-          return [
-            409,
-            {
-              error:
-                "Given username hash doesn't match the reserved one or no reservation found.",
-            },
-          ];
-        }
-
-        return [
-          200,
-          {
-            usernameLinkHandle: stringifyUuid(result.usernameLinkHandle),
-          },
-        ];
-      }),
     );
   }
 
@@ -1286,7 +1206,7 @@ export class Connection extends Service {
         headers['unidentified-access-key'],
         'base64',
       );
-      if (!timingSafeEqual(accessKey, target.accessKey)) {
+      if (!isValidAccessKey(accessKey, target)) {
         return 'Invalid access key';
       }
     }

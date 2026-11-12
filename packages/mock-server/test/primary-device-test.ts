@@ -38,6 +38,7 @@ async function createPrimaryDevice(name: string): Promise<PrimaryDevice> {
     pniRegistrationId: 2 as RegistrationId,
     isProvisioned: false,
     authCredentialSalt: randomBytes(16),
+    capabilities: new Set(),
   });
 
   const primary = new PrimaryDevice(device, {
@@ -90,6 +91,9 @@ async function createPrimaryDevice(name: string): Promise<PrimaryDevice> {
     },
     async getProfileKeyPresentation() {
       throw new Error('Not implemented');
+    },
+    setProfile() {
+      // Profiles aren't stored in these tests
     },
     async getGroup() {
       throw new Error('Not implemented');

@@ -7,6 +7,7 @@ import type {
   CoreAttachmentLocalBackupJobType,
 } from '../../types/AttachmentBackup.std.ts';
 import type { ChatStyle } from '../../types/ChatStyle.std.ts';
+import type { BackupKey } from '@signalapp/libsignal-client/dist/AccountKeys.js';
 
 // Duplicated here to allow loading it in a non-node environment
 export enum BackupLevel {
@@ -34,14 +35,15 @@ export type OnProgressCallback = (
   totalBytes: number
 ) => void;
 
-export type BackupExportOptions = { abortSignal: AbortSignal } & (
+export type BackupExportOptions =
   | {
       type: 'remote' | 'cross-client-integration-test';
       level: BackupLevel;
     }
+  | { type: 'link-and-sync' }
   | { type: 'plaintext-export' }
-  | { type: 'local-encrypted' }
-);
+  | { type: 'local-encrypted' };
+export type BackupExportType = BackupExportOptions['type'];
 
 export type BackupImportOptions = (
   | { type: 'remote' | 'cross-client-integration-test' }
@@ -49,8 +51,8 @@ export type BackupImportOptions = (
       type: 'local-encrypted';
       localBackupSnapshotDir: string;
     }
+  | { type: 'link-and-sync'; ephemeralBackupKey: BackupKey }
 ) & {
-  ephemeralKey?: Uint8Array<ArrayBuffer>;
   onProgress?: OnProgressCallback;
 };
 
@@ -69,6 +71,7 @@ export type StatsType = {
   chatFolders: number;
   chats: number;
   distributionLists: number;
+  favoriteStickers: number;
   fixedDirectMessages: number;
   messages: number;
   notificationProfiles: number;

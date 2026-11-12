@@ -15,7 +15,9 @@ export {
   EMPTY_DATA_MESSAGE,
   EMPTY_GROUP_ACTIONS,
 } from './api/primary-device';
+export { DeviceCapability } from './data/capabilities';
 export { Device, SingleUseKey } from './data/device';
+export { VersionedProfile } from './data/profile';
 export { EnvelopeType } from './server/base';
 export {
   signalservice as Proto,

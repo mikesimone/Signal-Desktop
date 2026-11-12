@@ -11,7 +11,6 @@ import { MuteExpiration } from '@signalapp/types';
 import { Backups, SignalService } from '../../protobuf/index.std.ts';
 import {
   DataReader,
-  DataWriter,
   pauseWriteAccess,
   resumeWriteAccess,
 } from '../../sql/Client.preload.ts';
@@ -25,6 +24,7 @@ import type { ChatStyle } from '../../types/ChatStyle.std.ts';
 import { getConversationBubbleColor } from '../../util/conversationBubbleColor.std.ts';
 import { StorySendMode, MY_STORY_ID } from '../../types/Stories.std.ts';
 import { getInstalledStickerPacksForBackup } from '../../types/Stickers.preload.ts';
+import { MAX_FAVORITE_STICKERS } from '../../util/Stickers.std.ts';
 import {
   isPniString,
   isServiceIdString,
@@ -55,7 +55,7 @@ import { uuidToBytes } from '../../util/uuidToBytes.std.ts';
 import { strictAssert } from '../../util/assert.std.ts';
 import { combineNames } from '../../util/combineNames.std.ts';
 import { getSafeLongFromTimestamp } from '../../util/timestampLongUtils.std.ts';
-import { DAY, DurationInSeconds } from '../../util/durations/index.std.ts';
+import { DurationInSeconds } from '../../util/durations/index.std.ts';
 import {
   PhoneNumberDiscoverability,
   parsePhoneNumberDiscoverability,
@@ -115,12 +115,7 @@ import {
   AdhocCallStatus,
 } from '../../types/CallDisposition.std.ts';
 import { isAciString } from '../../util/isAciString.std.ts';
-import type {
-  AboutMe,
-  BackupExportOptions,
-  LocalChatStyle,
-  StatsType,
-} from './types.std.ts';
+import type { AboutMe, LocalChatStyle, StatsType } from './types.std.ts';
 import { messageHasPaymentEvent } from '../../messages/payments.std.ts';
 import {
   numberToAddressType,
@@ -135,19 +130,18 @@ import {
   hasRequiredInformationForRemoteBackup,
 } from '../../util/Attachment.std.ts';
 import { getFilePointerForAttachment } from './util/filePointers.preload.ts';
+import type { BackupContentPolicy } from './policy.std.ts';
 import { getBackupMediaRootKey } from './crypto.preload.ts';
 import type {
   CoreAttachmentBackupJobType,
   CoreAttachmentLocalBackupJobType,
 } from '../../types/AttachmentBackup.std.ts';
-import { AttachmentBackupManager } from '../../jobs/AttachmentBackupManager.preload.ts';
 import {
   getBackupCdnInfo,
   getLocalBackupFileNameForAttachment,
   getMediaNameForAttachment,
   getPlaintextExportFileNameForAttachment,
 } from './util/mediaId.preload.ts';
-import { calculateExpirationTimestamp } from '../../util/expirationTimer.std.ts';
 import { ReadStatus } from '../../messages/MessageReadStatus.std.ts';
 import { CallLinkRestrictions } from '../../types/CallLink.std.ts';
 import {
@@ -178,7 +172,7 @@ import {
 import { KIBIBYTE } from '../../types/AttachmentSize.std.ts';
 import { itemStorage } from '../../textsecure/Storage.preload.ts';
 import { ChatFolderType } from '../../types/ChatFolder.std.ts';
-import { expiresTooSoonForBackup } from './util/expiration.std.ts';
+import { canIncludeExpiringMessageInBackup } from './util/expiration.std.ts';
 import type { PinnedMessage } from '../../types/PinnedMessage.std.ts';
 import type { ThemeType } from '../../util/preload.preload.ts';
 import { safeParseStrict } from '../../util/schemas.std.ts';
@@ -259,7 +253,7 @@ type RunResultType = Readonly<{
 }>;
 
 export class BackupExportStream {
-  readonly #options: BackupExportOptions;
+  readonly #policy: BackupContentPolicy;
   // Shared between all methods for consistency.
   readonly #now = Date.now();
 
@@ -281,6 +275,7 @@ export class BackupExportStream {
     chatFolders: 0,
     chats: 0,
     distributionLists: 0,
+    favoriteStickers: 0,
     fixedDirectMessages: 0,
     installedStickerPacks: 0,
     messages: 0,
@@ -291,7 +286,7 @@ export class BackupExportStream {
   };
   #pendingRecipients: Array<Backups.Recipient.Params> = [];
   #ourConversation?: ConversationAttributesType;
-  #attachmentBackupJobs: Array<
+  readonly #attachmentBackupJobs: Array<
     CoreAttachmentBackupJobType | CoreAttachmentLocalBackupJobType
   > = [];
   #nextRecipientId = 1n;
@@ -304,8 +299,8 @@ export class BackupExportStream {
     bigint
   >();
 
-  constructor(options: BackupExportOptions) {
-    this.#options = options;
+  constructor(policy: BackupContentPolicy) {
+    this.#policy = policy;
   }
 
   public run(): RunResultType {
@@ -328,7 +323,6 @@ export class BackupExportStream {
 
   async *#run(): AsyncIterable<NonNullable<Backups.Frame.Params['item']>> {
     log.info('starting...');
-    await AttachmentBackupManager.stop();
 
     log.info('message migration starting...');
     await migrateAllMessages();
@@ -341,35 +335,6 @@ export class BackupExportStream {
       isPaused = false;
       await resumeWriteAccess();
 
-      // TODO (DESKTOP-7344): Clear & add backup jobs in a single transaction
-      const { type } = this.#options;
-      switch (type) {
-        case 'remote':
-          log.info(
-            `Enqueuing ${this.#attachmentBackupJobs.length} remote attachment backup jobs`
-          );
-          await DataWriter.clearAllAttachmentBackupJobs();
-          await Promise.all(
-            this.#attachmentBackupJobs.map(job => {
-              if (job.type === 'local') {
-                log.error(
-                  "Can't enqueue local backup jobs during remote backup, skipping"
-                );
-                return Promise.resolve();
-              }
-
-              return AttachmentBackupManager.addJobAndMaybeThumbnailJob(job);
-            })
-          );
-          this.#attachmentBackupJobs = [];
-          break;
-        case 'plaintext-export':
-        case 'local-encrypted':
-        case 'cross-client-integration-test':
-          break;
-        default:
-          throw missingCaseError(type);
-      }
       log.info('finished successfully');
     } catch (error) {
       log.error('errored', toLogFormat(error));
@@ -378,7 +343,6 @@ export class BackupExportStream {
       if (isPaused) {
         await resumeWriteAccess();
       }
-      await AttachmentBackupManager.start();
     }
   }
 
@@ -835,6 +799,47 @@ export class BackupExportStream {
       };
 
       this.#stats.chatFolders += 1;
+    }
+
+    const activeFavoriteStickers =
+      await DataReader.getAllFavoriteStickersForBackup();
+
+    // Favorite stickers are backed up as a single frame containing all of them.
+    const favoriteStickers: Array<Backups.FavoriteStickerList.FavoriteSticker.Params> =
+      [];
+
+    for (const favorite of activeFavoriteStickers) {
+      const { packId, packKey, stickerId, favoritedAtTimestampMs } = favorite;
+      if (packKey == null) {
+        log.warn('Dropping favorite sticker; missing packKey');
+        continue;
+      }
+
+      favoriteStickers.push({
+        packId: Bytes.fromHex(packId),
+        packKey: Bytes.fromBase64(packKey),
+        stickerId,
+        favoritedAtTimestamp: getSafeLongFromTimestamp(favoritedAtTimestampMs),
+      });
+
+      this.#stats.favoriteStickers += 1;
+
+      if (this.#stats.favoriteStickers >= MAX_FAVORITE_STICKERS) {
+        const droppedCount =
+          activeFavoriteStickers.length - MAX_FAVORITE_STICKERS;
+        log.warn(
+          `Reached favorite sticker limit of ${MAX_FAVORITE_STICKERS}, dropping ${droppedCount}`
+        );
+        break;
+      }
+    }
+
+    if (favoriteStickers.length > 0) {
+      yield {
+        favoriteStickerList: {
+          favoriteSticker: favoriteStickers,
+        },
+      };
     }
 
     const FLUSH_EVERY = 10000;
@@ -1565,23 +1570,14 @@ export class BackupExportStream {
       return undefined;
     }
 
-    const expirationTimestamp = calculateExpirationTimestamp(message);
     if (
-      expiresTooSoonForBackup({ messageExpiresAt: expirationTimestamp ?? null })
+      !canIncludeExpiringMessageInBackup({
+        message,
+        expiringMessagesPolicy: this.#policy.expiringMessages,
+        now: this.#now,
+      })
     ) {
       return undefined;
-    }
-
-    if (message.expireTimer) {
-      if (this.#options.type === 'plaintext-export') {
-        // All disappearing messages are excluded in plaintext export
-        return undefined;
-      }
-
-      if (DurationInSeconds.toMillis(message.expireTimer) <= DAY) {
-        // Message has an expire timer that's too short for export
-        return undefined;
-      }
     }
 
     let authorId: bigint | undefined;
@@ -3364,22 +3360,31 @@ export class BackupExportStream {
   }): Promise<Backups.FilePointer.Params> {
     const { filePointer, backupJob } = await getFilePointerForAttachment({
       attachment,
-      backupOptions: this.#options,
+      policy: this.#policy,
       messageReceivedAt,
       getBackupCdnInfo,
     });
 
     let mediaName: string | undefined;
-    if (this.#options.type === 'local-encrypted') {
-      if (hasRequiredInformationForLocalBackup(attachment)) {
-        mediaName = getLocalBackupFileNameForAttachment(attachment);
-      }
-    } else if (this.#options.type === 'plaintext-export') {
-      if (hasRequiredInformationForLocalBackup(attachment)) {
-        mediaName = getPlaintextExportFileNameForAttachment(attachment);
-      }
-    } else if (hasRequiredInformationForRemoteBackup(attachment)) {
-      mediaName = getMediaNameForAttachment(attachment);
+    const { attachmentTarget } = this.#policy;
+    switch (attachmentTarget) {
+      case 'local-encrypted':
+        if (hasRequiredInformationForLocalBackup(attachment)) {
+          mediaName = getLocalBackupFileNameForAttachment(attachment);
+        }
+        break;
+      case 'local-plaintext':
+        if (hasRequiredInformationForLocalBackup(attachment)) {
+          mediaName = getPlaintextExportFileNameForAttachment(attachment);
+        }
+        break;
+      case 'remote':
+        if (hasRequiredInformationForRemoteBackup(attachment)) {
+          mediaName = getMediaNameForAttachment(attachment);
+        }
+        break;
+      default:
+        throw missingCaseError(attachmentTarget);
     }
 
     if (mediaName) {
@@ -3735,13 +3740,9 @@ export class BackupExportStream {
     >;
   }): Promise<Backups.ViewOnceMessage.Params> {
     const attachment = message.attachments?.at(0);
-    // Integration tests use the 'link-and-sync' version of export, which will include
-    // view-once attachments
-    const shouldIncludeAttachments =
-      this.#options.type !== 'plaintext-export' && isTestOrMockEnvironment();
     return {
       attachment:
-        !shouldIncludeAttachments || attachment == null
+        !this.#policy.includeViewOnceAttachments || attachment == null
           ? null
           : await this.#processMessageAttachment({
               attachment,

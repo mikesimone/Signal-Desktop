@@ -130,7 +130,6 @@ export type PropsDataType = {
   autoDownloadAttachment: AutoDownloadAttachmentType;
   backupFreeMediaDays: number;
   previouslyViewedBackupKeyHash: string | undefined;
-  backupLocalBackupsEnabled: boolean;
   backupTier: BackupLevel | null;
   lastLocalBackup: LocalBackupExportMetadata | undefined;
   localBackupFolder: string | undefined;
@@ -323,7 +322,7 @@ type PropsFunctionType = {
 
   internalAddDonationReceipt: (receipt: DonationReceipt) => void;
   saveAttachmentToDisk: (options: {
-    data: Uint8Array<ArrayBuffer>;
+    data: { type: 'bytes'; bytes: Iterable<Uint8Array<ArrayBuffer>> };
     name: string;
     baseDir?: string | undefined;
   }) => Promise<{ fullPath: string; name: string } | null>;
@@ -467,7 +466,6 @@ export function Preferences({
   backupKeyHash,
   backupTier,
   backupSubscriptionStatus,
-  backupLocalBackupsEnabled,
   badge,
   blockedContactCount,
   blockedGroupCount,
@@ -2328,7 +2326,6 @@ export function Preferences({
         resumeBackupMediaDownload={resumeBackupMediaDownload}
         cloudBackupStatus={cloudBackupStatus}
         i18n={i18n}
-        isLocalBackupsEnabled={backupLocalBackupsEnabled}
         lastLocalBackup={lastLocalBackup}
         locale={resolvedLocale}
         localBackupFolder={localBackupFolder}

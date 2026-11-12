@@ -18,6 +18,9 @@ import {
   ClientZkProfileOperations,
   CreateCallLinkCredentialRequest,
   CreateCallLinkCredentialResponse,
+  DonationPermitDerivedKeyPair,
+  DonationPermitRequest,
+  DonationPermitResponse,
   ExpiringProfileKeyCredentialResponse,
   GenericServerSecretParams,
   GroupPublicParams,
@@ -46,7 +49,13 @@ import {
   PROFILE_KEY_CREDENTIAL_EXPIRATION,
 } from '../constants';
 import { ServerCertificate, generateSenderCertificate } from '../crypto';
+import {
+  DEFAULT_DEVICE_CAPABILITIES,
+  DeviceCapability,
+  hasAccountCapability,
+} from '../data/capabilities';
 import { ChangeNumberOptions, Device, DeviceKeys } from '../data/device';
+import { VersionedProfile } from '../data/profile';
 import {
   BackupMediaBatch,
   BackupSignedPresentation,
@@ -130,10 +139,9 @@ export type BackupCredentials = Readonly<{
   media: Credentials;
 }>;
 
-export type ChallengeResponse = Readonly<{
-  code: number;
-  data: unknown;
-}>;
+export type ChallengeResponse =
+  | Readonly<{ type: 'rejected' }>
+  | Readonly<{ type: 'rateLimited'; retryAfterSeconds: number }>;
 
 export type PreparedMultiDeviceMessage = Readonly<{
   timestamp: bigint;
@@ -150,6 +158,7 @@ export type ProvisionDeviceOptions = Readonly<{
   provisioningCode: ProvisioningCode;
   registrationId: RegistrationId;
   pniRegistrationId: RegistrationId | undefined;
+  capabilities: ReadonlySet<DeviceCapability>;
 }>;
 
 export type RegisterDeviceOptions = Readonly<
@@ -173,6 +182,7 @@ export type RegisterDeviceOptions = Readonly<
     pniRegistrationId: RegistrationId | undefined;
     registrationLockToken?: string | null;
     unidentifiedAccessKey: Buffer<ArrayBuffer> | undefined;
+    capabilities?: ReadonlySet<DeviceCapability>;
   }
 >;
 
@@ -400,6 +410,11 @@ export abstract class Server {
     Map<string, Buffer<ArrayBuffer>>
   >();
   private readonly registrationLockTokensByACI = new Map<AciString, string>();
+  private readonly profilesByAci = new Map<
+    AciString,
+    Map<string, VersionedProfile>
+  >();
+  private readonly currentProfileVersionByAci = new Map<AciString, string>();
   private readonly provisioningCodes = new Map<
     string,
     Map<ProvisioningCode, ProvisionIdString>
@@ -534,6 +549,34 @@ export abstract class Server {
     return this.registrationLockTokensByACI.get(aci);
   }
 
+  public setProfile(aci: AciString, profile: VersionedProfile): void {
+    let profiles = this.profilesByAci.get(aci);
+    if (!profiles) {
+      profiles = new Map();
+      this.profilesByAci.set(aci, profiles);
+    }
+    profiles.set(profile.version, profile);
+    this.currentProfileVersionByAci.set(aci, profile.version);
+  }
+
+  public getProfile(
+    aci: AciString,
+    version: string,
+  ): VersionedProfile | undefined {
+    return this.profilesByAci.get(aci)?.get(version);
+  }
+
+  public getCurrentProfileVersion(aci: AciString): string | undefined {
+    return this.currentProfileVersionByAci.get(aci);
+  }
+
+  public hasAccountCapability(
+    aci: AciString,
+    capability: DeviceCapability,
+  ): boolean {
+    return hasAccountCapability(this.devices.get(aci) ?? [], capability);
+  }
+
   public setRegisterResponseData(data: Partial<RegisterAccountResponse>): void {
     this.registerResponseData = data;
   }
@@ -562,6 +605,7 @@ export abstract class Server {
     authCredentialSalt: maybeAuthCredentialSalt,
     registrationLockToken,
     unidentifiedAccessKey,
+    capabilities = DEFAULT_DEVICE_CAPABILITIES,
   }: RegisterDeviceOptions): Promise<Device> {
     if (provisionId && !this.usedProvisionIds.has(provisionId)) {
       throw new Error('Use generateProvisionId() to create new provision id');
@@ -610,6 +654,7 @@ export abstract class Server {
       pniRegistrationId,
       isProvisioned: !!password,
       authCredentialSalt,
+      capabilities,
     });
     if (unidentifiedAccessKey?.length && !device.accessKey?.length) {
       device.accessKey = unidentifiedAccessKey;
@@ -640,6 +685,8 @@ export abstract class Server {
 
     this.devices.delete(aci);
     this.primaryByServiceId.delete(aci);
+    this.profilesByAci.delete(aci);
+    this.currentProfileVersionByAci.delete(aci);
     if (pni) {
       this.primaryByServiceId.delete(pni);
     }
@@ -707,6 +754,7 @@ export abstract class Server {
     provisioningCode,
     registrationId,
     pniRegistrationId,
+    capabilities,
   }: ProvisionDeviceOptions): Promise<Device> {
     const entry = this.provisioningCodes.get(aci);
     if (!entry) {
@@ -728,6 +776,7 @@ export abstract class Server {
       pniRegistrationId,
       password,
       unidentifiedAccessKey: undefined,
+      capabilities,
     });
 
     debug('provisioned device id=%j aci=%j', device.deviceId, device.aci);
@@ -1737,6 +1786,16 @@ export abstract class Server {
     });
   }
 
+  public async issueDonationPermits(
+    request: Uint8Array<ArrayBuffer>,
+  ): Promise<Uint8Array<ArrayBuffer>> {
+    const keyPair = DonationPermitDerivedKeyPair.forExpiration(
+      DonationPermitResponse.defaultExpiration(),
+      this.zkSecret,
+    );
+    return new DonationPermitRequest(request).issue(keyPair).serialize();
+  }
+
   public async issueExpiringProfileKeyCredential({
     aci,
     profileKeyCommitment,
@@ -1768,12 +1827,10 @@ export abstract class Server {
   async getProfileKeyPresentation({
     aci,
     profileKey,
-    profileKeyCommitment: providedProfileKeyCommitment,
     groupParams,
   }: {
     aci: AciString;
     profileKey: ProfileKey;
-    profileKeyCommitment: ProfileKeyCommitment | undefined;
     groupParams: GroupSecretParams;
   }): Promise<ProfileKeyCredentialPresentation> {
     const ops = new ClientZkProfileOperations(this.zkSecret.getPublicParams());
@@ -1782,9 +1839,9 @@ export abstract class Server {
       Aci.parseFromServiceIdString(aci),
       profileKey,
     );
-    const profileKeyCommitment =
-      providedProfileKeyCommitment ??
-      profileKey.getCommitment(Aci.parseFromServiceIdString(aci));
+    const profileKeyCommitment = profileKey.getCommitment(
+      Aci.parseFromServiceIdString(aci),
+    );
     const response = await this.issueExpiringProfileKeyCredential({
       aci,
       profileKeyCommitment,

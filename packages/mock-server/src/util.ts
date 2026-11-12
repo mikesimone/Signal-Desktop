@@ -10,8 +10,31 @@ import type { JsonValue } from 'type-fest';
 
 import { DAY_IN_SECONDS } from './constants';
 import { type RegistrationId, ServiceIdKind } from './types';
-import { ParsedUrlQuery } from 'node:querystring';
 import { Device } from './data/device';
+
+export function unreachable(input: never): never {
+  throw new TypeError(`Expected case to be unreachable, found ${input}`);
+}
+
+export function isValidAccessKey(
+  accessKey: Uint8Array | null,
+  target: Device,
+): boolean {
+  if (accessKey == null) {
+    return false;
+  }
+
+  if (target.accessKey == null) {
+    return false;
+  }
+
+  // timingSafeEqual throws when the lengths differ
+  if (accessKey.length !== target.accessKey.length) {
+    return false;
+  }
+
+  return crypto.timingSafeEqual(accessKey, target.accessKey);
+}
 
 type PromiseQueueEntry<T> = Readonly<{
   value: T;
@@ -279,6 +302,12 @@ export function fromBase64(base64: string): Buffer<ArrayBuffer> {
   return Buffer.from(base64, 'base64');
 }
 
+export function fromOptionalBase64(
+  base64: string | null | undefined,
+): Buffer<ArrayBuffer> | undefined {
+  return base64 ? fromBase64(base64) : undefined;
+}
+
 export function fromURLSafeBase64(base64: string): Buffer<ArrayBuffer> {
   const source = base64.replace(/-/g, '+').replace(/_/g, '/');
 
@@ -320,16 +349,6 @@ export function assertJsonValue(root: unknown): asserts root is JsonValue {
   if (issues.length > 0) {
     throw new TypeError(`Invalid JsonValue:\n${issues.join('\n')}`);
   }
-}
-
-export function serviceIdKindFromQuery(
-  query: Record<string, string> | ParsedUrlQuery | undefined,
-): ServiceIdKind {
-  if (query && (query.identity === 'pni' || query.identity === 'PNI')) {
-    return ServiceIdKind.PNI;
-  }
-
-  return ServiceIdKind.ACI;
 }
 
 export function booleanFromQuery(

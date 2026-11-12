@@ -82,6 +82,9 @@ export enum ToastType {
   RemoteConfigChanged = 'RemoteConfigChanged',
   ReportedSpamAndBlocked = 'ReportedSpamAndBlocked',
   SQLError = 'SQLError',
+  StickerFavoriteAdded = 'StickerFavoriteAdded',
+  StickerFavoriteRemoved = 'StickerFavoriteRemoved',
+  StickerFavoritesTooMany = 'StickerFavoritesTooMany',
   StickerPackInstallFailed = 'StickerPackInstallFailed',
   StoryMuted = 'StoryMuted',
   StoryReact = 'StoryReact',
@@ -247,6 +250,9 @@ export type AnyToast =
   | { toastType: ToastType.ReceiptSaveFailed }
   | { toastType: ToastType.ReportedSpam }
   | { toastType: ToastType.ReportedSpamAndBlocked }
+  | { toastType: ToastType.StickerFavoriteAdded }
+  | { toastType: ToastType.StickerFavoriteRemoved }
+  | { toastType: ToastType.StickerFavoritesTooMany }
   | { toastType: ToastType.StickerPackInstallFailed }
   | { toastType: ToastType.SQLError }
   | { toastType: ToastType.StoryMuted }

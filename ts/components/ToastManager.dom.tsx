@@ -27,6 +27,7 @@ import { I18n } from './I18n.dom.tsx';
 import { UserText } from './UserText.dom.tsx';
 import { RemoteMegaphone } from './RemoteMegaphone.dom.tsx';
 import { PinReminderMegaphone } from './PinReminderMegaphone.dom.tsx';
+import { MAX_FAVORITE_STICKERS } from '../util/Stickers.std.ts';
 
 export type PropsType = {
   changeLocation: (newLocation: Location) => unknown;
@@ -883,6 +884,32 @@ function renderToast({
     );
   }
 
+  if (toastType === ToastType.StickerFavoriteAdded) {
+    return (
+      <Toast onClose={hideToast}>
+        {i18n('icu:stickers--Toast--StickerFavoriteAdded')}
+      </Toast>
+    );
+  }
+
+  if (toastType === ToastType.StickerFavoriteRemoved) {
+    return (
+      <Toast onClose={hideToast}>
+        {i18n('icu:stickers--Toast--StickerFavoriteRemoved')}
+      </Toast>
+    );
+  }
+
+  if (toastType === ToastType.StickerFavoritesTooMany) {
+    return (
+      <Toast onClose={hideToast}>
+        {i18n('icu:stickers--Toast--StickerFavoritesTooMany', {
+          count: MAX_FAVORITE_STICKERS,
+        })}
+      </Toast>
+    );
+  }
+
   if (toastType === ToastType.StickerPackInstallFailed) {
     return (
       <Toast onClose={hideToast}>
@@ -890,6 +917,7 @@ function renderToast({
       </Toast>
     );
   }
+
   if (toastType === ToastType.SQLError) {
     return (
       <Toast

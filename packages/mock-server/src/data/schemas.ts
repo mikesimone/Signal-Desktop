@@ -3,6 +3,7 @@
 
 import z from 'zod';
 
+import { capabilitiesFromRecord } from './capabilities';
 import {
   AciString,
   DeviceId,
@@ -10,7 +11,7 @@ import {
   RegistrationId,
   ServiceIdString,
 } from '../types';
-import { fromBase64, fromURLSafeBase64 } from '../util';
+import { fromBase64 } from '../util';
 
 export const PositiveInt = z.coerce.number().int().nonnegative();
 
@@ -27,27 +28,12 @@ export const RegistrationIdSchema = z
   .transform((x) => x as RegistrationId);
 export const DeviceIdSchema = z.number().transform((x) => x as DeviceId);
 
-const PreKeySchema = z.object({
-  keyId: z.number(),
-  publicKey: z.string(),
-});
-export type ServerPreKey = z.infer<typeof PreKeySchema>;
-
 const SignedPreKeySchema = z.object({
   keyId: z.number(),
   publicKey: z.string(),
   signature: z.string(),
 });
 export type ServerSignedPreKey = z.infer<typeof SignedPreKeySchema>;
-
-export const DeviceKeysSchema = z.object({
-  preKeys: PreKeySchema.array(),
-  pqPreKeys: SignedPreKeySchema.array().optional(),
-  pqLastResortPreKey: SignedPreKeySchema.optional(),
-  signedPreKey: SignedPreKeySchema.optional(),
-});
-
-export type DeviceKeys = z.infer<typeof DeviceKeysSchema>;
 
 export const MessageSchema = z.object({
   // NOTE: Envelope.Type
@@ -66,6 +52,10 @@ export const MessageListSchema = z.object({
 
 export type MessageList = z.infer<typeof MessageListSchema>;
 
+export const CapabilitiesSchema = z
+  .record(z.string(), z.boolean())
+  .transform(capabilitiesFromRecord);
+
 export const AtomicLinkingDataSchema = z.object({
   verificationCode: z.string(),
   accountAttributes: z.object({
@@ -73,6 +63,7 @@ export const AtomicLinkingDataSchema = z.object({
     registrationId: RegistrationIdSchema,
     pniRegistrationId: RegistrationIdSchema.optional(),
     name: z.string(),
+    capabilities: CapabilitiesSchema,
   }),
   aciSignedPreKey: SignedPreKeySchema,
   aciPqLastResortPreKey: SignedPreKeySchema,
@@ -110,13 +101,7 @@ export const AccountAttributesSchema = z.object({
   registrationId: RegistrationIdSchema,
   pniRegistrationId: RegistrationIdSchema.optional(),
   name: z.string().optional().nullable(),
-  capabilities: z.object({
-    attachmentBackfill: z.boolean().optional(),
-    spqr: z.boolean(),
-    usernameChangeSyncMessage: z.boolean(),
-    // TODO(indutny): read it
-    optionalPhoneNumber: z.boolean().optional(),
-  }),
+  capabilities: CapabilitiesSchema,
   registrationLock: z.string().optional().nullable(),
   unidentifiedAccessKey: z.string().optional().nullable(),
   unrestrictedUnidentifiedAccess: z.boolean(),
@@ -133,13 +118,7 @@ export const RegisterAccountSchema = z.object({
     registrationId: RegistrationIdSchema,
     pniRegistrationId: RegistrationIdSchema.optional(),
     name: z.string().optional(),
-    capabilities: z.object({
-      attachmentBackfill: z.boolean().optional(),
-      spqr: z.boolean(),
-      usernameChangeSyncMessage: z.boolean(),
-      // TODO(indutny): read it
-      optionalPhoneNumber: z.boolean().optional(),
-    }),
+    capabilities: CapabilitiesSchema,
     registrationLock: z.string().optional(),
     unidentifiedAccessKey: z.array(z.number()),
     unrestrictedUnidentifiedAccess: z.boolean(),
@@ -185,10 +164,6 @@ export type RegisterAccountResponse = {
   };
   reregistration: boolean;
 };
-
-export const PutRegistrationLockSchema = z.object({
-  registrationLock: z.string(),
-});
 
 export const TransportSchema = z.literal('sms').or(z.literal('voice'));
 export type Transport = z.infer<typeof TransportSchema>;
@@ -319,9 +294,3 @@ export const BackupMediaBatchSchema = z.object({
 });
 
 export type BackupMediaBatch = z.infer<typeof BackupMediaBatchSchema>;
-
-export const UsernameConfirmationSchema = z.object({
-  usernameHash: z.string().transform(fromURLSafeBase64),
-  zkProof: z.string().transform(fromURLSafeBase64),
-  encryptedUsername: z.string().transform(fromURLSafeBase64),
-});

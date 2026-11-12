@@ -9,11 +9,9 @@ import {
   ProtocolAddress,
   PublicKey,
 } from '@signalapp/libsignal-client';
-import {
-  BackupLevel,
-  ProfileKeyCommitment,
-} from '@signalapp/libsignal-client/zkgroup';
+import { BackupLevel } from '@signalapp/libsignal-client/zkgroup';
 
+import { DeviceCapability } from './capabilities';
 import {
   AciString,
   DeviceId,
@@ -37,6 +35,7 @@ export type DeviceOptions = Readonly<{
   pniRegistrationId: RegistrationId | undefined;
   isProvisioned: boolean;
   authCredentialSalt: Buffer<ArrayBuffer>;
+  capabilities: ReadonlySet<DeviceCapability>;
 }>;
 
 export type ChangeNumberOptions = Readonly<{
@@ -86,17 +85,11 @@ export class Device {
   // the websocket.
   public readonly isProvisioned: boolean;
 
-  public capabilities: {
-    deleteSync: boolean;
-    versionedExpirationTimer: boolean;
-    ssre2: boolean;
-    usernameChangeSyncMessage: boolean;
-  };
+  public capabilities: ReadonlySet<DeviceCapability>;
 
   public backupLevel = BackupLevel.Paid;
   public accessKey?: Buffer<ArrayBuffer>;
-  public profileKeyCommitment?: ProfileKeyCommitment;
-  public profileName?: Buffer<ArrayBuffer>;
+  public encryptedName?: Buffer<ArrayBuffer>;
   public readonly authCredentialSalt: Buffer<ArrayBuffer>;
 
   private keys = new Map<ServiceIdKind, InternalDeviceKeys>();
@@ -124,12 +117,7 @@ export class Device {
       this.pni == null
         ? undefined
         : ProtocolAddress.new(this.pni, this.deviceId);
-    this.capabilities = {
-      deleteSync: true,
-      versionedExpirationTimer: true,
-      ssre2: true,
-      usernameChangeSyncMessage: true,
-    };
+    this.capabilities = options.capabilities;
   }
 
   public get debugId(): string {
@@ -254,16 +242,29 @@ export class Device {
       throw new Error('setKeys: Missing lastResortKey');
     }
 
+    // Each kind of one-time pre-key is only replaced when it is provided
+    const replacesPreKeys = keys.preKeys != null || keys.preKeyIterator != null;
+    const replacesKyberPreKeys =
+      keys.kyberPreKeys != null || keys.kyberPreKeyIterator != null;
+
     this.keys.set(serviceIdKind, {
       identityKey: keys.identityKey,
 
       signedPreKey,
-      preKeys: keys.preKeys?.slice() ?? [],
-      kyberPreKeys: keys.kyberPreKeys?.slice() ?? [],
+      preKeys: replacesPreKeys
+        ? (keys.preKeys?.slice() ?? [])
+        : (existingKeys?.preKeys ?? []),
+      kyberPreKeys: replacesKyberPreKeys
+        ? (keys.kyberPreKeys?.slice() ?? [])
+        : (existingKeys?.kyberPreKeys ?? []),
       lastResortKey,
 
-      preKeyIterator: keys.preKeyIterator,
-      kyberPreKeyIterator: keys.kyberPreKeyIterator,
+      preKeyIterator: replacesPreKeys
+        ? keys.preKeyIterator
+        : existingKeys?.preKeyIterator,
+      kyberPreKeyIterator: replacesKyberPreKeys
+        ? keys.kyberPreKeyIterator
+        : existingKeys?.kyberPreKeyIterator,
     });
   }
 

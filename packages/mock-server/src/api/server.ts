@@ -490,6 +490,7 @@ export class Server extends BaseServer {
       getSenderCertificate: this.getSenderCertificate.bind(this, device),
       getDeviceByServiceId: this.getDeviceByServiceId.bind(this),
       getProfileKeyPresentation: this.getProfileKeyPresentation.bind(this),
+      setProfile: this.setProfile.bind(this),
       getGroup: this.getGroup.bind(this),
       createGroup: this.createGroup.bind(this),
       modifyGroup: this.modifyGroup.bind(this),
@@ -553,11 +554,8 @@ export class Server extends BaseServer {
     this.unregisteredServiceIds.delete(serviceId);
   }
 
-  public respondToChallengesWith(code = 413, data?: unknown): void {
-    this.responseForChallenges = {
-      code,
-      data,
-    };
+  public respondToChallengesWith(response: ChallengeResponse): void {
+    this.responseForChallenges = response;
   }
 
   public stopRespondingToChallenges(): void {
@@ -570,6 +568,13 @@ export class Server extends BaseServer {
 
   public rateLimit({ source, target }: RateLimitOptions): void {
     this.rateLimitCountByPair.set(`${source}:${target}`, 0);
+  }
+
+  public getRateLimitCount({
+    source,
+    target,
+  }: RateLimitOptions): number | undefined {
+    return this.rateLimitCountByPair.get(`${source}:${target}`);
   }
 
   public stopRateLimiting({
@@ -866,15 +871,20 @@ export class Server extends BaseServer {
       return;
     }
 
-    debug('updateDeviceKeys: got keys for', device.debugId, serviceIdKind);
+    // One-time pre-keys and Kyber pre-keys can arrive in separate requests
+    if (
+      (await device.getPreKeyCount(serviceIdKind)) === 0 ||
+      (await device.getKyberPreKeyCount(serviceIdKind)) === 0
+    ) {
+      return;
+    }
 
     const { seenServiceIdKinds, promiseQueue } = resultQueue;
+    if (seenServiceIdKinds.has(serviceIdKind)) {
+      return;
+    }
 
-    assert(
-      !seenServiceIdKinds.has(serviceIdKind),
-      `Duplicate service id kind ${serviceIdKind} ` +
-        `for device: ${device.debugId}`,
-    );
+    debug('updateDeviceKeys: got keys for', device.debugId, serviceIdKind);
     seenServiceIdKinds.add(serviceIdKind);
     if (
       !seenServiceIdKinds.has(ServiceIdKind.ACI) ||

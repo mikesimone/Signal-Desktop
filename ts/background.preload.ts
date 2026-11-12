@@ -6,6 +6,7 @@ import { createRoot } from 'react-dom/client';
 import PQueue from 'p-queue';
 import pMap from 'p-map';
 import { v7 as generateUuid } from 'uuid';
+import { resetLocalTimeZone as intlDateResetLocalTimeZone } from '@internationalized/date';
 
 import * as Registration from './util/registration.preload.ts';
 import MessageReceiver from './textsecure/MessageReceiver.preload.ts';
@@ -89,6 +90,7 @@ import {
 } from './jobs/initializeAllJobQueues.preload.ts';
 import { removeStorageKeyJobQueue } from './jobs/removeStorageKeyJobQueue.preload.ts';
 import { conversationJobQueue } from './jobs/conversationJobQueue.preload.ts';
+import { handleAttachmentBackfillRequest } from './jobs/attachmentBackfillResponseJobQueue.preload.ts';
 import { ourProfileKeyService } from './services/ourProfileKey.std.ts';
 import { notificationService } from './services/notifications.preload.ts';
 import { areWeASubscriberService } from './services/areWeASubscriber.dom.ts';
@@ -97,10 +99,13 @@ import {
   setIsInitialContactSync,
 } from './services/contactSync.preload.ts';
 import { startTimeTravelDetector } from './util/startTimeTravelDetector.std.ts';
+import { startTimeZoneChangeDetector } from './util/startTimeZoneChangeDetector.std.ts';
+import { clearDateTimeFormatterCache } from './util/formatTimestamp.dom.ts';
 import { LatestQueue } from './util/LatestQueue.std.ts';
 import { parseIntOrThrow } from './util/parseIntOrThrow.std.ts';
 import { getProfile } from './util/getProfile.preload.ts';
 import type {
+  AttachmentBackfillRequestSyncEvent,
   AttachmentBackfillResponseSyncEvent,
   ConfigurationEvent,
   DeliveryEvent,
@@ -277,7 +282,6 @@ import { MessageModel } from './models/messages.preload.ts';
 import { waitForEvent } from './shims/events.dom.ts';
 import { sendSyncRequests } from './textsecure/syncRequests.preload.ts';
 import { handleServerAlerts } from './util/handleServerAlerts.preload.ts';
-import { isLocalBackupsEnabled } from './util/isLocalBackupsEnabled.dom.ts';
 import { NavTab, SettingsPage, ProfileEditorPage } from './types/Nav.std.ts';
 import { initialize as initializeDonationService } from './services/donations.preload.ts';
 import { MessageRequestResponseSource } from './types/MessageRequestResponseEvent.std.ts';
@@ -740,6 +744,10 @@ async function startApp(): Promise<void> {
     messageReceiver.addEventListener(
       'deleteForMeSync',
       queuedEventListener(onDeleteForMeSync)
+    );
+    messageReceiver.addEventListener(
+      'attachmentBackfillRequestSync',
+      queuedEventListener(onAttachmentBackfillRequestSync)
     );
     messageReceiver.addEventListener(
       'attachmentBackfillResponseSync',
@@ -1613,6 +1621,13 @@ async function startApp(): Promise<void> {
       window.Whisper.events.emit('timetravel');
     });
 
+    startTimeZoneChangeDetector(() => {
+      log.info('time zone changed');
+      clearDateTimeFormatterCache();
+      // React-aria components rely on @internationalized/date
+      intlDateResetLocalTimeZone();
+    });
+
     updateExpiringMessagesService();
     updateNotificationProfileService();
     tapToViewMessagesDeletionService.update();
@@ -1999,8 +2014,7 @@ async function startApp(): Promise<void> {
     wasBackupImported: boolean;
   }> {
     const backupDownloadPath = itemStorage.get('backupDownloadPath');
-    const isLocalBackupAvailable =
-      backupsService.isLocalBackupStaged() && isLocalBackupsEnabled();
+    const isLocalBackupAvailable = backupsService.isLocalBackupStaged();
 
     if (!isLocalBackupAvailable && !backupDownloadPath) {
       return { wasBackupImported: false };
@@ -4201,6 +4215,13 @@ async function startApp(): Promise<void> {
     await queueSyncTasks(syncTasks, DataWriter.removeSyncTaskById);
 
     log.info(`${logId}: Done`);
+  }
+  async function onAttachmentBackfillRequestSync(
+    ev: AttachmentBackfillRequestSyncEvent
+  ) {
+    const { confirm } = ev;
+    await handleAttachmentBackfillRequest(ev);
+    confirm();
   }
   async function onAttachmentBackfillResponseSync(
     ev: AttachmentBackfillResponseSyncEvent
