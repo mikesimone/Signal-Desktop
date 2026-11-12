@@ -5786,7 +5786,7 @@ async function showImmichView(view, { more = false } = {}) {
       if (immichState !== state) {
         return;
       }
-      body.replaceChildren(immichAlbumGrid(albums));
+      body.replaceChildren(immichAlbums(albums));
       return;
     }
     const page = more ? state.nextPage : 1;
@@ -5818,6 +5818,64 @@ function immichThumb(id) {
   img.loading = 'lazy';
   img.src = `api/immich/thumbnail?${new URLSearchParams({ id })}`;
   return img;
+}
+
+// Album search and sort (decision F59), as Backchannel Android. The sort
+// is remembered on this browser.
+const ALBUM_SORTS = [
+  ['name', 'Name', (a, b) => a.name.localeCompare(b.name)],
+  ['updated', 'Recently updated', (a, b) => b.updatedAt - a.updatedAt],
+  ['newest', 'Newest photos', (a, b) => b.newestAt - a.newestAt],
+  ['count', 'Most items', (a, b) => b.count - a.count],
+];
+
+function immichAlbums(albums) {
+  const wrap = el('div', 'immich-albums');
+  const bar = el('div', 'immich-album-bar');
+  const search = el('input', 'setting-input');
+  search.type = 'search';
+  search.placeholder = 'Search albums';
+  search.setAttribute('aria-label', 'Search albums');
+  let sort = 'name';
+  try {
+    sort = localStorage.getItem('immichAlbumSort') || 'name';
+  } catch {
+    // Default sort.
+  }
+  const select = settingSelect(
+    sort,
+    ALBUM_SORTS.map(([key, label]) => [key, label]),
+    value => {
+      sort = value;
+      try {
+        localStorage.setItem('immichAlbumSort', value);
+      } catch {
+        // Not remembered.
+      }
+      render();
+    }
+  );
+  select.setAttribute('aria-label', 'Sort albums');
+  bar.append(search, select);
+  const grid = el('div');
+  const render = () => {
+    const query = search.value.trim().toLocaleLowerCase();
+    const compare =
+      ALBUM_SORTS.find(([key]) => key === sort)?.[2] ?? ALBUM_SORTS[0][2];
+    const shown = albums
+      .filter(a => !query || a.name.toLocaleLowerCase().includes(query))
+      .sort(compare);
+    grid.replaceChildren(
+      shown.length === 0 && albums.length > 0
+        ? el('p', 'sub', 'No albums match.')
+        : immichAlbumGrid(shown)
+    );
+  };
+  search.addEventListener('input', render);
+  render();
+  wrap.append(bar, grid);
+  setTimeout(() => search.focus());
+  return wrap;
 }
 
 function immichAlbumGrid(albums) {
@@ -5985,6 +6043,7 @@ const WHATS_NEW = [
       'Auto-reply (Settings, Chats): a new message in a 1:1 chat gets your away text, sent from the server even with this page closed.',
       "Save received photos and videos to your Immich, from every chat (Settings, Chats) or chosen ones (the chat's ⋯ menu).",
       'Connect Immich with your email and password; an API key still works.',
+      'Search and sort your Immich albums in the picker.',
       'Send silently: hold or right-click Send. Other Backchannel users get no alert; other Signal apps still notify.',
     ],
   ],

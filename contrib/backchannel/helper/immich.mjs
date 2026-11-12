@@ -30,7 +30,10 @@ export function extensionFor(contentType) {
 // "2026-11-11T13:37:38.066-08:00": the instant written in a time zone, which
 // is what makes Immich show the local time (Signal sends no EXIF zone, so it
 // would otherwise treat the send time as UTC). BACKCHANNEL_TZ, default Pacific.
-export function localIso(ms, timeZone = process.env.BACKCHANNEL_TZ || 'America/Los_Angeles') {
+export function localIso(
+  ms,
+  timeZone = process.env.BACKCHANNEL_TZ || 'America/Los_Angeles'
+) {
   const at = new Date(ms);
   const zone = new Intl.DateTimeFormat('en-US', {
     timeZone,
@@ -199,6 +202,9 @@ export class Immich {
       thumbnailId: a.albumThumbnailAssetId
         ? String(a.albumThumbnailAssetId)
         : null,
+      // For sorting (decision F59): when it last changed, and its newest photo.
+      updatedAt: Date.parse(a.updatedAt ?? '') || 0,
+      newestAt: Date.parse(a.endDate ?? '') || 0,
     }));
   }
 

@@ -1332,3 +1332,15 @@ and keeps just the key in immich.json. It never stores the password.
 
 WHY: Mike asked for Immich to plug in through the usual sign-in, as
 Backchannel Android v14 does.
+
+## F59. Fork only: search and sort Immich albums
+
+DECISION: the Immich picker's Albums tab has a search box (album names)
+and a sort: Name, Recently updated, Newest photos, Most items. The sort is
+remembered in this browser. The helper adds each album's `updatedAt` and
+newest-photo date (`endDate`) to what it already passed along; the
+filtering and sorting happen on the page, since Immich returns every album
+at once.
+
+WHY: Mike, 2026-11-11 20:50 PT: "the Immich connection needs the ability to
+search and sort albums", on web and Android.

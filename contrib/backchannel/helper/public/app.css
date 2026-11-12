@@ -4300,3 +4300,17 @@ label.poll-option {
   font: inherit;
   cursor: pointer;
 }
+
+/* Immich album search and sort (decision F59). */
+.immich-album-bar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.immich-album-bar .setting-input {
+  flex: 1;
+  min-width: 0;
+}
+.immich-album-bar .setting-select {
+  max-width: none;
+}
