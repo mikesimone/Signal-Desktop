@@ -6520,7 +6520,7 @@ function settingsSections() {
         ),
         settingRow(
           'Save received photos and videos',
-          "To your Immich, from every chat. A chat's ⋯ menu saves just that chat. Needs Immich connected (Attach, Immich).",
+          "To your Immich, from every chat except archived or muted groups. A chat's ⋯ menu saves just that chat, even those. Needs Immich connected (Attach, Immich).",
           settingSwitch(autoSaveSettings.all, v =>
             saveAutoSave({ ...autoSaveSettings, all: v })
           )

@@ -1285,7 +1285,9 @@ no page open:
   remembers what it saved in auto-save.json. Nothing happens while Immich
   isn't connected. Chats with disappearing messages are saved too (Mike,
   2026-11-11: the timer is there to save phone space). View-once media is
-  never saved: the bridge never hands its content over. Android also
+  never saved: the bridge never hands its content over.
+  "Every chat" leaves out archived and muted groups (Mike, 2026-11-11);
+  a chat picked in its ⋯ menu is saved anyway. Android also
   skips locked chats; the web has no chat lock.
 - Not built: multiple accounts (each account is its own Signal and kit on
   Six, so it would be a second kit). Send silently waits on Android's

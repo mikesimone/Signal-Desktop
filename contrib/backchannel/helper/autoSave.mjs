@@ -103,19 +103,31 @@ export class AutoSave {
     return this.get();
   }
 
-  wants(conversationId) {
-    return this.#settings.all || this.#settings.chats.includes(conversationId);
+  // A chat picked in its ⋯ menu is always saved. "Every chat" leaves out
+  // archived and muted groups (Mike, 2026-11-11).
+  wants(conversationId, conversation = null) {
+    if (this.#settings.chats.includes(conversationId)) {
+      return true;
+    }
+    return (
+      this.#settings.all &&
+      !(
+        conversation?.type === 'group' &&
+        (conversation.archived || conversation.muted)
+      )
+    );
   }
 
   // m: a message.added or message.updated MessageDTO; conversation: its
-  // ConversationDTO (for the file name). Returns the work, so tests can wait. Chats with disappearing messages are saved too
-  // (Mike's call: the timer is there to save phone space, not for privacy).
-  // View-once media never reaches the helper: the bridge hides its content.
+  // ConversationDTO. Returns the work, so tests can wait. Chats with
+  // disappearing messages are saved too (Mike's call: the timer is there to
+  // save phone space, not for privacy). View-once media never reaches the
+  // helper: the bridge hides its content.
   handle(m, conversation) {
     if (
       m?.direction !== 'incoming' ||
       m.kind === 'viewOnce' ||
-      !this.wants(m.conversationId) ||
+      !this.wants(m.conversationId, conversation) ||
       !this.#immich?.status().connected
     ) {
       return this.#queue;
@@ -161,7 +173,12 @@ export class AutoSave {
       }
       await this.#immich.upload(Buffer.concat(chunks), {
         deviceAssetId: `signal-${key}`,
-        fileName: savedName(conversation?.title, m.sentAt ?? Date.now(), index, a),
+        fileName: savedName(
+          conversation?.title,
+          m.sentAt ?? Date.now(),
+          index,
+          a
+        ),
         contentType: a.contentType,
         createdAt: m.sentAt ?? Date.now(),
       });

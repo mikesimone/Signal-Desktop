@@ -2084,7 +2084,10 @@ describe('Immich local time', () => {
       localIso(Date.UTC(2026, 6, 4, 3, 5, 9, 0), 'America/Los_Angeles'),
       '2026-07-03T20:05:09.000-07:00'
     );
-    assert.equal(localIso(Date.UTC(2026, 0, 1), 'UTC'), '2026-01-01T00:00:00.000+00:00');
+    assert.equal(
+      localIso(Date.UTC(2026, 0, 1), 'UTC'),
+      '2026-01-01T00:00:00.000+00:00'
+    );
   });
 
   it('sets the time after an upload, and survives a refused edit', async () => {
@@ -2161,6 +2164,26 @@ describe('auto-save', () => {
     assert.equal(uploads[0][1].deviceAssetId, 'signal-m1:0');
     // The file keeps the chat and the date, not "attachment".
     assert.match(uploads[0][1].fileName, /^Signal_\d{4}-\d\d-\d\d_\d{6}\.jpg$/);
+    // "Every chat" skips archived and muted groups, unless picked.
+    as.set({ all: true, chats: ['g2'] });
+    const group = { type: 'group', archived: false, muted: false };
+    await as.handle(
+      { ...m, id: 'm4', conversationId: 'g1' },
+      { ...group, muted: true }
+    );
+    await as.handle(
+      { ...m, id: 'm5', conversationId: 'g1' },
+      { ...group, archived: true }
+    );
+    await as.handle({ ...m, id: 'm6', conversationId: 'g1' }, group);
+    await as.handle(
+      { ...m, id: 'm7', conversationId: 'g2' },
+      { ...group, muted: true }
+    );
+    assert.deepEqual(
+      uploads.slice(2).map(u => u[1].deviceAssetId),
+      ['signal-m6:0', 'signal-m7:0']
+    );
     rmSync(dir, { recursive: true, force: true });
   });
 
@@ -2176,7 +2199,10 @@ describe('auto-save', () => {
       'Chris-Cossin_2026-11-11_134355-3.mov'
     );
     assert.equal(
-      savedName('（_◉_）', t, 0, { contentType: 'image/png', fileName: 'x.PNG' }),
+      savedName('（_◉_）', t, 0, {
+        contentType: 'image/png',
+        fileName: 'x.PNG',
+      }),
       'Signal_2026-11-11_134355.png'
     );
     assert.equal(savedName(null, t, 0, {}), 'Signal_2026-11-11_134355.bin');
