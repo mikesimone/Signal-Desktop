@@ -146,7 +146,7 @@ should. Checked against Android's change list of 2026-11-04 (bc1 to bc9).
 | v14: search inside All media                      | done      | F55                                                    |
 | v14: hide or delete contacts                      | done      | F55: Signal's Remove; Delete chat was already there    |
 | v14: hide group system messages                   | different | the page never shows them (only real messages cross the bridge) |
-| v14: voice note transcript                        | missing   | waiting on Mike: run Whisper on Six? (asked 2026-11-11) |
+| v14: voice note transcript                        | done      | F60: optional speech server in the kit (speaches)      |
 | v14: auto-reply                                   | done      | F56: sent by the helper, page closed or not            |
 | v14: auto-save received photos and videos, per chat | done    | F56: saved to Immich instead of a phone gallery        |
 | v14: send silently                                | done      | F57: shared marker; only Backchannel receivers stay quiet |

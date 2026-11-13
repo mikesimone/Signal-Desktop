@@ -4314,3 +4314,31 @@ label.poll-option {
 .immich-album-bar .setting-select {
   max-width: none;
 }
+
+/* Voice-note transcripts (decision F60). */
+.voice {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.transcript {
+  max-width: 320px;
+  font-size: 0.92em;
+  line-height: 1.35;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.transcript.pending {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--muted, #6b6b6b);
+  font: inherit;
+  font-size: 0.85em;
+  font-style: italic;
+  text-align: left;
+}
+button.transcript.pending {
+  cursor: pointer;
+  text-decoration: underline;
+}

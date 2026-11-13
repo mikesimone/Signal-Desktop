@@ -2033,6 +2033,70 @@ function renderVisualContent(m, a, index, multiple) {
   return box;
 }
 
+// Voice-note transcripts (decision F60), as Backchannel Android: the
+// helper has a speech server on your own machine transcribe each voice
+// note. Off unless the kit's transcribe service is set up.
+let transcribeEnabled = false;
+// `${messageId}:${index}` -> { state: 'pending' | 'done' | 'failed', text }
+const transcripts = new Map();
+
+async function loadTranscribe() {
+  try {
+    transcribeEnabled = (await api('api/transcribe/status')).enabled === true;
+  } catch {
+    transcribeEnabled = false;
+  }
+}
+
+function transcriptKeys(m) {
+  return transcribeEnabled
+    ? (m.attachments ?? []).map(
+        (a, i) => transcripts.get(`${m.id}:${i}`)?.state ?? null
+      )
+    : null;
+}
+
+async function fetchTranscript(m, index) {
+  const key = `${m.id}:${index}`;
+  transcripts.set(key, { state: 'pending' });
+  try {
+    const { text } = await api(
+      `api/transcript?${new URLSearchParams({ messageId: m.id, index: String(index) })}`
+    );
+    transcripts.set(key, { state: 'done', text });
+  } catch {
+    transcripts.set(key, { state: 'failed' });
+  }
+  if (messages.has(m.id)) {
+    renderMessages();
+  }
+}
+
+function transcriptView(m, index) {
+  const key = `${m.id}:${index}`;
+  const entry = transcripts.get(key);
+  if (!entry) {
+    fetchTranscript(m, index);
+    return el('span', 'transcript pending', 'Transcribing…');
+  }
+  if (entry.state === 'pending') {
+    return el('span', 'transcript pending', 'Transcribing…');
+  }
+  if (entry.state === 'failed') {
+    const retry = el(
+      'button',
+      'transcript pending',
+      "Couldn't transcribe. Try again"
+    );
+    retry.type = 'button';
+    retry.addEventListener('click', () => fetchTranscript(m, index));
+    return retry;
+  }
+  return entry.text
+    ? el('span', 'transcript', entry.text)
+    : el('span', 'transcript pending', 'No speech');
+}
+
 function renderAudio(m, a, index) {
   const box = el('span', 'audio');
   if (a.state === 'ready') {
@@ -2041,6 +2105,11 @@ function renderAudio(m, a, index) {
     audio.preload = 'metadata';
     audio.src = attachmentUrl(m, index, a);
     box.append(audio);
+    if (a.isVoiceMessage && transcribeEnabled) {
+      const voice = el('span', 'voice');
+      voice.append(box, transcriptView(m, index));
+      return voice;
+    }
   } else {
     box.append(
       el(
@@ -3011,6 +3080,7 @@ function cachedMessage(m, prev, next) {
     starredIds.has(m.id),
     translations.get(m.id)?.text,
     isBlurred(m.conversationId),
+    transcriptKeys(m),
   ]);
   const cached = messageCache.get(m.id);
   if (cached && cached.key === key) {
@@ -5601,6 +5671,11 @@ loadStarredIds();
 loadCustomPhotos();
 loadKeywords();
 loadAutomation();
+loadTranscribe().then(() => {
+  if (transcribeEnabled && selectedId) {
+    renderMessages();
+  }
+});
 loadViewPrefs().then(() => {
   if (selectedId) {
     renderMessages();
@@ -6065,6 +6140,7 @@ const WHATS_NEW = [
       "Save received photos and videos to your Immich, from every chat (Settings, Chats) or chosen ones (the chat's ⋯ menu).",
       'Connect Immich with your email and password; an API key still works.',
       'Search and sort your Immich albums in the picker.',
+      "Voice messages show a transcript, made by a speech server on your own machine (the kit's optional transcribe service).",
       'Send silently: hold or right-click Send. Other Backchannel users get no alert; other Signal apps still notify.',
     ],
   ],
@@ -7782,6 +7858,12 @@ function connectEvents() {
   });
   on('autoReply.changed', value => {
     autoReplySettings = value;
+  });
+  on('transcript.ready', ({ messageId, index, text }) => {
+    transcripts.set(`${messageId}:${index}`, { state: 'done', text });
+    if (messages.has(messageId)) {
+      renderMessages();
+    }
   });
   on('autoSave.changed', value => {
     autoSaveSettings = value;

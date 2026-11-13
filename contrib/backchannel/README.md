@@ -60,6 +60,9 @@ Backchannel does. Each new one is added here when it ships.
   server even with no page open, at most once per chat in the time you pick.
 - **Send silently.** Hold or right-click Send; other Backchannel users get
   no alert (other Signal apps still notify).
+- **Voice-note transcripts** from a speech server on your own machine:
+  add `COMPOSE_PROFILES=transcribe` and
+  `BACKCHANNEL_TRANSCRIBE_URL=http://transcribe:8000` to `.env`.
 - **Auto-save to Immich.** Received photos and videos go to your Immich,
   from every chat or just the ones you pick.
 - **Your own photo for anyone.** Pick a picture for a person in their

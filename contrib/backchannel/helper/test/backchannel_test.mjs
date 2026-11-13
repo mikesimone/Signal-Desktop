@@ -24,6 +24,7 @@ import { AutoSave, savedName } from '../autoSave.mjs';
 import { Immich, localIso } from '../immich.mjs';
 import { ContactPhotoRefresh } from '../contactPhotos.mjs';
 import { Reminders } from '../reminders.mjs';
+import { Transcriber } from '../transcriber.mjs';
 import { FakeBridge, makeConversation, makeMessage } from './fake-bridge.mjs';
 
 const HELPER = join(
@@ -2215,5 +2216,67 @@ describe('auto-save', () => {
       'Signal_2026-11-11_134355.png'
     );
     assert.equal(savedName(null, t, 0, {}), 'Signal_2026-11-11_134355.bin');
+  });
+});
+
+describe('voice-note transcripts', () => {
+  it('transcribes a voice note once, through the speech server', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'bc-tr-'));
+    const seen = [];
+    const server = createServer((req, res) => {
+      let size = 0;
+      req.on('data', d => (size += d.length));
+      req.on('end', () => {
+        seen.push({ method: req.method, url: req.url, size });
+        res.setHeader('content-type', 'application/json');
+        if (req.url === '/v1/audio/transcriptions') {
+          res.end(JSON.stringify({ text: ' Hello there. ' }));
+        } else {
+          res.writeHead(201).end('{}');
+        }
+      });
+    });
+    await new Promise(r => server.listen(0, '127.0.0.1', r));
+    const audio = Buffer.from('fake-ogg-audio');
+    const bridge = {
+      call: async (method, { offset }) => {
+        assert.equal(method, 'attachments.read');
+        return {
+          contentType: 'audio/ogg',
+          size: audio.length,
+          data: audio.subarray(offset).toString('base64'),
+        };
+      },
+    };
+    const told = [];
+    const tr = new Transcriber(join(dir, 'transcripts.json'), {
+      url: `http://127.0.0.1:${server.address().port}/`,
+      model: 'Systran/faster-whisper-small',
+      bridge,
+      onText: item => told.push(item),
+    });
+    try {
+      assert.equal(tr.enabled(), true);
+      const voice = { isVoiceMessage: true, state: 'ready' };
+      await tr.handle({ id: 'm1', attachments: [voice] });
+      assert.equal(await tr.request('m1', 0), 'Hello there.');
+      assert.deepEqual(told, [
+        { messageId: 'm1', index: 0, text: 'Hello there.' },
+      ]);
+      assert.deepEqual(
+        seen.map(s => s.url),
+        ['/v1/models/Systran/faster-whisper-small', '/v1/audio/transcriptions']
+      );
+      // Kept across restarts; no second trip to the server.
+      const again = new Transcriber(join(dir, 'transcripts.json'), {
+        url: 'http://127.0.0.1:1',
+        bridge,
+      });
+      assert.equal(await again.request('m1', 0), 'Hello there.');
+      assert.equal(new Transcriber(null, { bridge }).enabled(), false);
+    } finally {
+      server.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

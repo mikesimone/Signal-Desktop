@@ -25,6 +25,9 @@ services:
       # One-time history import: put a Signal local-backup snapshot folder at <data dir>/import/snapshot, then use
       # File > Stage local backup for import in the not-yet-linked window (patches/0002). Unused otherwise.
       BACKCHANNEL_LOCAL_BACKUP_DIR: /data/import/snapshot
+      # Voice-note transcripts (decision F60): see the transcribe service below.
+      BACKCHANNEL_TRANSCRIBE_URL: ${BACKCHANNEL_TRANSCRIBE_URL:-}
+      BACKCHANNEL_TRANSCRIBE_MODEL: ${BACKCHANNEL_TRANSCRIBE_MODEL:-}
     ports:
       # Host loopback only: a reverse proxy (or ssh -L) puts the chat page
       # in front of people, and VNC is for the one-time link and approval.
@@ -34,3 +37,21 @@ services:
       - ${BACKCHANNEL_DATA:-${SIGNAL_DATA:?set BACKCHANNEL_DATA in .env}}:/data
     # Chromium needs more shared memory than Docker's 64 MB default.
     shm_size: 1gb
+
+  # Optional: voice-note transcripts (decision F60), from a speech-to-text
+  # server on this machine, so the audio never leaves it. To turn it on, add
+  # to .env:
+  #   COMPOSE_PROFILES=transcribe
+  #   BACKCHANNEL_TRANSCRIBE_URL=http://transcribe:8000
+  # The first voice note downloads the speech model (about 500 MB) into the
+  # transcribe-models volume. Any server with the OpenAI
+  # /v1/audio/transcriptions API works in its place.
+  transcribe:
+    image: ghcr.io/speaches-ai/speaches:${BACKCHANNEL_TRANSCRIBE_TAG:-latest-cpu}
+    profiles: [transcribe]
+    restart: unless-stopped
+    volumes:
+      - transcribe-models:/home/ubuntu/.cache/huggingface/hub
+
+volumes:
+  transcribe-models:

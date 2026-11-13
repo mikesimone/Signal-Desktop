@@ -51,6 +51,7 @@ import { KeywordAlerts } from './keywords.mjs';
 import { ViewPrefs } from './viewPrefs.mjs';
 import { AutoReply } from './autoReply.mjs';
 import { AutoSave } from './autoSave.mjs';
+import { Transcriber } from './transcriber.mjs';
 import { Reminders } from './reminders.mjs';
 import { ScheduledMessages } from './scheduled.mjs';
 import { allowedOrigins, createWebServer } from './server.mjs';
@@ -191,6 +192,8 @@ const bridge = new Bridge({
     }
     if (event.event === 'message.added' || event.event === 'message.updated') {
       autoSave.handle(event.data, store.get(event.data.conversationId));
+      // Voice-note transcripts (decision F60).
+      transcriber.handle(event.data);
     }
   },
 });
@@ -248,6 +251,13 @@ const autoReply = new AutoReply(join(configDir, 'auto-reply.json'), {
     bridge.call('messages.sendText', { conversationId, body }),
   log,
 });
+const transcriber = new Transcriber(join(configDir, 'transcripts.json'), {
+  url: process.env.BACKCHANNEL_TRANSCRIBE_URL || null,
+  model: process.env.BACKCHANNEL_TRANSCRIBE_MODEL || null,
+  bridge,
+  log,
+  onText: item => web?.broadcast('transcript.ready', item),
+});
 const autoSave = new AutoSave(join(configDir, 'auto-save.json'), {
   bridge,
   immich,
@@ -282,6 +292,7 @@ web = createWebServer({
   immich,
   autoReply,
   autoSave,
+  transcriber,
   reminders,
   keywords: new KeywordAlerts(join(configDir, 'keywords.json')),
   viewPrefs: new ViewPrefs(join(configDir, 'view-prefs.json')),

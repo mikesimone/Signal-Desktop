@@ -1346,3 +1346,22 @@ at once.
 
 WHY: Mike, 2026-11-11 20:50 PT: "the Immich connection needs the ability to
 search and sort albums", on web and Android.
+
+## F60. Fork only: voice-note transcripts from a speech server you run
+
+DECISION: Mike picked "Whisper on Six" (2026-11-13) after reporting that
+voice notes weren't transcribed on the web. The kit gains an optional
+`transcribe` service (speaches, faster-whisper on CPU, compose profile
+`transcribe`). When `BACKCHANNEL_TRANSCRIBE_URL` points at it, the helper
+transcribes every voice note as Signal finishes downloading it, keeps the
+text in transcripts.json, and tells open pages (`transcript.ready`). The
+page shows the text under the voice note, and asks for one it doesn't have
+yet (`api/transcript`). The helper talks to the OpenAI
+`/v1/audio/transcriptions` API, so any such server you run works in its
+place; it asks speaches for the model first (`POST /v1/models/<id>`), which
+downloads it on first use. Default model: Systran/faster-whisper-small
+(multilingual). The audio never leaves the machine running the kit, and
+nothing is set up unless the owner turns it on in .env.
+
+WHY: Mike's v14 list includes voice-note transcripts; his 2026-11-06 "no"
+was about the browser's speech API sending audio to Google.

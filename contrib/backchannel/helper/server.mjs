@@ -240,6 +240,7 @@ export function createWebServer({
   viewPrefs = null,
   autoReply = null,
   autoSave = null,
+  transcriber = null,
   scheduled = null,
   contactPhotos = null,
   log,
@@ -1229,6 +1230,35 @@ export function createWebServer({
       }
       broadcast('autoReply.changed', saved);
       sendJson(res, 200, saved);
+      return;
+    }
+    if (req.method === 'GET' && route === 'api/transcribe/status') {
+      sendJson(res, 200, { enabled: transcriber?.enabled() ?? false });
+      return;
+    }
+    if (req.method === 'GET' && route === 'api/transcript') {
+      const messageId = url.searchParams.get('messageId') ?? '';
+      const index = Number(url.searchParams.get('index'));
+      if (
+        !transcriber?.enabled() ||
+        !messageId ||
+        messageId.length > 128 ||
+        !Number.isInteger(index) ||
+        index < 0 ||
+        index > 63
+      ) {
+        sendJson(res, 400, { error: { code: 'INVALID_ARGUMENT' } });
+        return;
+      }
+      try {
+        sendJson(res, 200, {
+          text: await transcriber.request(messageId, index),
+        });
+      } catch (error) {
+        sendJson(res, 502, {
+          error: { code: error.code ?? 'TRANSCRIBE_ERROR' },
+        });
+      }
       return;
     }
     if (req.method === 'GET' && route === 'api/autoSave') {
