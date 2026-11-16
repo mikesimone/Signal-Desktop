@@ -9,7 +9,7 @@ Status: **done**, **partial**, **missing**, or **different** (on purpose).
 A weekly check compares new Signal releases against this list and adds
 what they bring.
 
-Last reviewed: 2026-11-09, against Signal 8.37.0-alpha.1 in fork main (upstream main has nothing newer).
+Last reviewed: 2026-11-16, against Signal 8.38.0-alpha.1 in fork main (upstream main has nothing newer). New since 8.37: favorite stickers (8.36 release notes); local backups are always on (flag removed, no page change).
 
 ## Chat list
 
@@ -44,7 +44,7 @@ Last reviewed: 2026-11-09, against Signal 8.37.0-alpha.1 in fork main (upstream 
 | Long messages                                            | done      |                                                      |
 | Polls (vote, end, create, send to many chats)            | done      | F6                                                   |
 | Stickers (view and send)                                 | done      | F10                                                  |
-| Sticker favorites                                        | missing   | Signal beta, behind a remote flag; 8.37 adds favoriting from a sticker message and the picker's menu |
+| Sticker favorites                                        | done      | F61: Favorites tab; right-click a sticker or a sticker message's menu; shown only while Signal's remote flag is on |
 | Link previews (view)                                     | done      |                                                      |
 | Mark read as you read, clears "mark as unread"           | done      | F13                                                  |
 | Unread line, jump-to-newest button with count            | done      | F18                                                  |

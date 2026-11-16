@@ -1365,3 +1365,19 @@ nothing is set up unless the owner turns it on in .env.
 
 WHY: Mike's v14 list includes voice-note transcripts; his 2026-11-06 "no"
 was about the browser's speech API sending audio to Google.
+
+## F61. Fork addition: favorite stickers
+
+DECISION: Signal 8.36 announces favorite stickers (StickerPreviewModal's
+Add to / Remove from favorites; a Favorites row in the picker; synced through
+storage service). The bridge passes them along: `stickers.getPacks` adds
+`favorites` and `favoritesEnabled` (Signal's remote flag), and a new
+`stickers.setFavorite` runs Signal's own `markStickerAsFavorite`, under the
+existing messages.send capability, so no Allow prompt. A sticker message's
+DTO now names its `packId` and `stickerId` (never the key). The page shows
+a Favorites tab first in the sticker picker; right-clicking a sticker there,
+or a sticker message's ⋯ menu, adds or removes it. Nothing shows while
+Signal's flag is off.
+
+WHY: Mike's standing rule (2026-10-13) that the page keeps up with Signal
+Desktop; found by the weekly parity check on 2026-11-16.

@@ -3,9 +3,11 @@
 
 import { createLogger } from '../../logging/log.std.ts';
 import {
+  getInstalledFavoriteStickers,
   getInstalledStickerPacks,
   getRecentStickers,
 } from '../../state/selectors/stickers.std.ts';
+import { isFavoriteStickersEnabled } from '../../util/stickers.preload.ts';
 import * as Errors from '../../types/errors.std.ts';
 import { getSticker, getStickerPack } from '../../types/Stickers.preload.ts';
 import { makeQuote } from '../../util/makeQuote.preload.ts';
@@ -19,6 +21,7 @@ import type {
   MessagesSendStickerParamsType,
   StickersGetImageParamsType,
   StickersGetPacksResultType,
+  StickersSetFavoriteParamsType,
 } from '../protocol.std.ts';
 import { ErrorCode } from '../protocol.std.ts';
 import { renderImage } from './ExternalClientExtras.preload.ts';
@@ -54,8 +57,35 @@ export function getStickerPacks(): ServiceResultType {
       stickerId: sticker.id,
       emoji: sticker.emoji ?? null,
     })),
+    favorites: getInstalledFavoriteStickers(state).map(sticker => ({
+      packId: sticker.packId,
+      stickerId: sticker.id,
+      emoji: sticker.emoji ?? null,
+    })),
+    favoritesEnabled: isFavoriteStickersEnabled(),
   };
   return { ok: true, value };
+}
+
+// Signal's Add to / Remove from favorites (StickerPreviewModal), which syncs
+// through storage service. The pack must be one Signal knows, as there; it
+// runs on its own and shows Signal's own toast.
+export function setStickerFavorite({
+  packId,
+  stickerId,
+  favorite,
+}: StickersSetFavoriteParamsType): ServiceResultType {
+  if (!isFavoriteStickersEnabled()) {
+    return { ok: false, code: ErrorCode.PreconditionFailed };
+  }
+  if (!getStickerPack(packId) || !getSticker(packId, stickerId)) {
+    return notFound;
+  }
+  window.reduxActions.stickers.markStickerAsFavorite(
+    { packId, stickerId },
+    favorite
+  );
+  return { ok: true, value: {} };
 }
 
 // Only stickers the picker offers: from installed packs, or recently used.
@@ -81,6 +111,9 @@ function findPickerSticker(
     pack.status === 'installed' ||
     state.stickers.recentStickers.some(
       recent => recent.packId === packId && recent.stickerId === stickerId
+    ) ||
+    state.stickers.favoriteStickers.some(
+      fav => fav.packId === packId && fav.stickerId === stickerId
     );
   return offered ? { pack, sticker } : undefined;
 }

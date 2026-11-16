@@ -17,6 +17,7 @@ import {
   messagesEditParamsSchema,
   messagesForwardParamsSchema,
   messagesSendStickerParamsSchema,
+  stickersSetFavoriteParamsSchema,
   linkPreviewsFetchParamsSchema,
   mediaListParamsSchema,
   chatFoldersListParamsSchema,
@@ -610,6 +611,22 @@ describe('externalClient/protocol', () => {
           conversationId,
           body: 'see https://example.com',
           linkPreviewUrl: 'https://example.com',
+        })
+      );
+    });
+
+    it('favorites a sticker by pack and id', () => {
+      assert.isTrue(
+        accepts(stickersSetFavoriteParamsSchema, {
+          packId: '9acc9e8aba563d26a4994e69263e3b25',
+          stickerId: 3,
+          favorite: true,
+        })
+      );
+      assert.isFalse(
+        accepts(stickersSetFavoriteParamsSchema, {
+          packId: '9acc9e8aba563d26a4994e69263e3b25',
+          stickerId: 3,
         })
       );
     });

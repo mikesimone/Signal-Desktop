@@ -1449,6 +1449,18 @@ describe('backchannel helper', () => {
     const read = bridge.calls.findLast(c => c.method === 'stickers.getImage');
     assert.deepEqual(read.params, { packId: 'abcd', stickerId: 0, width: 96 });
 
+    const fav = await http(port, {
+      method: 'POST',
+      path: `/${helper.token}/api/stickerFavorite`,
+      headers: json,
+      body: { packId: 'abcd', stickerId: 0, favorite: true },
+    });
+    assert.equal(fav.status, 200);
+    assert.deepEqual(
+      bridge.calls.findLast(c => c.method === 'stickers.setFavorite').params,
+      { packId: 'abcd', stickerId: 0, favorite: true }
+    );
+
     const sent = await http(port, {
       method: 'POST',
       path: `/${helper.token}/api/sendSticker`,

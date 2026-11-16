@@ -391,6 +391,8 @@ function toSticker(message: MessageSourceType): StickerDTO | null {
     width: sticker.width ?? sticker.data?.width ?? null,
     height: sticker.height ?? sticker.data?.height ?? null,
     ready: Boolean(sticker.data?.path),
+    packId: sticker.packId ?? null,
+    stickerId: sticker.stickerId ?? null,
   };
 }
 

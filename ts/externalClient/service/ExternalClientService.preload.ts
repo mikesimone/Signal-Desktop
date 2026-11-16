@@ -69,6 +69,7 @@ import {
 } from './ExternalClientPreferences.preload.ts';
 import {
   getStickerImage,
+  setStickerFavorite,
   getStickerPacks,
   sendSticker,
 } from './ExternalClientStickers.preload.ts';
@@ -414,6 +415,10 @@ async function dispatch(
     case Method.StickersGetImage: {
       const params = safeParseUnknown(SERVICE_PARAM_SCHEMAS[method], rawParams);
       return params.success ? getStickerImage(params.data) : invalid;
+    }
+    case Method.StickersSetFavorite: {
+      const params = safeParseUnknown(SERVICE_PARAM_SCHEMAS[method], rawParams);
+      return params.success ? setStickerFavorite(params.data) : invalid;
     }
     case Method.SettingsGet: {
       // The blocked list needs Signal's conversations.

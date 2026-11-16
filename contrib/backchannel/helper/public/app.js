@@ -5671,6 +5671,7 @@ loadStarredIds();
 loadCustomPhotos();
 loadKeywords();
 loadAutomation();
+loadStickerFavorites();
 loadTranscribe().then(() => {
   if (transcribeEnabled && selectedId) {
     renderMessages();
@@ -6129,6 +6130,12 @@ $('immich').addEventListener('click', e => {
 // Newest first. As Backchannel Android for now: every entry since the
 // beginning shows, and the ones since your last look are marked New.
 const WHATS_NEW = [
+  [
+    '2026-11-16',
+    [
+      "Favorite stickers, as Signal 8.36: a Favorites tab in the sticker picker. Right-click a sticker, or use a sticker message's ⋯ menu, to add or remove one.",
+    ],
+  ],
   [
     '2026-11-11',
     [
@@ -6959,6 +6966,48 @@ async function sendSticker(packId, stickerId) {
   }
 }
 
+// Signal 8.36's favorite stickers (decision F61): a Favorites tab, and
+// right-click a sticker (or a sticker message's ⋯ menu) to add or remove
+// one. Signal syncs them to your phone.
+let stickerFavorites = new Set();
+let stickerFavoritesEnabled = false;
+
+function noteStickerData(data) {
+  stickerFavoritesEnabled = data.favoritesEnabled === true;
+  stickerFavorites = new Set(
+    (data.favorites ?? []).map(f => `${f.packId}:${f.stickerId}`)
+  );
+}
+
+async function loadStickerFavorites() {
+  try {
+    noteStickerData(await api('api/stickers'));
+  } catch {
+    // The picker loads them again when it opens.
+  }
+}
+
+async function setStickerFavorite(packId, stickerId, favorite) {
+  try {
+    await api('api/stickerFavorite', { packId, stickerId, favorite });
+  } catch (error) {
+    toast(
+      error.code === 'PRECONDITION_FAILED'
+        ? "Signal doesn't offer favorite stickers yet."
+        : `Couldn't change favorites (${error.code ?? error.message}).`
+    );
+    return false;
+  }
+  const key = `${packId}:${stickerId}`;
+  if (favorite) {
+    stickerFavorites.add(key);
+  } else {
+    stickerFavorites.delete(key);
+  }
+  toast(favorite ? 'Added to favorites' : 'Removed from favorites');
+  return true;
+}
+
 async function openStickerPicker(anchorElement, onPick = sendSticker) {
   const anchor = anchorElement.getBoundingClientRect();
   let data;
@@ -6968,6 +7017,7 @@ async function openStickerPicker(anchorElement, onPick = sendSticker) {
     toast(`Couldn't load stickers (${error.code ?? error.message}).`);
     return;
   }
+  noteStickerData(data);
   closePopovers();
   const picker = $('sticker-picker');
   const tabs = el('div', 'sticker-tabs');
@@ -6977,6 +7027,17 @@ async function openStickerPicker(anchorElement, onPick = sendSticker) {
   body.append(title, grid);
 
   const sources = [];
+  if (stickerFavoritesEnabled && data.favorites.length > 0) {
+    sources.push({
+      key: 'favorites',
+      title: 'Favorites',
+      stickers: data.favorites.map(f => ({
+        packId: f.packId,
+        id: f.stickerId,
+        emoji: f.emoji,
+      })),
+    });
+  }
   if (data.recents.length > 0) {
     sources.push({
       key: 'recent',
@@ -7011,6 +7072,24 @@ async function openStickerPicker(anchorElement, onPick = sendSticker) {
           closePopovers();
           onPick(st.packId, st.id);
         });
+        if (stickerFavoritesEnabled) {
+          const key = `${st.packId}:${st.id}`;
+          cell.title =
+            `${st.emoji ?? ''} (right-click to ${stickerFavorites.has(key) ? 'remove from' : 'add to'} favorites)`.trim();
+          cell.addEventListener('contextmenu', async ev => {
+            ev.preventDefault();
+            ev.stopPropagation();
+            const done = await setStickerFavorite(
+              st.packId,
+              st.id,
+              !stickerFavorites.has(key)
+            );
+            if (done) {
+              cell.title =
+                `${st.emoji ?? ''} (right-click to ${stickerFavorites.has(key) ? 'remove from' : 'add to'} favorites)`.trim();
+            }
+          });
+        }
         return cell;
       })
     );
@@ -7044,7 +7123,7 @@ async function openStickerPicker(anchorElement, onPick = sendSticker) {
         tab.append(img);
       }
     } else {
-      tab.append(icon('cat-recent'));
+      tab.append(icon(source.key === 'favorites' ? 'star' : 'cat-recent'));
     }
     tab.addEventListener('click', ev => {
       ev.stopPropagation();
@@ -7361,6 +7440,20 @@ function openMoreMenu(m, anchor) {
     const starred = starredIds.has(m.id);
     add('star', starred ? 'Unstar' : 'Star', () => setStar(m, !starred));
     add('clock', 'Remind me', () => openReminderMenu(m, anchor));
+  }
+  if (
+    stickerFavoritesEnabled &&
+    m.sticker?.packId != null &&
+    m.sticker.stickerId != null
+  ) {
+    const fav = stickerFavorites.has(
+      `${m.sticker.packId}:${m.sticker.stickerId}`
+    );
+    add(
+      'star',
+      fav ? 'Remove sticker from favorites' : 'Add sticker to favorites',
+      () => setStickerFavorite(m.sticker.packId, m.sticker.stickerId, !fav)
+    );
   }
   if (m.kind === 'text' && m.body && m.attachments.length > 0) {
     add('trash', 'Delete attachments, keep text', () =>

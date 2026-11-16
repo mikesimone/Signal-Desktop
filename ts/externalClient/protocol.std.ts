@@ -156,6 +156,8 @@ export const Method = {
   ConversationsGetMembers: 'conversations.getMembers',
   StickersGetPacks: 'stickers.getPacks',
   StickersGetImage: 'stickers.getImage',
+  // Fork addition (decision F61): Signal 8.36's favorite stickers.
+  StickersSetFavorite: 'stickers.setFavorite',
   MessagesSendSticker: 'messages.sendSticker',
   MessagesSendContact: 'messages.sendContact',
   SettingsGet: 'settings.get',
@@ -212,6 +214,7 @@ export const SERVICE_METHOD_CAPABILITIES = {
   [Method.ConversationsGetMembers]: Capability.ConversationsRead,
   [Method.StickersGetPacks]: Capability.MessagesSend,
   [Method.StickersGetImage]: Capability.MessagesSend,
+  [Method.StickersSetFavorite]: Capability.MessagesSend,
   [Method.MessagesSendSticker]: Capability.MessagesSend,
   [Method.MessagesSendContact]: Capability.MessagesSend,
   [Method.SettingsGet]: Capability.SettingsManage,
@@ -1048,7 +1051,24 @@ export type StickersGetPacksResultType = Readonly<{
   recents: ReadonlyArray<
     Readonly<{ packId: string; stickerId: number; emoji: string | null }>
   >;
+  // Fork addition (decision F61): Signal 8.36's Favorites, in its order,
+  // and whether Signal offers favorites at all (a remote flag).
+  favorites: ReadonlyArray<
+    Readonly<{ packId: string; stickerId: number; emoji: string | null }>
+  >;
+  favoritesEnabled: boolean;
 }>;
+
+export const stickersSetFavoriteParamsSchema = z
+  .object({
+    packId: stickerPackIdSchema,
+    stickerId: stickerIdSchema,
+    favorite: z.boolean(),
+  })
+  .strict();
+export type StickersSetFavoriteParamsType = z.infer<
+  typeof stickersSetFavoriteParamsSchema
+>;
 
 export const stickersGetImageParamsSchema = z
   .object({
@@ -1724,6 +1744,7 @@ export const SERVICE_PARAM_SCHEMAS = {
   [Method.PollsSend]: pollsSendParamsSchema,
   [Method.StickersGetPacks]: stickersGetPacksParamsSchema,
   [Method.StickersGetImage]: stickersGetImageParamsSchema,
+  [Method.StickersSetFavorite]: stickersSetFavoriteParamsSchema,
   [Method.MessagesSendSticker]: messagesSendStickerParamsSchema,
   [Method.MessagesSendContact]: messagesSendContactParamsSchema,
   [Method.SettingsGet]: settingsGetParamsSchema,
@@ -1906,6 +1927,10 @@ export type StickerDTO = Readonly<{
   height: number | null;
   // attachments.read with `sticker: true` works.
   ready: boolean;
+  // Fork addition (decision F61): which sticker it is, for
+  // stickers.setFavorite. Never the pack's key.
+  packId: string | null;
+  stickerId: number | null;
 }>;
 
 // Who wrote a message, as Signal shows it in that conversation.

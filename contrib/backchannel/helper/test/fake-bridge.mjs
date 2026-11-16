@@ -112,7 +112,7 @@ export class FakeBridge {
   messages = new Map();
   // conversationId -> [{ conversationId, author }]
   members = new Map();
-  stickers = { packs: [], recents: [] };
+  stickers = { packs: [], recents: [], favorites: [], favoritesEnabled: true };
   gifs = [];
   gifFiles = new Map();
   // conversationId -> ConversationDetailsDTO
@@ -413,6 +413,23 @@ export class FakeBridge {
           ).toString('base64'),
         });
         return;
+      case 'stickers.setFavorite': {
+        const others = (this.stickers.favorites ?? []).filter(
+          f => f.packId !== params.packId || f.stickerId !== params.stickerId
+        );
+        this.stickers.favorites = params.favorite
+          ? [
+              ...others,
+              {
+                packId: params.packId,
+                stickerId: params.stickerId,
+                emoji: null,
+              },
+            ]
+          : others;
+        this.#reply(session, id, {});
+        return;
+      }
       case 'messages.sendContact':
       case 'messages.sendSticker': {
         const reason = this.sendRefusals.get(params.conversationId);
