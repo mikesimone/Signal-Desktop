@@ -4342,3 +4342,28 @@ button.transcript.pending {
   cursor: pointer;
   text-decoration: underline;
 }
+
+/* A sticker at full window size (decision F62). */
+.sticker-preview {
+  position: fixed;
+  inset: 0;
+  z-index: 45;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.85);
+}
+.sticker-preview-img {
+  width: min(512px, 90vw, calc(100vh - 120px));
+  height: min(512px, 90vw, calc(100vh - 120px));
+  object-fit: contain;
+}
+.sticker-preview-bar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}

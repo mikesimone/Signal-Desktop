@@ -1381,3 +1381,14 @@ Signal's flag is off.
 
 WHY: Mike's standing rule (2026-10-13) that the page keeps up with Signal
 Desktop; found by the weekly parity check on 2026-11-16.
+
+## F62. Fork addition: full-size sticker preview in the picker
+
+DECISION: Long-pressing (450 ms) or right-clicking a sticker in the page's
+sticker picker opens it full window, as Signal's StickerPreviewModal does,
+with Send, Add to / Remove from favorites (when Signal's flag is on) and
+Close. Esc or a click on the backdrop closes it. This replaces F61's
+right-click favorite toggle. Page only; no bridge change.
+
+WHY: Mike, 2026-11-16: "long-press on a sticker in the sticker picker,
+PLEASE expand the image to full window so we can see the Goddamn thing."
