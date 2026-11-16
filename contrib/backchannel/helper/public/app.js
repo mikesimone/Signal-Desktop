@@ -6133,7 +6133,8 @@ const WHATS_NEW = [
   [
     '2026-11-16',
     [
-      "Favorite stickers, as Signal 8.36: a Favorites tab in the sticker picker. Right-click a sticker, or use a sticker message's ⋯ menu, to add or remove one.",
+      'Favorite stickers, as Signal 8.36: a Favorites tab in the sticker picker.',
+      "Long-press or right-click a sticker in the picker to see it full size, then send it or add it to favorites. A sticker message's ⋯ menu adds favorites too.",
     ],
   ],
   [
@@ -6966,9 +6967,9 @@ async function sendSticker(packId, stickerId) {
   }
 }
 
-// Signal 8.36's favorite stickers (decision F61): a Favorites tab, and
-// right-click a sticker (or a sticker message's ⋯ menu) to add or remove
-// one. Signal syncs them to your phone.
+// Signal 8.36's favorite stickers (decision F61): a Favorites tab; add or
+// remove one from a sticker's full-size view (F62) or a sticker message's
+// ⋯ menu. Signal syncs them to your phone.
 let stickerFavorites = new Set();
 let stickerFavoritesEnabled = false;
 
@@ -7006,6 +7007,76 @@ async function setStickerFavorite(packId, stickerId, favorite) {
   }
   toast(favorite ? 'Added to favorites' : 'Removed from favorites');
   return true;
+}
+
+// A sticker at full window size (decision F62): long-press or right-click
+// one in the picker. Send it, or add it to or remove it from favorites.
+function openStickerPreview(st, onPick) {
+  if (document.querySelector('.sticker-preview')) {
+    return;
+  }
+  const overlay = el('div', 'sticker-preview');
+  overlay.setAttribute('role', 'dialog');
+  overlay.setAttribute('aria-label', 'Sticker');
+  const img = el('img', 'sticker-preview-img');
+  img.alt = st.emoji ?? 'Sticker';
+  img.src = stickerImageUrl(st.packId, st.id, 512);
+  const bar = el('div', 'sticker-preview-bar');
+  const close = () => {
+    overlay.remove();
+    document.removeEventListener('keydown', onKey, true);
+  };
+  const onKey = ev => {
+    if (ev.key === 'Escape') {
+      ev.stopPropagation();
+      close();
+    }
+  };
+  const send = el('button', 'setting-button primary', 'Send');
+  send.type = 'button';
+  send.addEventListener('click', ev => {
+    ev.stopPropagation();
+    close();
+    closePopovers();
+    onPick(st.packId, st.id);
+  });
+  bar.append(send);
+  if (stickerFavoritesEnabled) {
+    const key = `${st.packId}:${st.id}`;
+    const fav = el('button', 'setting-button');
+    fav.type = 'button';
+    const label = () => {
+      fav.textContent = stickerFavorites.has(key)
+        ? 'Remove from favorites'
+        : 'Add to favorites';
+    };
+    label();
+    fav.addEventListener('click', async ev => {
+      ev.stopPropagation();
+      await setStickerFavorite(st.packId, st.id, !stickerFavorites.has(key));
+      label();
+    });
+    bar.append(fav);
+  }
+  const done = el('button', 'setting-button', 'Close');
+  done.type = 'button';
+  done.addEventListener('click', ev => {
+    ev.stopPropagation();
+    close();
+  });
+  bar.append(done);
+  overlay.append(img, bar);
+  // A click outside the sticker closes it; the picker stays open.
+  overlay.addEventListener('click', ev => {
+    ev.stopPropagation();
+    if (ev.target === overlay) {
+      close();
+    }
+  });
+  overlay.addEventListener('pointerdown', ev => ev.stopPropagation());
+  document.addEventListener('keydown', onKey, true);
+  document.body.append(overlay);
+  send.focus();
 }
 
 async function openStickerPicker(anchorElement, onPick = sendSticker) {
@@ -7072,24 +7143,35 @@ async function openStickerPicker(anchorElement, onPick = sendSticker) {
           closePopovers();
           onPick(st.packId, st.id);
         });
-        if (stickerFavoritesEnabled) {
-          const key = `${st.packId}:${st.id}`;
-          cell.title =
-            `${st.emoji ?? ''} (right-click to ${stickerFavorites.has(key) ? 'remove from' : 'add to'} favorites)`.trim();
-          cell.addEventListener('contextmenu', async ev => {
-            ev.preventDefault();
-            ev.stopPropagation();
-            const done = await setStickerFavorite(
-              st.packId,
-              st.id,
-              !stickerFavorites.has(key)
-            );
-            if (done) {
-              cell.title =
-                `${st.emoji ?? ''} (right-click to ${stickerFavorites.has(key) ? 'remove from' : 'add to'} favorites)`.trim();
-            }
-          });
+        // Long-press or right-click: see it full size (decision F62).
+        let held = false;
+        let holdTimer = null;
+        cell.addEventListener('pointerdown', () => {
+          held = false;
+          holdTimer = setTimeout(() => {
+            held = true;
+            openStickerPreview(st, onPick);
+          }, 450);
+        });
+        for (const type of ['pointerup', 'pointerleave', 'pointercancel']) {
+          cell.addEventListener(type, () => clearTimeout(holdTimer));
         }
+        cell.addEventListener(
+          'click',
+          ev => {
+            if (held) {
+              held = false;
+              ev.stopImmediatePropagation();
+            }
+          },
+          true
+        );
+        cell.addEventListener('contextmenu', ev => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          clearTimeout(holdTimer);
+          openStickerPreview(st, onPick);
+        });
         return cell;
       })
     );
