@@ -4357,8 +4357,10 @@ button.transcript.pending {
   background: rgba(0, 0, 0, 0.85);
 }
 .sticker-preview-img {
-  width: min(512px, 90vw, calc(100vh - 120px));
-  height: min(512px, 90vw, calc(100vh - 120px));
+  /* Full window (Mike, 2026-11-16): the largest square that fits beside
+     the button bar, upscaled past the sticker's own 512px if need be. */
+  width: min(calc(100vw - 32px), calc(100vh - 120px));
+  height: min(calc(100vw - 32px), calc(100vh - 120px));
   object-fit: contain;
 }
 .sticker-preview-bar {
