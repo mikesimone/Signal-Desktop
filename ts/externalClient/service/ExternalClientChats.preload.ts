@@ -9,6 +9,7 @@ import { itemStorage } from '../../textsecure/Storage.preload.ts';
 import * as Errors from '../../types/errors.std.ts';
 import { getPinnedConversationLimit } from '../../util/Conversation.preload.ts';
 import { drop } from '../../util/drop.std.ts';
+import { isMe } from '../../util/whatTypeOfConversation.dom.ts';
 import { DurationInSeconds } from '../../util/durations/duration-in-seconds.std.ts';
 import type { ServiceResultType } from '../hostTypes.std.ts';
 import type { ConversationsUpdateParamsType } from '../protocol.std.ts';
@@ -88,7 +89,7 @@ export function updateConversation({
         break;
       // Fork addition (decision F55): Signal's Remove, direct chats only.
       case 'remove':
-        if (model.get('type') !== 'private' || model.isMe()) {
+        if (model.get('type') !== 'private' || isMe(model.attributes)) {
           return { ok: false, code: ErrorCode.InvalidArgument };
         }
         actions.removeConversation(conversationId);
