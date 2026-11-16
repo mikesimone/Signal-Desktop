@@ -7925,6 +7925,14 @@ function connectEvents() {
     loadState()
       .then(loadDueReminders)
       .catch(() => {});
+    // The helper may have restarted with transcripts switched on or off;
+    // a tab opened before that would otherwise never show them.
+    const wasEnabled = transcribeEnabled;
+    loadTranscribe().then(() => {
+      if (transcribeEnabled !== wasEnabled && selectedId) {
+        renderMessages();
+      }
+    });
   });
   on('resync', () => loadState().catch(() => {}));
   on('scheduled.changed', ({ counts }) => {
