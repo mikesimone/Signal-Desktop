@@ -891,6 +891,23 @@ export function createWebServer({
     }
     if (req.method === 'POST' && route === 'api/conversation') {
       const { conversationId, change } = await readJson(req);
+      // Not while it holds starred messages (decision F63).
+      if (change?.action === 'delete' && stars) {
+        let starred = 0;
+        for (const item of stars.list(String(conversationId ?? ''))) {
+          // oxlint-disable-next-line no-await-in-loop
+          const found = await bridge
+            .call('messages.get', { messageId: item.messageId })
+            .catch(() => null);
+          starred += found?.message ? 1 : 0;
+        }
+        if (starred > 0) {
+          sendJson(res, 409, {
+            error: { code: 'STARRED', message: String(starred) },
+          });
+          return;
+        }
+      }
       sendJson(
         res,
         200,
@@ -1318,14 +1335,22 @@ export function createWebServer({
     }
     if (req.method === 'POST' && route === 'api/star') {
       const { messageId, conversationId, starred } = await readJson(req);
-      sendJson(res, 200, {
-        ok:
-          stars?.set({
-            messageId: String(messageId ?? ''),
-            conversationId: String(conversationId ?? ''),
-            starred: starred === true,
-          }) ?? false,
-      });
+      const ok =
+        stars?.set({
+          messageId: String(messageId ?? ''),
+          conversationId: String(conversationId ?? ''),
+          starred: starred === true,
+        }) ?? false;
+      // Kept past the chat's disappearing timer while starred (F63).
+      if (ok) {
+        await bridge
+          .call('messages.keep', {
+            messageId: String(messageId),
+            keep: starred === true,
+          })
+          .catch(() => {});
+      }
+      sendJson(res, 200, { ok });
       return;
     }
     if (req.method === 'GET' && route === 'api/privateReplies') {
@@ -1397,6 +1422,13 @@ export function createWebServer({
     }
     if (req.method === 'POST' && route === 'api/delete') {
       const { messageId, forEveryone, attachmentIndex } = await readJson(req);
+      // A starred message stays until it is unstarred (decision F63).
+      if (stars?.has(String(messageId ?? ''))) {
+        sendJson(res, 409, {
+          error: { code: 'STARRED', message: 'Unstar it first.' },
+        });
+        return;
+      }
       const result = await bridge.call('messages.delete', {
         messageId,
         forEveryone: forEveryone === true,

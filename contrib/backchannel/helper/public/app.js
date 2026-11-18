@@ -2207,11 +2207,24 @@ function lightboxItems(m) {
 // Delete just this photo for me, keeping the message and its text
 // (decision F55). Synced to your linked devices, as Signal's All media
 // "Delete" is.
+// A starred message stays until it is unstarred (decision F63); the
+// helper refuses too.
+function keptByStar(m) {
+  if (!starredIds.has(m.id)) {
+    return false;
+  }
+  toast("Starred messages aren't deleted. Unstar it first.");
+  return true;
+}
+
 async function deleteLightboxItem() {
   if (!lightbox) {
     return;
   }
   const { m, items, pos } = lightbox;
+  if (keptByStar(m)) {
+    return;
+  }
   const index = items[pos];
   const what = kindOf(m.attachments[index]) === 'image' ? 'photo' : 'item';
   if (
@@ -2237,6 +2250,9 @@ async function deleteLightboxItem() {
 
 // Deletes every attachment of a message for me, keeping its text.
 async function deleteAttachmentsOnly(m) {
+  if (keptByStar(m)) {
+    return;
+  }
   if (!window.confirm('Delete the attachments for you? The text stays.')) {
     return;
   }
@@ -3340,7 +3356,9 @@ async function changeConversation(conversationId, change) {
     toast(
       change.action === 'pin' && error.code === 'PRECONDITION_FAILED'
         ? 'You can only pin up to 4 chats.'
-        : `Not changed (${error.code ?? error.message}).`
+        : error.code === 'STARRED'
+          ? `This chat has starred messages (${error.message}). Unstar them first.`
+          : `Not changed (${error.code ?? error.message}).`
     );
     return false;
   }
@@ -6131,6 +6149,12 @@ $('immich').addEventListener('click', e => {
 // beginning shows, and the ones since your last look are marked New.
 const WHATS_NEW = [
   [
+    '2026-11-17',
+    [
+      "Starred messages are kept: a chat's disappearing-messages timer skips them, and they can't be deleted until you unstar them.",
+    ],
+  ],
+  [
     '2026-11-16',
     [
       'Favorite stickers, as Signal 8.36: a Favorites tab in the sticker picker.',
@@ -7627,6 +7651,9 @@ function startEdit(m) {
 }
 
 async function deleteMessage(m, forEveryone) {
+  if (keptByStar(m)) {
+    return;
+  }
   const question = forEveryone
     ? 'Delete this message for everyone?'
     : 'Delete this message for you?';

@@ -145,6 +145,7 @@ export const Method = {
   AttachmentsDownload: 'attachments.download',
   MessagesEdit: 'messages.edit',
   MessagesDelete: 'messages.delete',
+  MessagesKeep: 'messages.keep',
   AttachmentsUploadBegin: 'attachments.uploadBegin',
   AttachmentsUploadChunk: 'attachments.uploadChunk',
   MessagesForward: 'messages.forward',
@@ -203,6 +204,7 @@ export const SERVICE_METHOD_CAPABILITIES = {
   [Method.AttachmentsDownload]: Capability.AttachmentsRead,
   [Method.MessagesEdit]: Capability.MessagesSend,
   [Method.MessagesDelete]: Capability.MessagesSend,
+  [Method.MessagesKeep]: Capability.MessagesSend,
   [Method.AttachmentsUploadBegin]: Capability.MessagesSend,
   [Method.AttachmentsUploadChunk]: Capability.MessagesSend,
   [Method.MessagesForward]: Capability.MessagesSend,
@@ -875,6 +877,18 @@ export const messagesDeleteParamsSchema = z
 export type MessagesDeleteParamsType = z.infer<
   typeof messagesDeleteParamsSchema
 >;
+
+// Fork addition (decision F63): a starred message is kept whatever the
+// chat's disappearing-messages timer says. keep: true sets the timer
+// aside on this device; keep: false puts it back, so a message whose time
+// has passed then goes as it would have.
+export const messagesKeepParamsSchema = z
+  .object({
+    messageId: messageIdSchema,
+    keep: z.boolean(),
+  })
+  .strict();
+export type MessagesKeepParamsType = z.infer<typeof messagesKeepParamsSchema>;
 
 // Fork addition: uploads for sending. The client announces a file, sends
 // its content in order in chunks, then names the upload in
@@ -1734,6 +1748,7 @@ export const SERVICE_PARAM_SCHEMAS = {
   [Method.AttachmentsDownload]: attachmentsDownloadParamsSchema,
   [Method.MessagesEdit]: messagesEditParamsSchema,
   [Method.MessagesDelete]: messagesDeleteParamsSchema,
+  [Method.MessagesKeep]: messagesKeepParamsSchema,
   [Method.AttachmentsUploadBegin]: attachmentsUploadBeginParamsSchema,
   [Method.AttachmentsUploadChunk]: attachmentsUploadChunkParamsSchema,
   [Method.MessagesForward]: messagesForwardParamsSchema,

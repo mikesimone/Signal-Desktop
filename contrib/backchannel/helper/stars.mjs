@@ -38,6 +38,10 @@ export class Stars {
     return this.#items.map(i => i.messageId);
   }
 
+  has(messageId) {
+    return this.#items.some(i => i.messageId === messageId);
+  }
+
   set({ messageId, conversationId, starred }, now = Date.now()) {
     const rest = this.#items.filter(i => i.messageId !== messageId);
     const item = { messageId, conversationId, starredAt: now };

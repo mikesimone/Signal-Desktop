@@ -25,10 +25,12 @@ import {
   getConversationIdentifier,
 } from '../../util/syncIdentifiers.preload.ts';
 import { getMessageById } from '../../messages/getMessageById.preload.ts';
+import { update as updateExpiringMessagesService } from '../../services/expiringMessagesDeletion.preload.ts';
 import { singleProtoJobQueue } from '../../jobs/singleProtoJobQueue.preload.ts';
 import { MessageSender } from '../../textsecure/SendMessage.preload.ts';
 import type { ConversationModel } from '../../models/conversations.preload.ts';
 import type { ServiceResultType } from '../hostTypes.std.ts';
+import type { MessageAttributesType } from '../../model-types.std.ts';
 import { toMessageDTO } from '../messageDto.std.ts';
 import type {
   AttachmentsDownloadParamsType,
@@ -41,6 +43,7 @@ import type {
   EmojiGetCatalogResultType,
   EmojiMarkUsedParamsType,
   MessagesDeleteParamsType,
+  MessagesKeepParamsType,
   MessagesEditParamsType,
   MessagesReactParamsType,
   ReactionsGetPreferredResultType,
@@ -577,4 +580,49 @@ export async function deleteMessage({
     });
   }
   return { ok: true, value: {} };
+}
+
+// Decision F63: the timer a kept (starred) message had, so unstarring puts
+// it back. Saved with the message on this device only.
+type KeptExpiry = {
+  expireTimer: MessageAttributesType['expireTimer'];
+  expirationStartTimestamp: MessageAttributesType['expirationStartTimestamp'];
+};
+type KeptAttributes = { backchannelKeptExpiry?: KeptExpiry };
+
+export async function keepMessage({
+  messageId,
+  keep,
+}: MessagesKeepParamsType): Promise<ServiceResultType> {
+  const message = await getMessageById(messageId);
+  if (!message || !getListedConversation(message.get('conversationId'))) {
+    return notFound;
+  }
+  const kept = (message.attributes as KeptAttributes).backchannelKeptExpiry;
+  if (keep) {
+    const expireTimer = message.get('expireTimer');
+    if (kept || !expireTimer) {
+      return { ok: true, value: { kept: true } };
+    }
+    message.set({
+      backchannelKeptExpiry: {
+        expireTimer,
+        expirationStartTimestamp: message.get('expirationStartTimestamp'),
+      },
+      expireTimer: undefined,
+      expirationStartTimestamp: undefined,
+    } as Partial<MessageAttributesType>);
+  } else {
+    if (!kept) {
+      return { ok: true, value: { kept: false } };
+    }
+    message.set({
+      backchannelKeptExpiry: undefined,
+      expireTimer: kept.expireTimer,
+      expirationStartTimestamp: kept.expirationStartTimestamp,
+    } as Partial<MessageAttributesType>);
+  }
+  await window.MessageCache.saveMessage(message.attributes);
+  updateExpiringMessagesService();
+  return { ok: true, value: { kept: keep } };
 }

@@ -18,6 +18,7 @@ import {
 } from '../conversationDto.std.ts';
 import {
   deleteMessage,
+  keepMessage,
   downloadAttachments,
   editMessage,
   getAttachmentThumbnail,
@@ -374,6 +375,13 @@ async function dispatch(
       }
       const params = safeParseUnknown(SERVICE_PARAM_SCHEMAS[method], rawParams);
       return params.success ? deleteMessage(params.data) : invalid;
+    }
+    case Method.MessagesKeep: {
+      if (!window.ConversationController.isInitialFetchComplete()) {
+        return notReady;
+      }
+      const params = safeParseUnknown(SERVICE_PARAM_SCHEMAS[method], rawParams);
+      return params.success ? keepMessage(params.data) : invalid;
     }
     case Method.AttachmentsUploadBegin: {
       if (!window.ConversationController.isInitialFetchComplete()) {

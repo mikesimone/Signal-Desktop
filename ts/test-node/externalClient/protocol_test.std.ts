@@ -16,6 +16,7 @@ import {
   helloParamsSchema,
   messagesEditParamsSchema,
   messagesForwardParamsSchema,
+  messagesKeepParamsSchema,
   messagesSendStickerParamsSchema,
   stickersSetFavoriteParamsSchema,
   linkPreviewsFetchParamsSchema,
@@ -611,6 +612,20 @@ describe('externalClient/protocol', () => {
           conversationId,
           body: 'see https://example.com',
           linkPreviewUrl: 'https://example.com',
+        })
+      );
+    });
+
+    it('keeps a starred message by id', () => {
+      assert.isTrue(
+        accepts(messagesKeepParamsSchema, { messageId: 'm1', keep: true })
+      );
+      assert.isFalse(accepts(messagesKeepParamsSchema, { messageId: 'm1' }));
+      assert.isFalse(
+        accepts(messagesKeepParamsSchema, {
+          messageId: 'm1',
+          keep: true,
+          expireTimer: 5,
         })
       );
     });

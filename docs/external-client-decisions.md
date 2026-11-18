@@ -1392,3 +1392,27 @@ right-click favorite toggle. Page only; no bridge change.
 
 WHY: Mike, 2026-11-16: "long-press on a sticker in the sticker picker,
 PLEASE expand the image to full window so we can see the Goddamn thing."
+
+## F63. Fork addition: starred messages are never deleted until unstarred
+
+DECISION: A starred message (F43) stays until it is unstarred, whatever
+would otherwise remove it. Signal Desktop has no "keep messages for"
+setting, so on the web the removals are the chat's disappearing-messages
+timer and deletes the user starts:
+
+- Timer: a new bridge method `messages.keep` (under messages.send, so no
+  Allow prompt) sets the message's timer aside on this device, saving the
+  old values with the message; `keep: false` puts them back, so a message
+  whose time has passed then goes as it would have. The helper calls it on
+  star and unstar, and again for every star each time Signal connects.
+- Deletes: the helper refuses `api/delete` (for me, for everyone, or one
+  attachment) on a starred message, and Delete chat on a chat that still
+  holds a starred message, with code STARRED; the page says to unstar first.
+
+Not covered: a sender's delete for everyone, and deletes made on another
+linked device (Backchannel Android does its own side).
+
+WHY: Mike, 2026-11-17: "No matter what the data retention policy is on
+someone's BC settings (like delete messages over six months old), starred
+messages should never be deleted without unstarring them first." A feature,
+not a bugfix.

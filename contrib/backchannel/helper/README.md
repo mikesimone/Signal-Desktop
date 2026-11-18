@@ -52,7 +52,7 @@ Photos, member labels, reactions and replies use fork-only bridge additions
 (`conversations.getAvatar`, `messages.react`, `reactions.getPreferred`,
 `quoteMessageId` on `messages.sendText`, author details on messages, and
 `attachments.getThumbnail`, `attachments.read`, `attachments.download`,
-`messages.edit`, `messages.delete`, `attachments.uploadBegin`,
+`messages.edit`, `messages.delete`, `messages.keep`, `attachments.uploadBegin`,
 `attachments.uploadChunk`, `messages.forward`, `emoji.getCatalog`, `polls.vote`, `polls.end`,
 `polls.send`, `conversations.getMembers`, mentions, formatting, `stickers.getPacks`, `stickers.getImage`,
 `gifs.search`, `gifs.read`, `gif` on `attachments.uploadBegin`,

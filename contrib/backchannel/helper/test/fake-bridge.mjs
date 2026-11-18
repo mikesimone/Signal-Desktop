@@ -629,6 +629,9 @@ export class FakeBridge {
         this.#reply(session, id, { details });
         return;
       }
+      case 'messages.keep':
+        this.#reply(session, id, { kept: params.keep });
+        return;
       case 'groups.update':
       case 'conversations.update':
       case 'conversations.setTyping':

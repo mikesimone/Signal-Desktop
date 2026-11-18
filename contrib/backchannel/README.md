@@ -39,7 +39,9 @@ Backchannel does. Each new one is added here when it ships.
 - **One poll to many chats.** Signal can't forward a poll; Backchannel
   sends each chat its own copy.
 - **Starred messages.** Star any message from its menu and find it again
-  in one list, for all chats or one. Kept on your server.
+  in one list, for all chats or one. Kept on your server. A starred
+  message outlasts disappearing-message timers and can't be deleted, nor
+  its chat, until you unstar it.
 - **Remind me** about any message: in an hour, tonight, tomorrow or a
   time you pick. Opens the chat at that message.
 - **Keyword alerts** that get through a muted chat.

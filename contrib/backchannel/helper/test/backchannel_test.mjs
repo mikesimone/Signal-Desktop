@@ -1516,7 +1516,35 @@ describe('backchannel helper', () => {
     const { items } = JSON.parse(list.text);
     assert.equal(items.length, 1);
     assert.equal(items[0].message.body, 'keep this');
+    // Kept past any timer, and not deleted until unstarred (F63).
+    assert.deepEqual(
+      bridge.calls.findLast(c => c.method === 'messages.keep').params,
+      { messageId: kept.id, keep: true }
+    );
+    const del = () =>
+      http(port, {
+        method: 'POST',
+        path: `/${helper.token}/api/delete`,
+        headers: json,
+        body: { messageId: kept.id, forEveryone: false },
+      });
+    const refused = await del();
+    assert.equal(refused.status, 409);
+    assert.equal(JSON.parse(refused.text).error.code, 'STARRED');
+    const deleteChat = await http(port, {
+      method: 'POST',
+      path: `/${helper.token}/api/conversation`,
+      headers: json,
+      body: { conversationId: alice.id, change: { action: 'delete' } },
+    });
+    assert.equal(deleteChat.status, 409);
+    assert.equal(JSON.parse(deleteChat.text).error.code, 'STARRED');
     await star(false);
+    assert.deepEqual(
+      bridge.calls.findLast(c => c.method === 'messages.keep').params,
+      { messageId: kept.id, keep: false }
+    );
+    assert.equal((await del()).status, 200);
     const after = await http(port, { path: `/${helper.token}/api/starIds` });
     assert.deepEqual(JSON.parse(after.text).ids, []);
   });

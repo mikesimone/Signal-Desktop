@@ -149,6 +149,17 @@ if (args.printUrl) {
 const endpoint =
   args.endpoint || endpointFor(args.userData || defaultUserData());
 const store = new Store();
+// Starred messages (decision F43). Signal keeps them past any
+// disappearing-messages timer until they are unstarred (decision F63).
+const stars = new Stars(join(configDir, 'stars.json'));
+async function keepStarred() {
+  for (const messageId of stars.ids()) {
+    // oxlint-disable-next-line no-await-in-loop
+    await bridge
+      .call('messages.keep', { messageId, keep: true })
+      .catch(() => {});
+  }
+}
 // Assigned below; the bridge callbacks run only after start().
 let web;
 
@@ -173,6 +184,7 @@ const bridge = new Bridge({
     // Anything that came due while Signal was away goes now.
     await scheduled.run(scheduled.ready);
     await contactPhotos.daily();
+    await keepStarred();
   },
   onEvent(event) {
     // Someone new in a 1:1 chat: the phone's contacts may have them.
@@ -288,7 +300,7 @@ web = createWebServer({
   store,
   bridge,
   privateReplies: new PrivateReplies(join(configDir, 'private-replies.json')),
-  stars: new Stars(join(configDir, 'stars.json')),
+  stars,
   immich,
   autoReply,
   autoSave,
