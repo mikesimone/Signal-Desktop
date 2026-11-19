@@ -90,10 +90,10 @@ diff --git a/ts/services/backups/index.preload.ts b/ts/services/backups/index.pr
 index b69fb5919..53d4b13c3 100644
 --- a/ts/services/backups/index.preload.ts
 +++ b/ts/services/backups/index.preload.ts
-@@ -52,7 +52,10 @@ import { signalProtocolStore } from '../../SignalProtocolStore.preload.ts';
- import { isTestOrMockEnvironment } from '../../environment.std.ts';
- import { runStorageServiceSyncJob } from '../storage.preload.ts';
- import { BackupExportStream } from './export.preload.ts';
+@@ -55,7 +55,10 @@ import { signalProtocolStore } from '../../SignalProtocolStore.preload.ts';
+ import { AttachmentBackupManager } from '../../jobs/AttachmentBackupManager.preload.ts';
+ import { getBackupContentPolicy } from './policy.std.ts';
+ import type { BackupContentPolicy } from './policy.std.ts';
 -import { BackupImportStream } from './import.preload.ts';
 +import {
 +  BackupImportStream,
