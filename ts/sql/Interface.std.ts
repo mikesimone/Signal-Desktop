@@ -91,6 +91,7 @@ import type {
 import type {
   FavoriteStickerStatusType,
   FavoriteStickerType,
+  HiddenStickerPackType,
   StickerReferenceType,
 } from '../types/Stickers.preload.ts';
 
@@ -147,6 +148,15 @@ export type StoredIdentityKeyType = {
   verified: number;
 };
 export type IdentityKeyIdType = IdentityKeyType['id'];
+
+export type LinkedDevice = {
+  readonly id: number;
+
+  readonly createdAt: number | null;
+  readonly lastSeenAt: number;
+  readonly name: string | null;
+  readonly registrationId: number;
+};
 
 export type ItemKeyType = keyof StorageAccessType;
 export type AllItemsType = Partial<StorageAccessType>;
@@ -1104,6 +1114,10 @@ type ReadableInterface = {
   getFavoriteSticker: (
     stickerRef: StickerReferenceType
   ) => FavoriteStickerType | undefined;
+  getAllHiddenStickerPacks: () => ReadonlyArray<HiddenStickerPackType>;
+  getAllHiddenStickerPacksActive: () => ReadonlyArray<HiddenStickerPackType>;
+  getHiddenStickerPack: (packId: string) => HiddenStickerPackType | undefined;
+  getKeyFromStickerPack: (packId: string) => string | undefined;
 
   getRecentEmojis: (limit: number) => ReadonlyArray<Emoji.Parent>;
   getRecentGifs: (limit: number) => ReadonlyArray<GifType>;
@@ -1186,6 +1200,8 @@ type ReadableInterface = {
   getMostRecentAttachmentUploadData: (
     plaintextHash: string
   ) => ExistingAttachmentUploadData | undefined;
+
+  getAllLinkedDevices: () => ReadonlyArray<LinkedDevice>;
 
   __dangerouslyRunAbitraryReadOnlySqlQuery: (
     readOnlySqlQuery: string
@@ -1485,6 +1501,12 @@ type WritableInterface = {
   ) => { deletedAtTimestampMs: number; storageNeedsSync: boolean } | undefined;
   deleteFavoriteSticker: (stickerRef: StickerReferenceType) => void;
   maybeDeleteSticker: (stickerRef: StickerReferenceType) => string | undefined;
+  createHiddenStickerPack: (hiddenPack: HiddenStickerPackType) => void;
+  updateHiddenStickerPack: (hiddenPack: HiddenStickerPackType) => void;
+  markHiddenStickerPackDeleted: (
+    packId: string
+  ) => { storageNeedsSync: boolean } | undefined;
+  deleteHiddenStickerPack: (packId: string) => void;
 
   updateEmojiUsage: (emoji: Emoji.Parent, lastUsedAt: number) => void;
 
@@ -1599,6 +1621,11 @@ type WritableInterface = {
   removeAll: () => void;
   removeAllConfiguration: (isPrimary: boolean) => void;
   eraseStorageServiceState: () => void;
+
+  createOrUpdateLinkedDevice: (linkedDevice: LinkedDevice) => void;
+  removeAllLinkedDevices: () => void;
+  removeLinkedDeviceById: (id: number) => void;
+  replaceAllLinkedDevices: (linkedDevices: ReadonlyArray<LinkedDevice>) => void;
 
   insertJob: (job: Readonly<StoredJob>) => void;
   deleteJob: (id: string) => void;

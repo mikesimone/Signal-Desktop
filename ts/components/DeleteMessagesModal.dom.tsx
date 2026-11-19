@@ -4,9 +4,9 @@
 import type { MouseEvent, JSX } from 'react';
 import { useCallback, useState } from 'react';
 import type { LocalizerType } from '../types/Util.std.ts';
-import type { ShowToastAction } from '../state/ducks/toast.preload.ts';
-import { ToastType } from '../types/Toast.dom.tsx';
-import { AxoAlertDialog } from '../axo/AxoAlertDialog.dom.tsx';
+import type { ShowToastAction } from '../state/ducks/toast.dom.ts';
+import { ToastType } from '../types/Toast.std.ts';
+import { AxoAlertDialog } from '../axo/dialogs/AxoAlertDialog.dom.tsx';
 
 export type DeleteMessagesModalProps = Readonly<{
   isMe: boolean;

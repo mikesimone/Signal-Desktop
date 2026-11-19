@@ -11,7 +11,12 @@ import pMap from 'p-map';
 import { Writable } from 'node:stream';
 import lodash from 'lodash';
 import { CallLinkRootKey } from '@signalapp/ringrtc';
-import { MuteExpiration, TimestampMs, Uint32 } from '@signalapp/types';
+import {
+  type GroupId,
+  MuteExpiration,
+  TimestampMs,
+  Uint32,
+} from '@signalapp/types';
 
 import { Backups, SignalService } from '../../protobuf/index.std.ts';
 import { DataReader, DataWriter } from '../../sql/Client.preload.ts';
@@ -44,6 +49,7 @@ import {
   STICKERPACK_KEY_BYTE_LEN,
   createPacksFromBackup,
   type StickerPackPointerType,
+  type HiddenStickerPackType,
 } from '../../types/Stickers.preload.ts';
 import { MAX_FAVORITE_STICKERS } from '../../util/Stickers.std.ts';
 import type { ChatStyle } from '../../types/ChatStyle.std.ts';
@@ -99,7 +105,7 @@ import { getBackupMediaRootKey } from './crypto.preload.ts';
 import type { GroupV2ChangeDetailType } from '../../types/groups.std.ts';
 import { queueAttachmentDownloads } from '../../util/queueAttachmentDownloads.preload.ts';
 import { isNotNil } from '../../util/isNotNil.std.ts';
-import { isGroup } from '../../util/whatTypeOfConversation.dom.ts';
+import { isGroup, isGroupV2 } from '../../util/whatTypeOfConversation.dom.ts';
 import {
   convertBackupMessageAttachmentToAttachment,
   convertFilePointerToAttachment,
@@ -144,7 +150,7 @@ import {
 } from '../../environment.std.ts';
 import { hasAttachmentDownloads } from '../../util/hasAttachmentDownloads.std.ts';
 import { isAdhoc, isNightly } from '../../util/version.std.ts';
-import { ToastType } from '../../types/Toast.dom.tsx';
+import { ToastType } from '../../types/Toast.std.ts';
 import { isConversationAccepted } from '../../util/isConversationAccepted.preload.ts';
 import { saveBackupsSubscriberData } from '../../util/backupSubscriptionData.preload.ts';
 import { postSaveUpdates } from '../../util/cleanup.preload.ts';
@@ -160,9 +166,9 @@ import { updateBackupMediaDownloadProgress } from '../../util/updateBackupMediaD
 import { itemStorage } from '../../textsecure/Storage.preload.ts';
 import { ChatFolderType } from '../../types/ChatFolder.std.ts';
 import type { ChatFolderId, ChatFolder } from '../../types/ChatFolder.std.ts';
-import { getPinnedMessagesLimit } from '../../util/pinnedMessages.dom.ts';
+import { getPinnedMessagesLimit } from '../../util/pinnedMessages.std.ts';
 import type { PinnedMessageParams } from '../../types/PinnedMessage.std.ts';
-import type { ThemeType } from '../../util/preload.preload.ts';
+import type { ThemeType } from '../../util/preload.sandbox.ts';
 import { toNumber } from '../../util/toNumber.std.ts';
 import { isKnownProtoEnumMember } from '../../util/isKnownProtoEnumMember.std.ts';
 import { Emoji } from '../../axo/emoji.std.ts';
@@ -623,6 +629,8 @@ export class BackupImportStream extends Writable {
         await this.#fromChatItem(item.chatItem, { aboutMe });
       } else if (item.installedStickerPack) {
         await this.#fromStickerPack(item.installedStickerPack);
+      } else if (item.hiddenStickerPack) {
+        await this.#fromHiddenStickerPack(item.hiddenStickerPack);
       } else if (item.favoriteStickerList) {
         await this.#fromFavoriteStickerList(item.favoriteStickerList);
       } else if (item.adHocCall) {
@@ -2523,6 +2531,17 @@ export class BackupImportStream extends Writable {
     const authorConvo = this.#recipientIdToConvo.get(quote.authorId);
     strictAssert(authorConvo !== undefined, 'author conversation not found');
 
+    const { privateReplyDescriptor } = quote;
+    const privateReplyGroupRecipientId =
+      privateReplyDescriptor?.privateReplyGroupRecipientId;
+    const privateReplyGroup =
+      privateReplyGroupRecipientId != null
+        ? this.#recipientIdToConvo.get(privateReplyGroupRecipientId)
+        : undefined;
+    const quotedGroupId =
+      privateReplyGroup && isGroupV2(privateReplyGroup)
+        ? privateReplyGroup.groupId
+        : undefined;
     return {
       id:
         getCheckedTimestampOrUndefinedFromLong(quote.targetSentTimestamp) ??
@@ -2531,6 +2550,9 @@ export class BackupImportStream extends Writable {
       authorAci: isAciString(authorConvo.serviceId)
         ? authorConvo.serviceId
         : undefined,
+      groupId: quotedGroupId as GroupId | undefined,
+      isPrivateReplyGroupUnknown:
+        privateReplyDescriptor?.unknownPrivateReply === true || undefined,
       author: isAciString(authorConvo.serviceId) ? undefined : authorConvo.e164,
       text: dropNull(quote.text?.body),
       bodyRanges: this.#fromBodyRanges(quote.text),
@@ -3979,6 +4001,37 @@ export class BackupImportStream extends Writable {
     const key = Bytes.toBase64(packKeyBytes);
 
     this.#installedStickerPacks.push({ id, key });
+  }
+
+  async #fromHiddenStickerPack(pack: Backups.StickerPack) {
+    const { packId: packIdBytes, packKey: packKeyBytes } = pack;
+
+    strictAssert(
+      packIdBytes?.length === STICKERPACK_ID_BYTE_LEN,
+      'Hidden sticker pack must have a valid pack id'
+    );
+
+    const packId = Bytes.toHex(packIdBytes);
+    const logId = `fromHiddenStickerPack(${packId.slice(-2)})`;
+
+    strictAssert(
+      packKeyBytes?.length === STICKERPACK_KEY_BYTE_LEN,
+      `${logId}: Hidden sticker pack must have a valid pack key`
+    );
+
+    const packKey = Bytes.toBase64(packKeyBytes);
+
+    const hiddenPack: HiddenStickerPackType = {
+      packId,
+      packKey,
+      unhiddenAtTimestampMs: undefined,
+      storageNeedsSync: false,
+      storageID: undefined,
+      storageUnknownFields: undefined,
+      storageVersion: undefined,
+    };
+
+    await DataWriter.createHiddenStickerPack(hiddenPack);
   }
 
   async #fromFavoriteStickerList({

@@ -3,7 +3,7 @@
 import { memo } from 'react';
 import { useSelector } from 'react-redux';
 import { UsernameEditor } from '../../components/UsernameEditor.dom.tsx';
-import { getMinNickname, getMaxNickname } from '../../util/Username.dom.ts';
+import { getMinNickname, getMaxNickname } from '../../util/Username.std.ts';
 import { getIntl } from '../selectors/user.std.ts';
 import {
   getUsernameReservationState,
@@ -14,7 +14,7 @@ import {
 import { getUsernameCorrupted } from '../selectors/items.dom.ts';
 import { getMe } from '../selectors/conversations.dom.ts';
 import { useUsernameActions } from '../ducks/username.preload.ts';
-import { useToastActions } from '../ducks/toast.preload.ts';
+import { useToastActions } from '../ducks/toast.dom.ts';
 
 export type SmartUsernameEditorProps = Readonly<{
   onClose: () => void;

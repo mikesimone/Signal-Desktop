@@ -6,7 +6,7 @@ import { ipcRenderer as ipc } from 'electron';
 import { createLogger } from '../../logging/log.std.ts';
 import type { MessageAttributesType } from '../../model-types.std.ts';
 import { DataReader } from '../../sql/Client.preload.ts';
-import * as RemoteConfig from '../../RemoteConfig.dom.ts';
+import * as RemoteConfig from '../../RemoteConfig.std.ts';
 import { _getConversationComparator } from '../../state/selectors/conversations.dom.ts';
 import * as Errors from '../../types/errors.std.ts';
 import { drop } from '../../util/drop.std.ts';

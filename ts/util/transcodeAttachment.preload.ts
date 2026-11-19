@@ -7,8 +7,6 @@ import { open, unlink, type FileHandle } from 'node:fs/promises';
 import { sanitize } from '@signalapp/libsignal-client/dist/Mp4Sanitizer.js';
 import {
   Input,
-  UrlSource,
-  ALL_FORMATS,
   StreamTarget,
   Conversion,
   Output,
@@ -31,6 +29,7 @@ import type {
 } from '../types/Attachment.std.ts';
 import { TranscodingTargetQuality } from '../types/transcoding.std.ts';
 import { VIDEO_MP4 } from '../types/MIME.std.ts';
+import { TRANSCODABLE_VIDEO_FORMATS } from '../types/VisualAttachment.dom.ts';
 import {
   generateKeys,
   decryptAttachmentV2ToSink,
@@ -38,7 +37,7 @@ import {
   type DecryptAttachmentToSinkOptionsType,
 } from '../AttachmentCrypto.node.ts';
 import { DataWriter } from '../sql/Client.preload.ts';
-import { getValue as getRemoteConfigValue } from '../RemoteConfig.dom.ts';
+import { getValue as getRemoteConfigValue } from '../RemoteConfig.std.ts';
 import { NodeInputStream } from './NodeInputStream.node.ts';
 import {
   maybeDeleteAttachmentFile,
@@ -48,9 +47,10 @@ import {
 import { updateAttachment } from './editHelpers.std.ts';
 import { strictAssert } from './assert.std.ts';
 import { drop } from './drop.std.ts';
-import { isVideoTypeSupported } from './GoogleChrome.std.ts';
+import { isVideoTypeTranscodable } from './GoogleChrome.std.ts';
 import { prefixAndSliceStream } from './prefixAndSliceStream.std.ts';
 import { getTranscodingOptions } from './getTranscodingOptions.preload.ts';
+import { createUrlSource } from './urlSource.dom.ts';
 import {
   getLocalAttachmentUrl,
   AttachmentDisposition,
@@ -145,10 +145,10 @@ async function transcodeVideo(
     disposition: AttachmentDisposition.Attachment,
   });
 
-  const source = new UrlSource(url);
+  const source = createUrlSource(url);
 
   const input = new Input({
-    formats: ALL_FORMATS,
+    formats: TRANSCODABLE_VIDEO_FORMATS,
     source,
   });
 
@@ -299,7 +299,7 @@ export async function transcodeAttachment({
   let newFields: TranscodingFieldsType | undefined;
   if (attachment.reuseToken != null) {
     // Do nothing with reused attachments to save disk space
-  } else if (isVideoTypeSupported(attachment.contentType)) {
+  } else if (isVideoTypeTranscodable(attachment.contentType)) {
     const qualityToTry = [transcodingTargetQuality];
 
     // Fallback to standard quality as the last resort

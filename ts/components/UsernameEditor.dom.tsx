@@ -15,7 +15,7 @@ import lodash from 'lodash';
 
 import type { LocalizerType } from '../types/Util.std.ts';
 import type { UsernameReservationType } from '../types/Username.std.ts';
-import { ToastType } from '../types/Toast.dom.tsx';
+import { ToastType } from '../types/Toast.std.ts';
 import { missingCaseError } from '../util/missingCaseError.std.ts';
 import {
   getNickname,
@@ -27,16 +27,16 @@ import {
   UsernameReservationError,
 } from '../state/ducks/usernameEnums.std.ts';
 import type { ReserveUsernameOptionsType } from '../state/ducks/username.preload.ts';
-import type { ShowToastAction } from '../state/ducks/toast.preload.ts';
+import type { ShowToastAction } from '../state/ducks/toast.dom.ts';
 import { useConfirmDiscard } from '../hooks/useConfirmDiscard.dom.tsx';
 import { AxoButton } from '../axo/AxoButton.dom.tsx';
-import { AxoConfirmDialog } from '../axo/AxoConfirmDialog.dom.tsx';
+import { AxoConfirmDialog } from '../axo/dialogs/AxoConfirmDialog.dom.tsx';
 import { AxoSymbol } from '../axo/AxoSymbol.dom.tsx';
 import { AxoFieldGroup } from '../axo/fields/AxoFieldGroup.dom.tsx';
 import { AxoTextField } from '../axo/fields/AxoTextField.dom.tsx';
 import { AxoFieldList } from '../axo/items/AxoFieldList.dom.tsx';
 import { tw } from '../axo/tw.dom.tsx';
-import { AxoDialog } from '../axo/AxoDialog.dom.tsx';
+import { AxoDialog } from '../axo/dialogs/AxoDialog.dom.tsx';
 
 const { noop } = lodash;
 

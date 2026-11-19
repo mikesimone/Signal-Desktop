@@ -48,7 +48,7 @@ import {
   getUserNumber,
 } from '../selectors/user.std.ts';
 import { renderClearingDataView } from '../../shims/renderClearingDataView.preload.tsx';
-import OS from '../../util/os/osPreload.preload.ts';
+import OS from '../../util/os/osPreload.sandbox.ts';
 import { themeChanged } from '../../shims/themeChanged.dom.ts';
 import * as Settings from '../../types/Settings.std.ts';
 import * as universalExpireTimerUtil from '../../util/universalExpireTimer.preload.ts';
@@ -72,9 +72,9 @@ import { getConversation } from '../../util/getConversation.preload.ts';
 import { waitForEvent } from '../../shims/events.dom.ts';
 import { DAY } from '../../util/durations/index.std.ts';
 import { sendSyncRequests } from '../../textsecure/syncRequests.preload.ts';
-import { SmartUpdateDialog } from './UpdateDialog.preload.tsx';
+import { SmartUpdateDialog } from './UpdateDialog.dom.tsx';
 import { Preferences } from '../../components/Preferences.dom.tsx';
-import { useUpdatesActions } from '../ducks/updates.preload.ts';
+import { useUpdatesActions } from '../ducks/updates.dom.ts';
 import { getUpdateDialogType } from '../selectors/updates.std.ts';
 import { getHasAnyFailedStorySends } from '../selectors/stories.preload.ts';
 import {
@@ -86,14 +86,14 @@ import { SmartProfileEditor } from './ProfileEditor.preload.tsx';
 import { useNavActions } from '../ducks/nav.std.ts';
 import { NavTab } from '../../types/Nav.std.ts';
 import { renderToastManagerWithoutMegaphone } from './ToastManager.preload.tsx';
-import { useToastActions } from '../ducks/toast.preload.ts';
+import { useToastActions } from '../ducks/toast.dom.ts';
 import { DataReader, DataWriter } from '../../sql/Client.preload.ts';
 import { deleteAllMyStories } from '../../util/deleteAllMyStories.preload.ts';
 import { SmartPreferencesDonations } from './PreferencesDonations.preload.tsx';
 import { useDonationsActions } from '../ducks/donations.preload.ts';
 import { generateDonationReceiptBlob } from '../../util/generateDonationReceipt.dom.ts';
 import { backupLevelFromNumber } from '../../services/backups/types.std.ts';
-import { getMessageQueueTime } from '../../util/getMessageQueueTime.dom.ts';
+import { getMessageQueueTime } from '../../util/getMessageQueueTime.std.ts';
 import { useBackupActions } from '../ducks/backups.preload.ts';
 import { isFeaturedEnabledSelector } from '../../util/isFeatureEnabled.dom.ts';
 import type { ExternalClientAppType } from '../../externalClient/rendererChannel.std.ts';
@@ -104,6 +104,7 @@ import {
 } from '../../externalClient/service/ExternalClientSettings.preload.ts';
 import { SmartPreferencesChatFoldersPage } from './PreferencesChatFoldersPage.preload.tsx';
 import { SmartPreferencesEditChatFolderPage } from './PreferencesEditChatFolderPage.preload.tsx';
+import { SmartPreferencesLinkedDevicesPage } from './PreferencesLinkedDevicesPage.preload.tsx';
 import {
   getCurrentChatFoldersCount,
   getHasAnyCurrentCustomChatFolders,
@@ -118,7 +119,7 @@ import { AppProvider } from '../../windows/AppProvider.dom.tsx';
 import { useMegaphonesActions } from '../ducks/megaphones.preload.ts';
 import { DialogType } from '../../types/Dialogs.std.ts';
 import { getDefaultAudioPreference } from '../../types/Calling.std.ts';
-import { promptOSAuth } from '../../util/promptOSAuth.preload.ts';
+import { promptOSAuth } from '../../util/promptOSAuth.sandbox.ts';
 import {
   pauseBackupMediaDownload,
   resumeBackupMediaDownload,
@@ -137,12 +138,13 @@ import {
   getBlockedContacts,
   getBlockedGroups,
 } from '../selectors/blocked.dom.ts';
+import { registrationJobQueue } from '../../jobs/registrationJobQueue.preload.ts';
 
 import type { SettingsLocation } from '../../types/Nav.std.ts';
 import type { StorageAccessType } from '../../types/Storage.d.ts';
 import type { NotifyWhileMutedKey } from '../../util/notifyWhileMuted.std.ts';
 import { NOTIFY_WHILE_MUTED_FIELDS } from '../../util/notifyWhileMuted.std.ts';
-import type { ThemeType } from '../../util/preload.preload.ts';
+import type { ThemeType } from '../../util/preload.sandbox.ts';
 import type { WidthBreakpoint } from '../../components/_util.std.ts';
 import type { StateType } from '../reducer.preload.ts';
 import { DonationsErrorBoundary } from '../../components/DonationsErrorBoundary.dom.tsx';
@@ -153,7 +155,6 @@ import {
 import type { SmartPreferencesChatFoldersPageProps } from './PreferencesChatFoldersPage.preload.tsx';
 import type { SmartPreferencesEditChatFolderPageProps } from './PreferencesEditChatFolderPage.preload.tsx';
 import type { ExternalProps as SmartNotificationProfilesProps } from './PreferencesNotificationProfiles.preload.tsx';
-import { registrationJobQueue } from '../../jobs/registrationJobQueue.preload.ts';
 
 const RESETTABLE_GLOBAL_NOTIFICATION_ITEMS = [
   ...Object.values(NOTIFY_WHILE_MUTED_FIELDS),
@@ -182,6 +183,10 @@ function renderPreferencesEditChatFolderPage(
   props: SmartPreferencesEditChatFolderPageProps
 ): JSX.Element {
   return <SmartPreferencesEditChatFolderPage {...props} />;
+}
+
+function renderPreferencesLinkedDevicesPage() {
+  return <SmartPreferencesLinkedDevicesPage />;
 }
 
 function renderNotificationProfilesHome(
@@ -1269,6 +1274,7 @@ export function SmartPreferences(): JSX.Element | null {
         renderPreferencesEditChatFolderPage={
           renderPreferencesEditChatFolderPage
         }
+        renderPreferencesLinkedDevicesPage={renderPreferencesLinkedDevicesPage}
         previouslyViewedBackupKeyHash={previouslyViewedBackupKeyHash}
         promptOSAuth={promptOSAuth}
         resetAllChatColors={resetAllChatColors}

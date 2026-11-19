@@ -7,6 +7,7 @@ import PQueue from 'p-queue';
 import pMap from 'p-map';
 import { v7 as generateUuid } from 'uuid';
 import { resetLocalTimeZone as intlDateResetLocalTimeZone } from '@internationalized/date';
+import { setTimeout, clearTimeout } from 'node:timers';
 
 import * as Registration from './util/registration.preload.ts';
 import MessageReceiver from './textsecure/MessageReceiver.preload.ts';
@@ -24,9 +25,8 @@ import {
 } from './textsecure/TaskWithTimeout.std.ts';
 import type { MessageAttributesType } from './model-types.std.ts';
 import * as Bytes from './Bytes.std.ts';
-import * as Timers from './Timers.preload.ts';
 import * as indexedDb from './indexeddb.dom.ts';
-import { ToastType } from './types/Toast.dom.tsx';
+import { ToastType } from './types/Toast.std.ts';
 import type { MenuOptionsType } from './types/menu.std.ts';
 import { SocketStatus } from './types/SocketStatus.std.ts';
 import { ThemeType } from './types/Util.std.ts';
@@ -67,7 +67,7 @@ import { initializeNetworkObserver } from './services/networkObserver.preload.ts
 import * as StorageService from './services/storage.preload.ts';
 import { usernameIntegrity } from './services/usernameIntegrity.preload.ts';
 import { updateIdentityKey } from './services/profiles.preload.ts';
-import { initializeUpdateListener } from './services/updateListener.preload.ts';
+import { initializeUpdateListener } from './services/updateListener.sandbox.ts';
 import { RoutineProfileRefresher } from './routineProfileRefresh.preload.ts';
 import { isOlderThan } from './util/timestamp.std.ts';
 import { safeParsePartial } from './util/schemas.std.ts';
@@ -232,19 +232,14 @@ import {
 import { generateMessageId } from './util/generateMessageId.node.ts';
 import { retryPlaceholders } from './services/retryPlaceholders.std.ts';
 import { setBatchingStrategy } from './util/messageBatcher.preload.ts';
-import { parseRemoteClientExpiration } from './util/parseRemoteClientExpiration.dom.ts';
+import { parseRemoteClientExpiration } from './util/parseRemoteClientExpiration.std.ts';
 import { addGlobalKeyboardShortcuts } from './services/addGlobalKeyboardShortcuts.preload.ts';
 import { createEventHandler } from './quill/signal-clipboard/util.dom.ts';
 import { onCallLogEventSync } from './util/onCallLogEventSync.preload.ts';
 import { backupsService } from './services/backups/index.preload.ts';
-import {
-  getCallIdFromEra,
-  updateLocalGroupCallHistoryTimestamp,
-} from './util/callDisposition.preload.ts';
 import { deriveMasterKey } from './Crypto.node.ts';
 import { AttachmentDownloadManager } from './jobs/AttachmentDownloadManager.preload.ts';
 import { onCallLinkUpdateSync } from './util/onCallLinkUpdateSync.preload.ts';
-import { CallMode } from './types/CallDisposition.std.ts';
 import type { SyncTaskType } from './util/syncTasks.preload.ts';
 import { queueSyncTasks, runAllSyncTasks } from './util/syncTasks.preload.ts';
 import type { ViewSyncTaskType } from './messageModifiers/ViewSyncs.preload.ts';
@@ -261,7 +256,7 @@ import {
   onChange as onRemoteConfigChange,
   maybeRefreshRemoteConfig,
   forceRefreshRemoteConfig,
-} from './RemoteConfig.dom.ts';
+} from './RemoteConfig.std.ts';
 import {
   getParametersForRedux,
   loadAll,
@@ -308,6 +303,10 @@ import { PhoneNumberDiscoverability } from './util/phoneNumberDiscoverability.st
 import { getProfileData } from './state/ducks/standaloneInstaller.preload.ts';
 import { pinReminderService } from './services/pinReminder.preload.ts';
 import { updateCapabilities } from './util/updateCapabilities.preload.ts';
+import { onContactSyncRequest } from './util/syncRequests/onContactSyncRequest.preload.ts';
+import { onConfigurationRequest } from './util/syncRequests/onConfigurationRequest.preload.ts';
+import { onKeysRequest } from './util/syncRequests/onKeysRequest.preload.ts';
+import { onBlockSyncRequest } from './util/syncRequests/onBlockSyncRequest.preload.ts';
 
 const { isNumber, throttle } = lodash;
 
@@ -652,6 +651,10 @@ async function startApp(): Promise<void> {
       queuedEventListener(onContactSync)
     );
     messageReceiver.addEventListener(
+      'contactSyncRequest',
+      queuedEventListener(onContactSyncRequest)
+    );
+    messageReceiver.addEventListener(
       'sent',
       queuedEventListener(onSentMessage)
     );
@@ -703,6 +706,14 @@ async function startApp(): Promise<void> {
       'configuration',
       queuedEventListener(onConfiguration)
     );
+    messageReceiver.addEventListener(
+      'configurationRequest',
+      queuedEventListener(onConfigurationRequest)
+    );
+    messageReceiver.addEventListener(
+      'blockSyncRequest',
+      queuedEventListener(onBlockSyncRequest)
+    );
     messageReceiver.addEventListener('typing', queuedEventListener(onTyping));
     messageReceiver.addEventListener(
       'sticker-pack',
@@ -725,6 +736,10 @@ async function startApp(): Promise<void> {
       queuedEventListener(onFetchLatestSync)
     );
     messageReceiver.addEventListener('keys', queuedEventListener(onKeysSync));
+    messageReceiver.addEventListener(
+      'keysRequest',
+      queuedEventListener(onKeysRequest)
+    );
     messageReceiver.addEventListener(
       'storyRecipientUpdate',
       queuedEventListener(onStoryRecipientUpdate)
@@ -1745,6 +1760,8 @@ async function startApp(): Promise<void> {
         await maybeRefreshRemoteConfig({
           getConfig,
           storage: itemStorage,
+          ourVersion: window.getVersion(),
+          showToast: window.reduxActions.toast.showToast,
         });
       } catch (error) {
         if (error instanceof HTTPError) {
@@ -1766,7 +1783,10 @@ async function startApp(): Promise<void> {
       if (value == null) {
         return;
       }
-      const remoteBuildExpirationTimestamp = parseRemoteClientExpiration(value);
+      const remoteBuildExpirationTimestamp = parseRemoteClientExpiration({
+        ourVersion: window.getVersion(),
+        remoteExpirationValue: value,
+      });
       if (remoteBuildExpirationTimestamp) {
         drop(
           itemStorage.put(
@@ -1894,7 +1914,12 @@ async function startApp(): Promise<void> {
       if (isFirstAuthSocketConnect) {
         try {
           await forceRefreshRemoteConfig(
-            { getConfig, storage: itemStorage },
+            {
+              getConfig,
+              storage: itemStorage,
+              ourVersion: window.getVersion(),
+              showToast: window.reduxActions.toast.showToast,
+            },
             'afterAuthSocketConnect/firstConnect'
           );
         } catch (error) {
@@ -1904,6 +1929,10 @@ async function startApp(): Promise<void> {
               ? `code: ${error.code}`
               : Errors.toLogFormat(error)
           );
+        }
+
+        if (window.ConversationController.areWePrimaryDevice()) {
+          window.reduxActions.linkedDevices.refreshDevices();
         }
       }
 
@@ -2206,7 +2235,7 @@ async function startApp(): Promise<void> {
         messageReceiver?.removeEventListener('envelopeQueued', onResetTimer);
 
         if (timeout !== undefined) {
-          Timers.clearTimeout(timeout);
+          clearTimeout(timeout);
           timeout = undefined;
         }
       };
@@ -2216,7 +2245,7 @@ async function startApp(): Promise<void> {
         cleanup();
         reject(new Error(`${logId}: Empty queue never fired`));
       };
-      let timeout: Timers.Timeout | undefined = Timers.setTimeout(
+      let timeout: NodeJS.Timeout | undefined = setTimeout(
         onTimeout,
         durations.MINUTE
       );
@@ -2229,9 +2258,9 @@ async function startApp(): Promise<void> {
 
       const onResetTimer = () => {
         if (timeout !== undefined) {
-          Timers.clearTimeout(timeout);
+          clearTimeout(timeout);
         }
-        timeout = Timers.setTimeout(onTimeout, durations.MINUTE);
+        timeout = setTimeout(onTimeout, durations.MINUTE);
       };
       messageReceiver.addEventListener('envelopeQueued', onResetTimer);
 
@@ -2321,7 +2350,7 @@ async function startApp(): Promise<void> {
     initMegaphoneCheckService();
     pinReminderService.init();
     // delay unread reminders by some arbitrary amount to avoid reminding at startup
-    Timers.setTimeout(() => initializeUnreadReminderService(), FIVE_MINUTES);
+    setTimeout(() => initializeUnreadReminderService(), FIVE_MINUTES);
 
     if (isFromMessageReceiver) {
       drop(
@@ -2949,11 +2978,6 @@ async function startApp(): Promise<void> {
       return;
     }
 
-    if (handleGroupCallUpdateMessage(data.message, messageDescriptor)) {
-      confirm();
-      return;
-    }
-
     // Don't wait for handleDataMessage, as it has its own per-conversation queueing
     drop(
       handleDataMessage(
@@ -3532,11 +3556,6 @@ async function startApp(): Promise<void> {
       return;
     }
 
-    if (handleGroupCallUpdateMessage(data.message, messageDescriptor)) {
-      event.confirm();
-      return;
-    }
-
     // Don't wait for handleDataMessage, as it has its own per-conversation queueing
     drop(
       handleDataMessage(
@@ -3585,46 +3604,6 @@ async function startApp(): Promise<void> {
       unidentifiedDeliveryReceived: data.unidentifiedDeliveryReceived,
     };
     return new MessageModel(partialMessage);
-  }
-
-  // Returns `false` if this message isn't a group call message.
-  function handleGroupCallUpdateMessage(
-    message: ProcessedDataMessage,
-    messageDescriptor: MessageDescriptor
-  ): boolean {
-    if (message.groupCallUpdate) {
-      if (message.groupV2 && messageDescriptor.type === GROUP) {
-        const conversationId = messageDescriptor.id;
-        const callId =
-          message.groupCallUpdate?.eraId != null
-            ? getCallIdFromEra(message.groupCallUpdate.eraId)
-            : null;
-        log.info(
-          'handleGroupCallUpdateMessage',
-          message.timestamp,
-          callId,
-          conversationId
-        );
-        window.reduxActions.calling.peekNotConnectedGroupCall({
-          callMode: CallMode.Group,
-          conversationId,
-        });
-        if (callId != null) {
-          drop(
-            updateLocalGroupCallHistoryTimestamp(
-              conversationId,
-              callId,
-              message.timestamp
-            )
-          );
-        }
-        return true;
-      }
-      log.warn(
-        'Received a group call update for a conversation that is not a GV2 group. Ignoring that property and continuing.'
-      );
-    }
-    return false;
   }
 
   async function unlinkAndDisconnect(): Promise<void> {

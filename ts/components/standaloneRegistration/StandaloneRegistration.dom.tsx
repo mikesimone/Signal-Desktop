@@ -13,7 +13,7 @@ import {
   FatalErrorType,
   RegistrationStage,
 } from '../../types/StandaloneRegistration.std.ts';
-import { AxoConfirmDialog } from '../../axo/AxoConfirmDialog.dom.tsx';
+import { AxoConfirmDialog } from '../../axo/dialogs/AxoConfirmDialog.dom.tsx';
 import { PhoneNumberScreen } from './stages/PhoneNumber.dom.tsx';
 import { CaptchaScreen } from './stages/Captcha.dom.tsx';
 import { VerificationCodeScreen } from './stages/VerificationCode.dom.tsx';
@@ -55,7 +55,7 @@ import type {
   verifyPIN as doVerifyPIN,
 } from '../../state/ducks/standaloneInstaller.preload.ts';
 import type { CountryDataType } from '../../util/getCountryData.dom.ts';
-import type { UpdatesStateType } from '../../state/ducks/updates.preload.ts';
+import type { UpdatesStateType } from '../../state/ducks/updates.dom.ts';
 
 const SPRING = {
   type: 'spring' as const,

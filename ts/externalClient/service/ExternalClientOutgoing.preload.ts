@@ -7,7 +7,7 @@ import { createLogger } from '../../logging/log.std.ts';
 import { getMessageById } from '../../messages/getMessageById.preload.ts';
 import { enqueuePollTerminateForSend } from '../../polls/enqueuePollTerminateForSend.preload.ts';
 import { enqueuePollVoteForSend } from '../../polls/enqueuePollVoteForSend.preload.ts';
-import { getValue as getRemoteConfigValue } from '../../RemoteConfig.dom.ts';
+import { getValue as getRemoteConfigValue } from '../../RemoteConfig.std.ts';
 import { getConversationSelector } from '../../state/selectors/conversations.dom.ts';
 import { getHasMediaBackups } from '../../state/selectors/items.dom.ts';
 import {

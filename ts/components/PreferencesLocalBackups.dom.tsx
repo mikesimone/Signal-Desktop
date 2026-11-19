@@ -16,14 +16,14 @@ import { OSAuthErrorDialog } from './preferences/OSAuthErrorDialog.dom.tsx';
 import { I18n } from './I18n.dom.tsx';
 import type { SettingsLocation } from '../types/Nav.std.ts';
 import { SettingsPage } from '../types/Nav.std.ts';
-import { ToastType } from '../types/Toast.dom.tsx';
-import type { ShowToastAction } from '../state/ducks/toast.preload.ts';
+import { ToastType } from '../types/Toast.std.ts';
+import type { ShowToastAction } from '../state/ducks/toast.dom.ts';
 import type {
   PromptOSAuthReasonType,
   PromptOSAuthResultType,
 } from '../util/os/promptOSAuthMain.main.ts';
 import { AxoButton } from '../axo/AxoButton.dom.tsx';
-import { AxoDialog } from '../axo/AxoDialog.dom.tsx';
+import { AxoDialog } from '../axo/dialogs/AxoDialog.dom.tsx';
 import { AxoCheckbox } from '../axo/AxoCheckbox.dom.tsx';
 import { SECOND } from '../util/durations/constants.std.ts';
 import { formatBackupKeyForDisplay } from '../util/formatBackupKeyForDisplay.std.ts';
@@ -32,7 +32,7 @@ import type { LocalBackupExportMetadata } from '../types/LocalExport.std.ts';
 import { tw } from '../axo/tw.dom.tsx';
 import { createLogger } from '../logging/log.std.ts';
 import { toLogFormat } from '../types/errors.std.ts';
-import { AxoAlertDialog } from '../axo/AxoAlertDialog.dom.tsx';
+import { AxoAlertDialog } from '../axo/dialogs/AxoAlertDialog.dom.tsx';
 import { AxoSymbol } from '../axo/AxoSymbol.dom.tsx';
 import { LocalBackupsConfirmKeyDialog } from './LocalBackupsConfirmKeyDialog.dom.tsx';
 import { LocalBackupsSetupIcon } from './LocalBackupsSetupIcon.dom.tsx';

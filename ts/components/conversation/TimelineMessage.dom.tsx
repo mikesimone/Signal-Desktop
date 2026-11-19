@@ -7,17 +7,14 @@ import {
   useEffect,
   useEffectEvent,
   useMemo,
+  useRef,
   useState,
 } from 'react';
-import type { ReactNode, ComponentProps, JSX, MouseEvent } from 'react';
-import { createPortal } from 'react-dom';
-import { Manager, Popper, Reference } from 'react-popper';
-import type { PreventOverflowModifier } from '@popperjs/core/lib/modifiers/preventOverflow.js';
+import type { ReactNode, ComponentProps, JSX, MouseEvent, Ref } from 'react';
+import { Popover } from 'radix-ui';
 import { tinykeys } from 'tinykeys';
 import { isDownloaded } from '../../util/Attachment.std.ts';
 import type { LocalizerType } from '../../types/I18N.std.ts';
-import { handleOutsideClick } from '../../util/handleOutsideClick.dom.ts';
-import { offsetDistanceModifier } from '../../util/popperUtil.std.ts';
 import { WidthBreakpoint } from '../_util.std.ts';
 import { Message, MessageInteractivity } from './Message.dom.tsx';
 import type { SmartReactionPicker } from '../../state/smart/ReactionPicker.dom.tsx';
@@ -57,6 +54,7 @@ export type PropsData = {
   canRetryDeleteForEveryone: boolean;
   canReact: boolean;
   canReply: boolean;
+  canReplyPrivately: boolean;
   canPinMessage: boolean;
   selectedReaction?: Emoji.Variant;
   stickerRef: StickerReferenceType | undefined;
@@ -84,6 +82,7 @@ export type PropsActions = {
   retryDeleteForEveryone: (id: string) => void;
   setMessageToEdit: (conversationId: string, messageId: string) => unknown;
   setQuoteByMessageId: (conversationId: string, messageId: string) => void;
+  replyPrivately: (messageId: string) => void;
   toggleSelectMessage: (
     conversationId: string,
     messageId: string,
@@ -123,6 +122,7 @@ export function TimelineMessage(props: Props): JSX.Element {
     canForward,
     canReact,
     canReply,
+    canReplyPrivately,
     canRetry,
     canRetryDeleteForEveryone,
     canPinMessage,
@@ -147,6 +147,7 @@ export function TimelineMessage(props: Props): JSX.Element {
     pushPanelForConversation,
     reactToMessage,
     renderReactionPicker,
+    replyPrivately,
     retryDeleteForEveryone,
     retryMessageSend,
     saveAttachment,
@@ -164,79 +165,40 @@ export function TimelineMessage(props: Props): JSX.Element {
     toggleSelectMessage,
   } = props;
 
-  const [reactionPickerRoot, setReactionPickerRoot] = useState<
-    HTMLDivElement | undefined
-  >(undefined);
+  const [reactionPickerOpen, setReactionPickerOpen] = useState(false);
 
   const isWindowWidthNotNarrow =
     containerWidthBreakpoint !== WidthBreakpoint.Narrow;
 
-  const popperPreventOverflowModifier =
-    useCallback((): Partial<PreventOverflowModifier> => {
-      return {
-        name: 'preventOverflow',
-        options: {
-          altAxis: true,
-          boundary: containerElementRef.current || undefined,
-          padding: {
-            bottom: 16,
-            left: 8,
-            right: 8,
-            top: 16,
-          },
-        },
-      };
-    }, [containerElementRef]);
+  const reactionPickerCollisionBoundary = containerElementRef.current;
 
-  const toggleReactionPicker = useCallback(
-    (onlyRemove = false): void => {
-      if (reactionPickerRoot) {
-        document.body.removeChild(reactionPickerRoot);
-        setReactionPickerRoot(undefined);
-        return;
-      }
+  const toggleReactionPicker = useCallback((onlyRemove = false): void => {
+    setReactionPickerOpen(open => (onlyRemove ? false : !open));
+  }, []);
 
-      if (!onlyRemove) {
-        const root = document.createElement('div');
-        document.body.appendChild(root);
+  const closeReactionPicker = useCallback(() => {
+    setReactionPickerOpen(false);
+  }, []);
 
-        setReactionPickerRoot(root);
-      }
-    },
-    [reactionPickerRoot]
-  );
+  const reactionPickerAnchorRef = useRef<HTMLButtonElement>(null);
+
+  // Let the anchor button toggle the picker instead of Radix closing it first
+  const handleReactionPickerPointerDownOutside = useCallback((event: Event) => {
+    const { target } = event;
+    if (
+      target instanceof Node &&
+      reactionPickerAnchorRef.current?.contains(target)
+    ) {
+      event.preventDefault();
+    }
+  }, []);
 
   useScrollerLock({
     reason: 'TimelineMessage reactionPicker',
-    lockScrollWhen: reactionPickerRoot != null,
+    lockScrollWhen: reactionPickerOpen,
     onUserInterrupt() {
       toggleReactionPicker(true);
     },
-  });
-
-  useEffect(() => {
-    let cleanUpHandler: (() => void) | undefined;
-    if (reactionPickerRoot) {
-      cleanUpHandler = handleOutsideClick(
-        target => {
-          if (
-            target instanceof Element &&
-            target.closest('[data-fun-overlay]') != null
-          ) {
-            return true;
-          }
-          toggleReactionPicker(true);
-          return true;
-        },
-        {
-          containerElements: [reactionPickerRoot],
-          name: 'Message.reactionPicker',
-        }
-      );
-    }
-    return () => {
-      cleanUpHandler?.();
-    };
   });
 
   const openGenericAttachment = useCallback(
@@ -353,18 +315,29 @@ export function TimelineMessage(props: Props): JSX.Element {
       .filter(isNotNil);
   }, [groupedReactions]);
 
+  const handleMessageContextMenuOpenChange = useCallback(
+    (open: boolean) => {
+      if (open) {
+        closeReactionPicker();
+      }
+    },
+    [closeReactionPicker]
+  );
+
   const renderMessageContextMenu = useCallback(
     (renderer: AxoMenuBuilder.Renderer, children: ReactNode): JSX.Element => {
       return (
         <MessageContextMenu
           i18n={i18n}
           renderer={renderer}
+          onOpenChange={handleMessageContextMenuOpenChange}
           shouldShowAdditional={shouldShowAdditional}
           onDownload={handleDownload}
           onEdit={
             canEditMessage ? () => setMessageToEdit(conversationId, id) : null
           }
           onReplyToMessage={handleReplyToMessage}
+          onReplyPrivately={canReplyPrivately ? () => replyPrivately(id) : null}
           onReact={handleReact}
           onEndPoll={canEndPoll ? () => endPoll(id) : null}
           onRetryMessageSend={canRetry ? () => retryMessageSend(id) : null}
@@ -419,6 +392,7 @@ export function TimelineMessage(props: Props): JSX.Element {
       canEditMessage,
       canForward,
       canPinMessage,
+      canReplyPrivately,
       canRetry,
       canSelect,
       canEndPoll,
@@ -428,6 +402,7 @@ export function TimelineMessage(props: Props): JSX.Element {
       handleDebugMessage,
       handleDownload,
       handleFavoriteSticker,
+      handleMessageContextMenuOpenChange,
       handleReact,
       handleOpenPinMessageDialog,
       handleUnpinMessage,
@@ -438,6 +413,7 @@ export function TimelineMessage(props: Props): JSX.Element {
       isFavoriteSticker,
       isPinned,
       pushPanelForConversation,
+      replyPrivately,
       retryDeleteForEveryone,
       retryMessageSend,
       setMessageToEdit,
@@ -451,7 +427,11 @@ export function TimelineMessage(props: Props): JSX.Element {
 
   const renderMenu = useCallback(() => {
     return (
-      <Manager>
+      <Popover.Root
+        open={reactionPickerOpen}
+        onOpenChange={setReactionPickerOpen}
+        modal={false}
+      >
         <MessageMenu
           i18n={i18n}
           isFavoriteSticker={isFavoriteSticker}
@@ -461,37 +441,38 @@ export function TimelineMessage(props: Props): JSX.Element {
           onFavoriteSticker={stickerRef ? handleFavoriteSticker : null}
           onReplyToMessage={canReply ? handleReplyToMessage : null}
           onReact={canReact ? handleReact : null}
+          reactionPickerAnchorRef={reactionPickerAnchorRef}
+          reactionPickerOpen={reactionPickerOpen}
           renderMessageContextMenu={renderMessageContextMenu}
         />
-        {reactionPickerRoot &&
-          createPortal(
-            <Popper
-              placement="top"
-              modifiers={[
-                offsetDistanceModifier(4),
-                popperPreventOverflowModifier(),
-              ]}
-            >
-              {({ ref, style }) =>
-                renderReactionPicker({
-                  ref,
-                  style,
-                  selected: selectedReaction,
-                  onClose: toggleReactionPicker,
-                  onPick: emoji => {
-                    toggleReactionPicker(true);
-                    reactToMessage(id, {
-                      emoji,
-                      remove: emoji === selectedReaction,
-                    });
-                  },
-                  messageEmojis,
-                })
-              }
-            </Popper>,
-            reactionPickerRoot
-          )}
-      </Manager>
+        <Popover.Portal>
+          <Popover.Content
+            aria-label={i18n('icu:reactToMessage')}
+            side="top"
+            sideOffset={4}
+            collisionBoundary={reactionPickerCollisionBoundary}
+            collisionPadding={{ top: 16, bottom: 16, left: 8, right: 8 }}
+            // ReactionPicker manages its own focus
+            onOpenAutoFocus={event => event.preventDefault()}
+            onCloseAutoFocus={event => event.preventDefault()}
+            onFocusOutside={event => event.preventDefault()}
+            onPointerDownOutside={handleReactionPickerPointerDownOutside}
+          >
+            {renderReactionPicker({
+              selected: selectedReaction,
+              onClose: closeReactionPicker,
+              onPick: emoji => {
+                toggleReactionPicker(true);
+                reactToMessage(id, {
+                  emoji,
+                  remove: emoji === selectedReaction,
+                });
+              },
+              messageEmojis,
+            })}
+          </Popover.Content>
+        </Popover.Portal>
+      </Popover.Root>
     );
   }, [
     i18n,
@@ -504,8 +485,10 @@ export function TimelineMessage(props: Props): JSX.Element {
     handleFavoriteSticker,
     handleReplyToMessage,
     handleReact,
-    reactionPickerRoot,
-    popperPreventOverflowModifier,
+    reactionPickerOpen,
+    reactionPickerCollisionBoundary,
+    closeReactionPicker,
+    handleReactionPickerPointerDownOutside,
     renderReactionPicker,
     selectedReaction,
     stickerRef,
@@ -541,6 +524,8 @@ type MessageMenuProps = {
   onFavoriteSticker: (() => void) | null;
   onReplyToMessage: (() => void) | null;
   onReact: (() => void) | null;
+  reactionPickerAnchorRef: Ref<HTMLButtonElement>;
+  reactionPickerOpen: boolean;
   renderMessageContextMenu: (
     renderer: AxoMenuBuilder.Renderer,
     children: ReactNode
@@ -556,8 +541,23 @@ function MessageMenu({
   onFavoriteSticker,
   onReplyToMessage,
   onReact,
+  reactionPickerAnchorRef,
+  reactionPickerOpen,
   renderMessageContextMenu,
 }: MessageMenuProps) {
+  const menuButton = (
+    <button
+      ref={isWindowWidthNotNarrow ? undefined : reactionPickerAnchorRef}
+      type="button"
+      aria-label={i18n('icu:messageContextMenuButton')}
+      className="module-message__buttons__menu"
+      onDoubleClick={ev => {
+        // Prevent double click from triggering the replyToMessage action
+        ev.stopPropagation();
+      }}
+    />
+  );
+
   return (
     <div
       className={classNames(
@@ -569,34 +569,28 @@ function MessageMenu({
       {isWindowWidthNotNarrow && (
         <>
           {onReact && (
-            <Reference>
-              {({ ref: popperRef }) => {
-                // Only attach the popper reference to the reaction button if it is
-                //   visible (it is hidden when the timeline is narrow)
-                const maybePopperRef = isWindowWidthNotNarrow
-                  ? popperRef
-                  : undefined;
+            // The reaction picker is anchored to the reaction button when it's
+            // visible (it is hidden when the timeline is narrow)
+            <Popover.Anchor asChild>
+              <button
+                ref={reactionPickerAnchorRef}
+                type="button"
+                aria-haspopup="dialog"
+                aria-expanded={reactionPickerOpen}
+                onClick={(event: MouseEvent) => {
+                  event.stopPropagation();
+                  event.preventDefault();
 
-                return (
-                  <button
-                    ref={maybePopperRef}
-                    type="button"
-                    onClick={(event: MouseEvent) => {
-                      event.stopPropagation();
-                      event.preventDefault();
-
-                      onReact();
-                    }}
-                    className="module-message__buttons__react"
-                    aria-label={i18n('icu:reactToMessage')}
-                    onDoubleClick={ev => {
-                      // Prevent double click from triggering the replyToMessage action
-                      ev.stopPropagation();
-                    }}
-                  />
-                );
-              }}
-            </Reference>
+                  onReact();
+                }}
+                className="module-message__buttons__react"
+                aria-label={i18n('icu:reactToMessage')}
+                onDoubleClick={ev => {
+                  // Prevent double click from triggering the replyToMessage action
+                  ev.stopPropagation();
+                }}
+              />
+            </Popover.Anchor>
           )}
 
           {onFavoriteSticker && (
@@ -652,30 +646,16 @@ function MessageMenu({
           )}
         </>
       )}
-      <Reference>
-        {({ ref: popperRef }) => {
-          // Only attach the popper reference to the collapsed menu button if
-          //   the reaction button is not visible (it is hidden when the
-          //   timeline is narrow)
-          const maybePopperRef = !isWindowWidthNotNarrow
-            ? popperRef
-            : undefined;
-
-          return renderMessageContextMenu(
-            'AxoDropdownMenu',
-            <button
-              ref={maybePopperRef}
-              type="button"
-              aria-label={i18n('icu:messageContextMenuButton')}
-              className="module-message__buttons__menu"
-              onDoubleClick={ev => {
-                // Prevent double click from triggering the replyToMessage action
-                ev.stopPropagation();
-              }}
-            />
-          );
-        }}
-      </Reference>
+      {renderMessageContextMenu(
+        'AxoDropdownMenu',
+        isWindowWidthNotNarrow ? (
+          menuButton
+        ) : (
+          // When the timeline is narrow, the reaction button is hidden and
+          // the picker is anchored to the menu button instead
+          <Popover.Anchor asChild>{menuButton}</Popover.Anchor>
+        )
+      )}
     </div>
   );
 }

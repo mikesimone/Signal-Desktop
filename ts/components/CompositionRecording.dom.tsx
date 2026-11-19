@@ -5,17 +5,17 @@ import { useEscapeHandling } from '../hooks/useEscapeHandling.dom.ts';
 import type {
   HideToastAction,
   ShowToastAction,
-} from '../state/ducks/toast.preload.ts';
+} from '../state/ducks/toast.dom.ts';
 import type { PeakType } from '../types/Audio.dom.tsx';
 import { ErrorDialogAudioRecorderType } from '../types/AudioRecorder.std.ts';
 import type { LocalizerType } from '../types/Util.std.ts';
-import type { AnyToast } from '../types/Toast.dom.tsx';
-import { ToastType } from '../types/Toast.dom.tsx';
+import type { AnyToast } from '../types/Toast.std.ts';
+import { ToastType } from '../types/Toast.std.ts';
 import { DurationInSeconds, SECOND } from '../util/durations/index.std.ts';
 import { tw } from '../axo/tw.dom.tsx';
 import { durationToPlaybackText } from '../util/durationToPlaybackText.std.ts';
 import { RecordingComposer } from './RecordingComposer.dom.tsx';
-import { AxoConfirmDialog } from '../axo/AxoConfirmDialog.dom.tsx';
+import { AxoConfirmDialog } from '../axo/dialogs/AxoConfirmDialog.dom.tsx';
 
 export type Props = Readonly<{
   i18n: LocalizerType;

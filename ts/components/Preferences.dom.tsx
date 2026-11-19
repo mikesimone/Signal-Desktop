@@ -62,8 +62,8 @@ import type {
 } from '../util/notifyWhileMuted.std.ts';
 import { getNotifyWhileMutedSummary } from '../util/notifyWhileMuted.std.ts';
 import type { ThemeSettingType } from '../util/theme.std.ts';
-import type { AnyToast } from '../types/Toast.dom.tsx';
-import { ToastType } from '../types/Toast.dom.tsx';
+import type { AnyToast } from '../types/Toast.std.ts';
+import { ToastType } from '../types/Toast.std.ts';
 import type { ConversationType } from '../state/ducks/conversations.preload.ts';
 import type { ChatStyle } from '../types/ChatStyle.std.ts';
 import { DEFAULT_BUBBLE_COLOR } from '../types/ChatStyle.std.ts';
@@ -100,8 +100,8 @@ import { LinkedDevicesOnboardingDialog } from './preferences/LinkedDevicesOnboar
 import { SignalAccountKeys } from './preferences/SignalAccountKeys.dom.tsx';
 import { SignalAccountKeysButton } from './preferences/SignalAccountKeysButton.dom.tsx';
 import { Emoji } from '../axo/emoji.std.ts';
-import { AxoAlertDialog } from '../axo/AxoAlertDialog.dom.tsx';
-import { AxoConfirmDialog } from '../axo/AxoConfirmDialog.dom.tsx';
+import { AxoAlertDialog } from '../axo/dialogs/AxoAlertDialog.dom.tsx';
+import { AxoConfirmDialog } from '../axo/dialogs/AxoConfirmDialog.dom.tsx';
 import { AxoSymbol } from '../axo/AxoSymbol.dom.tsx';
 import moment from 'moment';
 import { AxoItem } from '../axo/items/AxoItem.dom.tsx';
@@ -258,7 +258,6 @@ type PropsFunctionType = {
   renderNotificationProfilesCreateFlow: (
     props: SmartNotificationProfilesProps
   ) => JSX.Element;
-
   renderProfileEditor: () => JSX.Element;
   renderToastManager: (
     _: Readonly<{ containerWidthBreakpoint: WidthBreakpoint }>
@@ -275,6 +274,7 @@ type PropsFunctionType = {
   renderPreferencesEditChatFolderPage: (
     props: SmartPreferencesEditChatFolderPageProps
   ) => JSX.Element;
+  renderPreferencesLinkedDevicesPage: () => JSX.Element;
 
   // Other props
   addCustomColor: (
@@ -614,6 +614,7 @@ export function Preferences({
   renderPreferencesBlockedPage,
   renderPreferencesChatFoldersPage,
   renderPreferencesEditChatFolderPage,
+  renderPreferencesLinkedDevicesPage,
   openFileInFolder,
   osName,
   previouslyViewedBackupKeyHash,
@@ -880,6 +881,8 @@ export function Preferences({
         title={i18n('icu:Preferences--signal-login')}
       />
     );
+  } else if (settingsLocation.page === SettingsPage.LinkedDevices) {
+    content = renderPreferencesLinkedDevicesPage();
   } else if (settingsLocation.page === SettingsPage.General) {
     const pageContents = (
       <AxoList.Group>
@@ -2677,6 +2680,16 @@ export function Preferences({
                   }
                   onClick={() =>
                     setSettingsLocation({ page: SettingsPage.Account })
+                  }
+                />
+              )}
+              {weArePrimaryDevice && (
+                <PreferencesButton
+                  symbol="device-phone-laptop"
+                  label={i18n('icu:Preferences__button--linked-devices')}
+                  current={settingsLocation.page === SettingsPage.LinkedDevices}
+                  onClick={() =>
+                    setSettingsLocation({ page: SettingsPage.LinkedDevices })
                   }
                 />
               )}

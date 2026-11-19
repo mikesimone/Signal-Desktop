@@ -20,7 +20,7 @@ import type { SettingsLocation } from '../types/Nav.std.ts';
 import { SettingsPage } from '../types/Nav.std.ts';
 import { I18n } from './I18n.dom.tsx';
 import { PreferencesLocalBackups } from './PreferencesLocalBackups.dom.tsx';
-import type { ShowToastAction } from '../state/ducks/toast.preload.ts';
+import type { ShowToastAction } from '../state/ducks/toast.dom.ts';
 import type {
   PromptOSAuthReasonType,
   PromptOSAuthResultType,
@@ -34,7 +34,7 @@ import {
 import type { LocalBackupExportMetadata } from '../types/LocalExport.std.ts';
 import { createLogger } from '../logging/log.std.ts';
 import { toLogFormat } from '../types/errors.std.ts';
-import { AxoAlertDialog } from '../axo/AxoAlertDialog.dom.tsx';
+import { AxoAlertDialog } from '../axo/dialogs/AxoAlertDialog.dom.tsx';
 
 export const SIGNAL_BACKUPS_LEARN_MORE_URL =
   'https://support.signal.org/hc/articles/360007059752-Backup-and-Restore-Messages';

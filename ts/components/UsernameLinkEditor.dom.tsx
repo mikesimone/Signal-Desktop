@@ -16,8 +16,8 @@ import lodash from 'lodash';
 
 import { SignalService as Proto } from '../protobuf/index.std.ts';
 import { UsernameLinkState } from '../state/ducks/usernameEnums.std.ts';
-import { ToastType } from '../types/Toast.dom.tsx';
-import type { ShowToastAction } from '../state/ducks/toast.preload.ts';
+import { ToastType } from '../types/Toast.std.ts';
+import type { ShowToastAction } from '../state/ducks/toast.dom.ts';
 import type { LocalizerType } from '../types/Util.std.ts';
 import { strictAssert } from '../util/assert.std.ts';
 import { drop } from '../util/drop.std.ts';
@@ -27,7 +27,7 @@ import { Button, ButtonVariant } from './Button.dom.tsx';
 import { Spinner } from './Spinner.dom.tsx';
 import { BrandedQRCode } from './BrandedQRCode.dom.tsx';
 import { useConfirmDiscard } from '../hooks/useConfirmDiscard.dom.tsx';
-import { AxoConfirmDialog } from '../axo/AxoConfirmDialog.dom.tsx';
+import { AxoConfirmDialog } from '../axo/dialogs/AxoConfirmDialog.dom.tsx';
 
 const { noop } = lodash;
 

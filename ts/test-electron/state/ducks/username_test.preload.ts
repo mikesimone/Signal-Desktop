@@ -17,7 +17,7 @@ import {
   UsernameReservationError,
 } from '../../../state/ducks/usernameEnums.std.ts';
 import { actions } from '../../../state/ducks/username.preload.ts';
-import { ToastType } from '../../../types/Toast.dom.tsx';
+import { ToastType } from '../../../types/Toast.std.ts';
 import { noopAction } from '../../../state/ducks/noop.std.ts';
 import { reducer } from '../../../state/reducer.preload.ts';
 import {
@@ -111,6 +111,7 @@ describe('electron/state/ducks/username', () => {
     it('should dispatch correct actions after delay', async () => {
       const clock = sandbox.useFakeTimers({
         now: 0,
+        toFake: ['setTimeout', 'clearTimeout'],
       });
 
       const doReserveUsername = sinon.stub().resolves(DEFAULT_RESERVATION);

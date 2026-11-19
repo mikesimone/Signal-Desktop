@@ -13,14 +13,14 @@ import { WidthBreakpoint } from './_util.std.ts';
 import { UsernameMegaphone } from './UsernameMegaphone.dom.tsx';
 import { assertDev } from '../util/assert.std.ts';
 import { missingCaseError } from '../util/missingCaseError.std.ts';
-import { ToastType } from '../types/Toast.dom.tsx';
+import { ToastType } from '../types/Toast.std.ts';
 import { MegaphoneType } from '../types/Megaphone.std.ts';
 import { NavTab, SettingsPage } from '../types/Nav.std.ts';
 import { AxoSymbol } from '../axo/AxoSymbol.dom.tsx';
 import { tw } from '../axo/tw.dom.tsx';
 
 import type { LocalizerType } from '../types/Util.std.ts';
-import type { AnyToast } from '../types/Toast.dom.tsx';
+import type { AnyToast } from '../types/Toast.std.ts';
 import type { AnyActionableMegaphone } from '../types/Megaphone.std.ts';
 import type { Location } from '../types/Nav.std.ts';
 import { I18n } from './I18n.dom.tsx';
@@ -42,6 +42,7 @@ export type PropsType = {
     conversationId: string,
     options?: { wasPinned?: boolean }
   ) => unknown;
+  onUndoHideStickerPack: (packId: string) => void;
   retryCallQualitySurvey: () => unknown;
   setDidResumeDonation: (didResume: boolean) => unknown;
   toast?: AnyToast;
@@ -63,6 +64,7 @@ function renderToast({
   saveHeapSnapshot,
   onShowDebugLog,
   onUndoArchive,
+  onUndoHideStickerPack,
   retryCallQualitySurvey,
   setDidResumeDonation,
   OS,
@@ -675,6 +677,37 @@ function renderToast({
     return <Toast onClose={hideToast}>{i18n('icu:debugLogLinkCopied')}</Toast>;
   }
 
+  if (toastType === ToastType.LinkedDeviceAdded) {
+    return (
+      <Toast onClose={hideToast}>
+        {i18n('icu:Toast--LinkedDeviceAdded', { name: toast.parameters.name })}
+      </Toast>
+    );
+  }
+  if (toastType === ToastType.LinkedDeviceRemoved) {
+    return (
+      <Toast onClose={hideToast}>
+        {i18n('icu:Toast--LinkedDeviceRemoved', {
+          name: toast.parameters.name,
+        })}
+      </Toast>
+    );
+  }
+  if (toastType === ToastType.LinkedDeviceNameUpdated) {
+    return (
+      <Toast onClose={hideToast}>
+        {i18n('icu:Toast--LinkedDeviceNameUpdated')}
+      </Toast>
+    );
+  }
+  if (toastType === ToastType.LinkedDeviceSyncComplete) {
+    return (
+      <Toast onClose={hideToast}>
+        {i18n('icu:Toast--LinkedDeviceSyncComplete')}
+      </Toast>
+    );
+  }
+
   if (toastType === ToastType.LoadingFullLogs) {
     return <Toast onClose={hideToast}>{i18n('icu:loading')}</Toast>;
   }
@@ -721,6 +754,14 @@ function renderToast({
           <AxoSymbol.Icon symbol={symbol} size={12} label={label} />
           <span className={tw('mx-[10px]')}>{text}</span>
         </div>
+      </Toast>
+    );
+  }
+
+  if (toastType === ToastType.OriginalMessageAndGroupNotFound) {
+    return (
+      <Toast onClose={hideToast}>
+        {i18n('icu:Quote__original-message-and-group-not-found')}
       </Toast>
     );
   }
@@ -900,12 +941,44 @@ function renderToast({
     );
   }
 
+  if (toastType === ToastType.StickerFavoritesHint) {
+    return (
+      <Toast onClose={hideToast}>
+        {i18n('icu:stickers--Toast--StickerFavoritesHint')}
+      </Toast>
+    );
+  }
+
   if (toastType === ToastType.StickerFavoritesTooMany) {
     return (
       <Toast onClose={hideToast}>
         {i18n('icu:stickers--Toast--StickerFavoritesTooMany', {
           count: MAX_FAVORITE_STICKERS,
         })}
+      </Toast>
+    );
+  }
+
+  if (toastType === ToastType.StickerPackHidden) {
+    return (
+      <Toast
+        onClose={hideToast}
+        toastAction={{
+          label: i18n('icu:stickers--Toast--StickerPackHidden--Undo'),
+          onClick: () => {
+            onUndoHideStickerPack(toast.parameters.packId);
+          },
+        }}
+      >
+        {i18n('icu:stickers--Toast--StickerPackHidden')}
+      </Toast>
+    );
+  }
+
+  if (toastType === ToastType.StickerPackUnhidden) {
+    return (
+      <Toast onClose={hideToast}>
+        {i18n('icu:stickers--Toast--StickerPackUnhidden')}
       </Toast>
     );
   }

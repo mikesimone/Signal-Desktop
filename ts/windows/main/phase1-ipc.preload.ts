@@ -7,11 +7,12 @@ import * as semver from 'semver';
 import lodash, { throttle } from 'lodash';
 
 import type { IPCType } from '../../window.d.ts';
+import { startUpdate, forceCheck } from '../../shims/updateIpc.sandbox.ts';
 import { parseIntWithFallback } from '../../util/parseIntWithFallback.std.ts';
 import { getSignalConnections } from '../../util/getSignalConnections.preload.ts';
 import { ThemeType } from '../../types/Util.std.ts';
 import { Environment } from '../../environment.std.ts';
-import { SignalContext } from '../context.preload.ts';
+import { SignalContext } from '../context.sandbox.ts';
 import { createLogger } from '../../logging/log.std.ts';
 import { formatCountForLogging } from '../../logging/formatCountForLogging.std.ts';
 import * as Errors from '../../types/errors.std.ts';
@@ -29,9 +30,9 @@ import {
 import { AggregatedStats } from '../../textsecure/WebsocketResources.preload.ts';
 import { UNAUTHENTICATED_CHANNEL_NAME } from '../../textsecure/SocketManager.preload.ts';
 import { isProduction } from '../../util/version.std.ts';
-import { ToastType } from '../../types/Toast.dom.tsx';
+import { ToastType } from '../../types/Toast.std.ts';
 import { ConversationController } from '../../ConversationController.preload.ts';
-import { isEnabled } from '../../RemoteConfig.dom.ts';
+import { isEnabled } from '../../RemoteConfig.std.ts';
 import { itemStorage } from '../../textsecure/Storage.preload.ts';
 import { BackupLevel } from '../../services/backups/types.std.ts';
 import { installExternalClientService } from '../../externalClient/service/ExternalClientService.preload.ts';
@@ -99,6 +100,13 @@ const IPC: IPCType = {
     return ipc.invoke('windows-notifications:clear-all');
   },
   closeAbout: () => ipc.send('close-about'),
+  updater: {
+    startUpdate,
+    forceCheck,
+  },
+  openFileInFolder: (target: string) => {
+    ipc.send('show-item-in-folder', target);
+  },
   crashReports: {
     getCount: () => ipc.invoke('crash-reports:get-count'),
     writeToLog: () => ipc.invoke('crash-reports:write-to-log'),

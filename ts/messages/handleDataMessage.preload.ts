@@ -28,8 +28,14 @@ import {
   isDirectConversation,
   isGroup,
   isGroupV1,
+  isGroupV2,
   isMe,
 } from '../util/whatTypeOfConversation.dom.ts';
+import {
+  getCallIdFromEra,
+  updateLocalHistoryFromGroupCallUpdateMessage,
+} from '../util/callDisposition.preload.ts';
+import { CallMode } from '../types/CallDisposition.std.ts';
 import {
   respondToGroupV2Migration,
   maybeUpdateGroup,
@@ -68,6 +74,7 @@ import {
   ModifyTargetMessageResult,
 } from '../util/modifyTargetMessage.preload.ts';
 import type { saveAndNotify } from './saveAndNotify.preload.ts';
+import type { ConversationModel } from '../models/conversations.preload.ts';
 import type { MessageModel } from '../models/messages.preload.ts';
 import { safeParsePartial } from '../util/schemas.std.ts';
 import { PollCreateSchema } from '../types/Polls.dom.ts';
@@ -357,6 +364,19 @@ export async function handleDataMessage(
       return;
     }
 
+    if (initialMessage.groupCallUpdate) {
+      await handleGroupCallUpdateMessage({
+        conversation,
+        sender,
+        isIncoming: type === 'incoming',
+        dataMessage: initialMessage,
+        receivedAt: message.get('received_at'),
+        receivedAtMs: message.get('received_at_ms') ?? null,
+      });
+      confirm();
+      return;
+    }
+
     // Drop incoming messages to announcement only groups where sender is not admin
     if (conversation.get('announcementsOnly')) {
       const senderServiceId = sender.getServiceId();
@@ -415,17 +435,38 @@ export async function handleDataMessage(
         `${storyContext.authorAci})`;
     }
 
+    let initialQuote = initialMessage.quote;
+    if (initialQuote?.groupId) {
+      let expectedQuoteAuthorAci: string | undefined;
+      if (type === 'incoming') {
+        expectedQuoteAuthorAci = ourAci;
+      } else if (type === 'outgoing') {
+        expectedQuoteAuthorAci = conversation.getServiceId();
+      }
+
+      if (!isDirectConversation(conversation.attributes)) {
+        log.warn(`${idLog}: Dropping quote with groupId outside of 1:1`);
+        initialQuote = undefined;
+      } else if (
+        !expectedQuoteAuthorAci ||
+        initialQuote.authorAci !== expectedQuoteAuthorAci
+      ) {
+        log.warn(`${idLog}: Dropping quote with groupId from wrong author`);
+        initialQuote = undefined;
+      }
+    }
+
     // Ensure that quote author's conversation exist
-    if (initialMessage.quote) {
+    if (initialQuote) {
       window.ConversationController.lookupOrCreate({
-        serviceId: initialMessage.quote.authorAci,
+        serviceId: initialQuote.authorAci,
         reason: 'handleDataMessage.quote.author',
       });
     }
 
     const [quote, storyQuote] = await Promise.all([
-      initialMessage.quote
-        ? copyFromQuotedMessage(initialMessage.quote, conversation.id)
+      initialQuote
+        ? copyFromQuotedMessage(initialQuote, conversation.id, type)
         : undefined,
       findStoryMessage({
         conversation: conversation.attributes,
@@ -801,4 +842,66 @@ export async function handleDataMessage(
       throw error;
     }
   });
+}
+
+async function handleGroupCallUpdateMessage({
+  conversation,
+  sender,
+  isIncoming,
+  dataMessage,
+  receivedAt,
+  receivedAtMs,
+}: Readonly<{
+  conversation: ConversationModel;
+  sender: ConversationModel;
+  isIncoming: boolean;
+  dataMessage: ProcessedDataMessage;
+  receivedAt: number;
+  receivedAtMs: number | null;
+}>): Promise<void> {
+  strictAssert(dataMessage.groupCallUpdate, 'groupCallUpdate must exist');
+
+  if (!dataMessage.groupV2 || !isGroupV2(conversation.attributes)) {
+    log.warn(
+      'Dropping a group call update for a conversation that is not a GV2 group'
+    );
+    return;
+  }
+
+  if (conversation.get('terminated')) {
+    log.warn(
+      `handleGroupCallUpdateMessage: Dropping group call update for terminated group ${conversation.idForLogging()}`
+    );
+    return;
+  }
+
+  const conversationId = conversation.id;
+  const { eraId } = dataMessage.groupCallUpdate;
+  const callId = eraId != null ? getCallIdFromEra(eraId) : null;
+  log.info(
+    'handleGroupCallUpdateMessage',
+    dataMessage.timestamp,
+    callId,
+    conversationId
+  );
+  window.reduxActions.calling.peekNotConnectedGroupCall({
+    callMode: CallMode.Group,
+    conversationId,
+  });
+  if (callId != null) {
+    const senderServiceId = sender.getServiceId();
+    const canCreate =
+      isIncoming &&
+      conversation.getAccepted({ ignoreEmptyConvo: true }) &&
+      (!conversation.get('announcementsOnly') ||
+        (senderServiceId != null && conversation.isAdmin(senderServiceId)));
+    await updateLocalHistoryFromGroupCallUpdateMessage({
+      conversation,
+      callId,
+      canCreate,
+      timestamp: dataMessage.timestamp,
+      receivedAtCounter: receivedAt,
+      receivedAtMs,
+    });
+  }
 }

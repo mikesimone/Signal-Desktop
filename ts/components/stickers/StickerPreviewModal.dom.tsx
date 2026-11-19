@@ -8,28 +8,26 @@ import {
   useCallback,
   useMemo,
   type JSX,
-  useRef,
   useId,
 } from 'react';
-import { Dialog as RadixDialog } from 'radix-ui';
-import { Popover } from 'react-aria-components';
+import { Popover } from 'radix-ui';
 
 import type { LocalizerType } from '../../types/Util.std.ts';
 import type {
   StickerPackType,
   StickerType,
 } from '../../state/ducks/stickers.preload.ts';
-import type { ShowToastAction } from '../../state/ducks/toast.preload.ts';
+import type { ShowToastAction } from '../../state/ducks/toast.dom.ts';
 import { UserText } from '../UserText.dom.tsx';
-import { AxoConfirmDialog } from '../../axo/AxoConfirmDialog.dom.tsx';
-import { AxoDialog } from '../../axo/AxoDialog.dom.tsx';
+import { AxoConfirmDialog } from '../../axo/dialogs/AxoConfirmDialog.dom.tsx';
+import { AxoDialog } from '../../axo/dialogs/AxoDialog.dom.tsx';
 import { tw } from '../../axo/tw.dom.tsx';
 import { AxoStackedButton } from '../../axo/AxoStackedButton.dom.tsx';
 import { SpinnerV2 } from '../SpinnerV2.dom.tsx';
 import { OfficialChatInlineBadge } from '../conversation/OfficialChatInlineBadge.dom.tsx';
 import { artAddStickersRoute } from '../../util/signalRoutes.std.ts';
 import { drop } from '../../util/drop.std.ts';
-import { ToastType } from '../../types/Toast.dom.tsx';
+import { ToastType } from '../../types/Toast.std.ts';
 import { fromBase64PackKeyToHex } from '../../util/Stickers.std.ts';
 import { useRestoreFocus } from '../../hooks/useRestoreFocus.dom.ts';
 import type { StickerReferenceType } from '../../types/Stickers.preload.ts';
@@ -212,7 +210,7 @@ const StickerButton = memo(function StickerButton(
   const canAddFavorite = pack.status === 'installed';
 
   const favoriteButtonLabelId = useId();
-  const popoverTriggerRef = useRef<HTMLButtonElement>(null);
+  const popoverTitleId = useId();
 
   const [isPopoverOpen, setIsPopoverOpen] = useState(false);
 
@@ -238,56 +236,57 @@ const StickerButton = memo(function StickerButton(
   }
 
   return (
-    <div key={stickerId} className={tw('relative')}>
-      <AriaClickable.Root
-        className={tw('legacy-z-index-base data-focused:axo-focus-ring')}
-      >
-        <img
-          className={tw(
-            'aspect-square max-h-18 w-full max-w-18 object-contain'
-          )}
-          src={url}
-          alt={
-            emoji ??
-            i18n('icu:stickers--StickerPreview--StickerNoEmojiAriaLabel')
-          }
-        />
-        <AriaClickable.HiddenTrigger
-          onClick={() => setIsPopoverOpen(true)}
-          label={i18n('icu:stickers--StickerPreview--SeeStickerDetails')}
-          ref={popoverTriggerRef}
-        />
-      </AriaClickable.Root>
-
-      {isPopoverOpen && (
-        <div className={tw('absolute -inset-1.25 rounded-2xl bg-secondary')} />
-      )}
-
-      {/* We wrap React Aria's Popover with a "dummy" RadixDialog to help them play nicely together.
-      See DatePicker for more info. */}
-      <RadixDialog.Root open={isPopoverOpen} modal>
-        <RadixDialog.Overlay asChild>{null}</RadixDialog.Overlay>
-        <RadixDialog.Content
-          asChild
-          aria-labelledby={undefined}
-          data-state={undefined}
+    <Popover.Root
+      open={isPopoverOpen}
+      onOpenChange={handlePopoverOpenChange}
+      modal
+    >
+      <div key={stickerId} className={tw('relative')}>
+        <AriaClickable.Root
+          className={tw('legacy-z-index-base data-focused:axo-focus-ring')}
         >
-          <Popover
+          <img
+            className={tw(
+              'aspect-square max-h-18 w-full max-w-18 object-contain'
+            )}
+            src={url}
+            alt={
+              emoji ??
+              i18n('icu:stickers--StickerPreview--StickerNoEmojiAriaLabel')
+            }
+          />
+          <Popover.Trigger asChild>
+            <AriaClickable.HiddenTrigger
+              onClick={() => setIsPopoverOpen(true)}
+              label={i18n('icu:stickers--StickerPreview--SeeStickerDetails')}
+            />
+          </Popover.Trigger>
+        </AriaClickable.Root>
+
+        {isPopoverOpen && (
+          <div
+            className={tw('absolute -inset-1.25 rounded-2xl bg-secondary')}
+          />
+        )}
+
+        <Popover.Portal>
+          <Popover.Content
             className={tw(
               'w-74 rounded-3xl p-2',
               'bg-surface-tertiary shadow-elevation-2',
+              'max-h-(--radix-popover-content-available-height)',
               'overflow-x-hidden overflow-y-auto',
-              'focus-visible:outline-none data-focus-visible:axo-focus-ring'
+              'legacy-z-index-above-popup',
+              'focus-visible:axo-focus-ring'
             )}
-            isOpen={isPopoverOpen}
-            onOpenChange={handlePopoverOpenChange}
-            triggerRef={popoverTriggerRef}
-            placement="top"
-            offset={11}
+            aria-labelledby={popoverTitleId}
+            side="top"
+            sideOffset={11}
+            collisionPadding={12}
           >
-            <RadixDialog.Title className={tw('sr-only')}>
+            <h2 id={popoverTitleId} className={tw('sr-only')}>
               {i18n('icu:stickers--StickerPreview--StickerDetailsTitle')}
-            </RadixDialog.Title>
+            </h2>
             <div className={tw('flex max-w-full flex-col items-center')}>
               <img
                 key={stickerId}
@@ -344,10 +343,10 @@ const StickerButton = memo(function StickerButton(
                 )}
               </AxoItem.Group>
             </div>
-          </Popover>
-        </RadixDialog.Content>
-      </RadixDialog.Root>
-    </div>
+          </Popover.Content>
+        </Popover.Portal>
+      </div>
+    </Popover.Root>
   );
 });
 

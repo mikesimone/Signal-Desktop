@@ -4,8 +4,8 @@
 import { memo, useCallback } from 'react';
 import { useSelector } from 'react-redux';
 import { StoryViewer } from '../../components/StoryViewer.dom.tsx';
-import { ToastType } from '../../types/Toast.dom.tsx';
-import { useToastActions } from '../ducks/toast.preload.ts';
+import { ToastType } from '../../types/Toast.std.ts';
+import { useToastActions } from '../ducks/toast.dom.ts';
 import { getConversationSelector } from '../selectors/conversations.dom.ts';
 import {
   getEmojiSkinToneDefault,

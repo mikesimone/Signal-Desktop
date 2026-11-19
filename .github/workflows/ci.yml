@@ -14,19 +14,125 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  # Pushes get their own group so they never queue or cancel
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+  cancel-in-progress: true
+
+env:
+  # actions/checkout: aborts slow git transfers so it retries the fetch
+  GIT_HTTP_LOW_SPEED_LIMIT: 1000000 # 1MB/s
+  GIT_HTTP_LOW_SPEED_TIME: 60 # for 60s
+  # actions/cache: treats a stuck download as a cache miss (default: 10 minutes)
+  SEGMENT_DOWNLOAD_TIMEOUT_MINS: 3
+
 jobs:
-  dependencies:
-    name: Dependencies
-    runs-on: ubuntu-22.04-8-cores
+  changes:
+    name: Changes
+    runs-on: ubuntu-slim
     timeout-minutes: 5
+    outputs:
+      sticker-creator: ${{ steps.changes.outputs.sticker-creator }}
+      dependencies: ${{ steps.changes.outputs.dependencies }}
+      axo: ${{ steps.changes.outputs.axo }}
+      changesets-release: ${{ steps.changes.outputs.changesets-release }}
     steps:
       - name: Checkout code
+        id: checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
+        timeout-minutes: 2
+        continue-on-error: true
+        with: &changes-checkout-with
+          filter: blob:none
+          fetch-depth: 2
+          sparse-checkout: /.github/scripts/paths-filter.mjs
+          sparse-checkout-cone-mode: false
+
+      - name: Retry checkout code
+        if: ${{ steps.checkout.outcome == 'failure' }}
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 5
+        env: &retry-checkout-env
+          # Logs connection and TLS events to diagnose hung fetches
+          GIT_TRACE_CURL: 1
+          GIT_TRACE_CURL_NO_DATA: 1
+        with: *changes-checkout-with
+
+      - name: Check for changes
+        id: changes
+        env:
+          # Globs matched as git `:(glob)` pathspecs
+          FILTERS: |
+            sticker-creator:
+              paths-any:
+                - sticker-creator/**
+                - package.json
+                - pnpm-lock.yaml
+                - pnpm-workspace.yaml
+                - .pnpmfile.mjs
+                - .github/actions/setup/**
+                - .github/workflows/ci.yml
+            dependencies:
+              paths-any:
+                - '**/package.json'
+                - '**/pnpm-lock.yaml'
+                - '**/pnpm-workspace.yaml'
+                - '**/.pnpmfile.mjs'
+                - .github/workflows/ci.yml
+            # Lint keeps ts/axo from importing the rest of ts/
+            axo:
+              paths-any:
+                - ts/axo/**
+                - vitest.config.mts
+                - stylesheets/**
+                - fonts/**
+                - packages/types/**
+                - scripts/generate-emoji-data.mjs
+                - package.json
+                - pnpm-lock.yaml
+                - pnpm-workspace.yaml
+                - .pnpmfile.mjs
+                - tsconfig.json
+                - .github/actions/setup/**
+                - .github/workflows/ci.yml
+            changesets-release:
+              if: ${{ github.event_name == 'pull_request' && github.head_ref == 'changeset-release/main' && github.event.pull_request.user.login == 'automated-signal' }}
+              paths-only:
+                - .changeset/**
+                - packages/*/CHANGELOG.md
+                - packages/*/package.json
+        run: |
+          filters=$(yq --output-format=json --indent=0 <<< "$FILTERS")
+          node .github/scripts/paths-filter.mjs --base HEAD^1 --filters "$filters" >> "$GITHUB_OUTPUT"
+
+  dependencies:
+    name: Dependencies
+    needs: changes
+    # These checks only read the lockfile, so nothing is installed
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout code
+        id: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 2
+        continue-on-error: true
+        with: &dependencies-checkout-with
           filter: blob:none
 
-      - name: Setup environment
-        uses: ./.github/actions/setup
+      - name: Retry checkout code
+        if: ${{ steps.checkout.outcome == 'failure' }}
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 5
+        env: *retry-checkout-env
+        with: *dependencies-checkout-with
+
+      - name: Setup pnpm
+        uses: pnpm/setup@fbda4c85fc2e1e08721cd8763afea8f48d60f024 # v3.0.0
+        with:
+          install: false
+          # Its keys are unique per run, so it never hits and saves every time
+          cache: false
 
       - name: Run pnpmfile tests
         background: true
@@ -42,22 +148,34 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
 
       - name: Audit dependency signatures
+        if: ${{ needs.changes.outputs.dependencies == 'true' }}
         background: true
         run: pnpm audit signatures
 
       - name: Check for duplicate dependencies
+        if: ${{ needs.changes.outputs.dependencies == 'true' }}
         background: true
         run: pnpm dedupe --check
 
   lint:
     name: Lint
     runs-on: ubuntu-22.04-8-cores
-    timeout-minutes: 5
+    timeout-minutes: 8
     steps:
       - name: Checkout code
+        id: checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
+        timeout-minutes: 2
+        continue-on-error: true
+        with: &lint-checkout-with
           filter: blob:none
+
+      - name: Retry checkout code
+        if: ${{ steps.checkout.outcome == 'failure' }}
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 5
+        env: *retry-checkout-env
+        with: *lint-checkout-with
 
       - name: Setup environment
         uses: ./.github/actions/setup
@@ -123,6 +241,10 @@ jobs:
         background: true
         run: pnpm run oxlint:ci
 
+      - name: Check Oxlint Tests
+        background: true
+        run: pnpm run test-oxlint
+
       - name: Check unused icons
         background: true
         run: pnpm run check:unused-icons
@@ -135,18 +257,29 @@ jobs:
     name: MacOS
     runs-on: macos-26
     if: github.ref == 'refs/heads/main'
-    timeout-minutes: 15
+    timeout-minutes: 25
 
     steps:
       - name: Checkout code
+        id: checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
+        timeout-minutes: 2
+        continue-on-error: true
+        with: &macos-checkout-with
           filter: blob:none
+
+      - name: Retry checkout code
+        if: ${{ steps.checkout.outcome == 'failure' }}
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 5
+        env: *retry-checkout-env
+        with: *macos-checkout-with
 
       - name: Setup environment
         uses: ./.github/actions/setup
         with:
           cache-electron-builder: true
+          save-pnpm-cache: true
 
       - name: Prepare beta build
         run: pnpm run prepare-beta-build
@@ -194,6 +327,8 @@ jobs:
 
   linux:
     name: Linux
+    needs: changes
+    if: ${{ needs.changes.outputs.changesets-release != 'true' }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     strategy:
@@ -205,13 +340,23 @@ jobs:
             arch: arm64
     steps:
       - name: Checkout code
+        id: checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 2
+        continue-on-error: true
+
+      - name: Retry checkout code
+        if: ${{ steps.checkout.outcome == 'failure' }}
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 5
+        env: *retry-checkout-env
 
       - name: Setup environment
         uses: ./.github/actions/setup
         with:
           apt-packages: xvfb libpulse0
           cache-electron-builder: true
+          save-pnpm-cache: true
 
       - name: Prepare beta builde
         run: pnpm run prepare-beta-build
@@ -254,6 +399,7 @@ jobs:
 
       - name: Clone backup integration tests
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 2
         with:
           repository: 'signalapp/Signal-Message-Backup-Tests'
           ref: 'a0f900243210efbedc72f0907c5d2f140385daa4'
@@ -282,16 +428,28 @@ jobs:
 
   windows:
     name: Windows
+    needs: changes
+    if: ${{ needs.changes.outputs.changesets-release != 'true' }}
     runs-on: windows-latest-8-cores
     timeout-minutes: 15
     steps:
       - name: Checkout code
+        id: checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 2
+        continue-on-error: true
+
+      - name: Retry checkout code
+        if: ${{ steps.checkout.outcome == 'failure' }}
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 5
+        env: *retry-checkout-env
 
       - name: Setup environment
         uses: ./.github/actions/setup
         with:
           cache-electron-builder: true
+          save-pnpm-cache: true
 
       - name: Remove certificate fields from package.json
         run: |
@@ -351,6 +509,8 @@ jobs:
 
   sticker-creator:
     name: Sticker Creator
+    needs: changes
+    if: ${{ needs.changes.outputs.sticker-creator == 'true' && needs.changes.outputs.changesets-release != 'true' }}
     runs-on: ubuntu-22.04-8-cores
     timeout-minutes: 5
 
@@ -360,7 +520,16 @@ jobs:
 
     steps:
       - name: Checkout code
+        id: checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 2
+        continue-on-error: true
+
+      - name: Retry checkout code
+        if: ${{ steps.checkout.outcome == 'failure' }}
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 5
+        env: *retry-checkout-env
 
       - name: Setup environment
         uses: ./.github/actions/setup
@@ -381,34 +550,91 @@ jobs:
         background: true
         run: pnpm run lint
 
+  mock-timings:
+    name: Mock Test Timings
+    runs-on: ubuntu-slim
+    if: ${{ github.repository == 'signalapp/Signal-Desktop-Private' }}
+    timeout-minutes: 5
+    outputs:
+      timings: ${{ steps.fetch.outputs.timings }}
+
+    steps:
+      - name: Checkout code
+        id: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 2
+        continue-on-error: true
+        with: &mock-timings-checkout-with
+          filter: blob:none
+          sparse-checkout: /.github/scripts/mock-timings/
+          sparse-checkout-cone-mode: false
+
+      - name: Retry checkout code
+        if: ${{ steps.checkout.outcome == 'failure' }}
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 5
+        env: *retry-checkout-env
+        with: *mock-timings-checkout-with
+
+      # Mock tests are split by index without timings
+      - name: Fetch mock test timings
+        id: fetch
+        continue-on-error: true
+        run: |
+          timings=$(node .github/scripts/mock-timings/fetch.mjs)
+          echo "timings=$timings" >> "$GITHUB_OUTPUT"
+        env:
+          BUILDKITE_TEST_ENGINE_API_ACCESS_TOKEN: ${{ secrets.BUILDKITE_TEST_ENGINE_API_ACCESS_TOKEN }}
+
   mock-tests:
-    name: Mock Tests ${{ matrix.withoutE164.name }} ${{ matrix.workerIndex.name }}
+    name: Mock Tests ${{ matrix.workerIndex.name }}
 
     strategy:
       fail-fast: false
       matrix:
-        withoutE164:
-          - name: "(with e164)"
-            value: false
-          - name: "(without e164)"
-            value: true
         workerIndex:
-          - name: '[1/4]'
+          - name: '[1/8]'
             value: 0
-          - name: '[2/4]'
+          - name: '[2/8]'
             value: 1
-          - name: '[3/4]'
+          - name: '[3/8]'
             value: 2
-          - name: '[4/4]'
+          - name: '[4/8]'
             value: 3
+          - name: '[5/8]'
+            value: 4
+          - name: '[6/8]'
+            value: 5
+          - name: '[7/8]'
+            value: 6
+          - name: '[8/8]'
+            value: 7
 
-    runs-on: ubuntu-latest-16-cores
-    if: ${{ github.repository == 'signalapp/Signal-Desktop-Private' }}
+    runs-on: ubuntu-latest-8-cores
+    needs:
+      - changes
+      - mock-timings
+    # Runs even if mock-timings fails
+    if: ${{ !cancelled() && needs.changes.result == 'success' && github.repository == 'signalapp/Signal-Desktop-Private' && needs.changes.outputs.changesets-release != 'true' }}
     timeout-minutes: 15
+
+    env:
+      BUILDKITE_ANALYTICS_TOKEN: ${{ secrets.BUILDKITE_ANALYTICS_TOKEN }}
+      BUILDKITE_ANALYTICS_BRANCH: ${{ github.head_ref || github.ref_name }}
+      BUILDKITE_ANALYTICS_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
 
     steps:
       - name: Checkout code
+        id: checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 2
+        continue-on-error: true
+
+      - name: Retry checkout code
+        if: ${{ steps.checkout.outcome == 'failure' }}
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 5
+        env: *retry-checkout-env
 
       - name: Setup environment
         uses: ./.github/actions/setup
@@ -424,21 +650,83 @@ jobs:
         env:
           ARTIFACTS_DIR: artifacts/linux
 
+      # Distinct display numbers because --auto-servernum races when both start at once
       - name: Run mock server tests
+        background: true
         run: |
           set -o pipefail
-          xvfb-run --auto-servernum pnpm run test-mock
+          xvfb-run --server-num=97 pnpm run test-mock
         timeout-minutes: 15
         env:
           NODE_ENV: production
           DEBUG: mock:test:*
           ARTIFACTS_DIR: artifacts/mock
           WORKER_INDEX: ${{ matrix.workerIndex.value }}
-          WORKER_COUNT: 4
-          MOCK_WITHOUT_E164: ${{ case(matrix.withoutE164.value, 'on', '') }}
+          WORKER_COUNT: 8
+          MOCHA_OPTIONS: --reporter mocha-multi-reporters --reporter-options configFile=.github/test-engine/mock-tests.json
+          MOCHA_TIMINGS: ${{ needs.mock-timings.outputs.timings }}
+
+      - name: Run mock server tests (without e164)
+        background: true
+        run: |
+          set -o pipefail
+          xvfb-run --server-num=98 pnpm run test-mock
+        timeout-minutes: 15
+        env:
+          NODE_ENV: production
+          DEBUG: mock:test:*
+          ARTIFACTS_DIR: artifacts/mock-without-e164
+          WORKER_INDEX: ${{ matrix.workerIndex.value }}
+          WORKER_COUNT: 8
+          MOCK_WITHOUT_E164: on
+          MOCHA_OPTIONS: --reporter mocha-multi-reporters --reporter-options configFile=.github/test-engine/mock-tests-without-e164.json
+          MOCHA_TIMINGS: ${{ needs.mock-timings.outputs.timings }}
+
+      - name: Wait for mock server tests
+        wait-all: true
+
+      - name: Upload mock server test logs on failure
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: logs-${{ matrix.workerIndex.value }}
+          path: artifacts
+
+  mock-tests-docker:
+    name: Mock Tests (docker)
+    runs-on: ubuntu-latest-8-cores
+    needs: changes
+    if: ${{ github.repository == 'signalapp/Signal-Desktop-Private' && needs.changes.outputs.changesets-release != 'true' }}
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout code
+        id: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 2
+        continue-on-error: true
+
+      - name: Retry checkout code
+        if: ${{ steps.checkout.outcome == 'failure' }}
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 5
+        env: *retry-checkout-env
+
+      - name: Setup environment
+        uses: ./.github/actions/setup
+        with:
+          apt-packages: xvfb libpulse0
+          install-electron: true
+
+      - name: Run generate
+        run: pnpm run generate
+
+      - name: Create preload cache
+        run: xvfb-run --auto-servernum pnpm run build:preload-cache
+        env:
+          ARTIFACTS_DIR: artifacts/linux
 
       - name: Run docker mock server tests
-        if: ${{ matrix.workerIndex.value == 0 }}
         run: |
           set -o pipefail
           sudo apt-get update
@@ -452,62 +740,113 @@ jobs:
           DEBUG: mock:test:*
           ARTIFACTS_DIR: artifacts/mock-docker
 
-      - name: Upload mock server test logs on failure
+      - name: Upload docker mock server test logs on failure
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: logs-${{ matrix.workerIndex.value }}
+          name: logs-docker
           path: artifacts
 
   check-min-os-version:
     name: Check Min OS Version
-
-    strategy:
-      fail-fast: false
-      matrix:
-        os:
-          - ubuntu-22.04-8-cores
-          - macos-26
-          - windows-latest-8-cores
-
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 10
+    # Inspects every platform's binaries without installing the app's dependencies
+    runs-on: ubuntu-slim
+    timeout-minutes: 5
 
     steps:
       - name: Checkout code
+        id: checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
+        timeout-minutes: 2
+        continue-on-error: true
+        with: &check-min-os-version-checkout-with
           filter: blob:none
+          fetch-depth: 2
+          sparse-checkout: |
+            /package.json
+            /pnpm-lock.yaml
+            /.github/scripts/min-os-version/
+          sparse-checkout-cone-mode: false
 
-      - name: Setup environment
-        uses: ./.github/actions/setup
+      - name: Retry checkout code
+        if: ${{ steps.checkout.outcome == 'failure' }}
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 5
+        env: *retry-checkout-env
+        with: *check-min-os-version-checkout-with
+
+      - name: Check for dependency changes
+        id: changes
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          if [ "$EVENT_NAME" != "pull_request" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # Plain assignments so a failing git diff fails the step
+          check_changes=$(git diff --name-only HEAD^1 HEAD -- \
+            .github/scripts/min-os-version \
+            .github/workflows/ci.yml)
+          input_changes=$(git diff --name-only HEAD^1 HEAD -- \
+            package.json \
+            pnpm-lock.yaml)
+          if [ -n "$check_changes" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          elif [ -n "$input_changes" ]; then
+            # The check compares the versions and settings it uses with HEAD^1
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "args=--base HEAD^1" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Setup min-os-version environment
+        if: ${{ steps.changes.outputs.changed == 'true' }}
+        uses: pnpm/setup@fbda4c85fc2e1e08721cd8763afea8f48d60f024 # v3.0.0
+        with:
+          working-directory: .github/scripts/min-os-version
+          require-lockfile: true
+          # Use the runner's Node, any recent version works
+          node-version-file: false
+          # Its keys are unique per run, so it never hits and saves every time
+          cache: false
 
       - name: Run OS version check
-        run: |
-          node scripts/check-min-os-version.mjs
+        if: ${{ steps.changes.outputs.changed == 'true' }}
+        run: node check.mjs $ARGS
+        working-directory: .github/scripts/min-os-version
+        env:
+          ARGS: ${{ steps.changes.outputs.args }}
 
   danger:
     name: Danger
-    runs-on: ubuntu-latest-8-cores
+    runs-on: ubuntu-slim
     timeout-minutes: 5
     if: github.event_name == 'pull_request'
     steps:
       - name: Checkout code
+        id: checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
+        timeout-minutes: 2
+        continue-on-error: true
+        with: &danger-checkout-with
           filter: blob:none
 
-      - name: Setup danger environment
-        uses: pnpm/setup@fbda4c85fc2e1e08721cd8763afea8f48d60f024 # v3.0.0
-        with:
-          cache: true
-          package-json-file: danger/package.json
-          cache-dependency-path: danger/pnpm-lock.yaml
-          install: false # skip install to focus on just danger/ package and to run `pnpm install --frozen-lockfile`
+      - name: Retry checkout code
+        if: ${{ steps.checkout.outcome == 'failure' }}
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 5
+        env: *retry-checkout-env
+        with: *danger-checkout-with
 
-      - name: Install danger dependencies
-        run: pnpm install --frozen-lockfile
-        working-directory: danger
+      - name: Setup danger environment
+        uses: pnpm/setup@fa36a5ef7dcdefc3a7cb25655c122e00cf6e636e # v3.1.2
+        with:
+          working-directory: danger
+          require-lockfile: true
+          # Use the runner's Node, any recent version works
+          node-version-file: false
+          # Its keys are unique per run, so it never hits and saves every time
+          cache: false
 
       - name: Run danger checks
         run: pnpm run danger:ci
@@ -517,11 +856,22 @@ jobs:
 
   storybook:
     name: Storybook
+    needs: changes
+    if: ${{ needs.changes.outputs.changesets-release != 'true' }}
     runs-on: ubuntu-latest-16-cores
     timeout-minutes: 10
     steps:
       - name: Checkout code
+        id: checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 2
+        continue-on-error: true
+
+      - name: Retry checkout code
+        if: ${{ steps.checkout.outcome == 'failure' }}
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 5
+        env: *retry-checkout-env
 
       - name: Setup environment
         uses: ./.github/actions/setup
@@ -544,11 +894,22 @@ jobs:
 
   axo:
     name: Axo
+    needs: changes
+    if: ${{ needs.changes.outputs.axo == 'true' && needs.changes.outputs.changesets-release != 'true' }}
     runs-on: ubuntu-latest-8-cores
     timeout-minutes: 15
     steps:
       - name: Checkout code
+        id: checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 2
+        continue-on-error: true
+
+      - name: Retry checkout code
+        if: ${{ steps.checkout.outcome == 'failure' }}
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 5
+        env: *retry-checkout-env
 
       - name: Setup environment
         uses: ./.github/actions/setup
@@ -572,13 +933,24 @@ jobs:
 
   axo-visual:
     name: Axo Visual
+    needs: changes
+    if: ${{ needs.changes.outputs.axo == 'true' && needs.changes.outputs.changesets-release != 'true' }}
     # Reference screenshots are updated by update-axo-screenshots.yml, which
     # must use the same runner as this job
     runs-on: ubuntu-latest-8-cores
     timeout-minutes: 15
     steps:
       - name: Checkout code
+        id: checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 2
+        continue-on-error: true
+
+      - name: Retry checkout code
+        if: ${{ steps.checkout.outcome == 'failure' }}
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 5
+        env: *retry-checkout-env
 
       - name: Setup environment
         uses: ./.github/actions/setup
@@ -649,12 +1021,22 @@ jobs:
             script: ts/test-mock/benchmarks/backup_bench.node.js
 
     runs-on: ubuntu-22.04-8-cores
-    if: ${{ github.repository == 'signalapp/Signal-Desktop-Private' }}
+    # Disabled until there's a Grafana DB to publish results to
+    if: ${{ false && github.repository == 'signalapp/Signal-Desktop-Private' }}
     timeout-minutes: 15
 
     steps:
       - name: Checkout code
+        id: checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 2
+        continue-on-error: true
+
+      - name: Retry checkout code
+        if: ${{ steps.checkout.outcome == 'failure' }}
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 5
+        env: *retry-checkout-env
 
       - name: Setup environment
         uses: ./.github/actions/setup
@@ -726,18 +1108,20 @@ jobs:
       github.repository == 'signalapp/Signal-Desktop-Private'
     name: Auto Merge Ready
     needs:
+      - changes
       - lint
       - linux
       - windows
       - sticker-creator
       - mock-tests
+      - mock-tests-docker
       - check-min-os-version
       - danger
       - storybook
       - axo
       - axo-visual
       - benchmark
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-slim
     steps:
       - name: Check if any jobs failed or were cancelled
         if: |

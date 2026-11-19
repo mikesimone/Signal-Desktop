@@ -13,8 +13,10 @@ import { createLogger } from '../logging/log.std.ts';
 import { DataReader, DataWriter } from '../sql/Client.preload.ts';
 import { ErrorWithToast } from '../types/ErrorWithToast.std.ts';
 import { SendStatus } from '../messages/MessageSendState.std.ts';
-import { ToastType } from '../types/Toast.dom.tsx';
+import { ToastType } from '../types/Toast.std.ts';
 import type { AciString } from '../types/ServiceId.std.ts';
+import type { GroupId } from '@signalapp/types';
+import { isPrivateReplySendEnabled } from './isPrivateReplySendEnabled.dom.ts';
 import { canEditMessage, isWithinMaxEdits } from './canEditMessage.dom.ts';
 import {
   conversationJobQueue,
@@ -54,6 +56,7 @@ export async function sendEditedMessage(
     preview,
     quoteSentAt,
     quoteAuthorAci,
+    quoteGroupId,
     targetMessageId,
   }: {
     body?: string;
@@ -61,6 +64,7 @@ export async function sendEditedMessage(
     preview: Array<LinkPreviewType>;
     quoteSentAt?: number;
     quoteAuthorAci?: AciString;
+    quoteGroupId?: GroupId;
     targetMessageId: string;
   }
 ): Promise<void> {
@@ -113,17 +117,23 @@ export async function sendEditedMessage(
     // Keep the quote if unchanged.
     if (quoteSentAt === existingQuote?.id) {
       quote = existingQuote;
-    } else {
+    } else if (quoteGroupId == null || isPrivateReplySendEnabled()) {
       const messages = await DataReader.getMessagesBySentAt(quoteSentAt);
       const matchingMessage = find(messages, item =>
-        isQuoteAMatch(item, conversationId, {
-          id: quoteSentAt,
-          authorAci: quoteAuthorAci,
+        isQuoteAMatch({
+          candidateQuotedMessage: item,
+          quotingConversationId: conversationId,
+          quotingMessageType: 'outgoing',
+          quote: {
+            id: quoteSentAt,
+            authorAci: quoteAuthorAci,
+            groupId: quoteGroupId,
+          },
         })
       );
 
       if (matchingMessage) {
-        quote = await makeQuote(matchingMessage);
+        quote = await makeQuote(matchingMessage, conversationId);
       }
     }
   }

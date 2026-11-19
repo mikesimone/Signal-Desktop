@@ -21,9 +21,9 @@ import {
   UsernameReservationState,
   UsernameReservationError,
 } from './usernameEnums.std.ts';
-import { showToast } from './toast.preload.ts';
-import { ToastType } from '../../types/Toast.dom.tsx';
-import type { ToastActionType } from './toast.preload.ts';
+import { showToast } from './toast.dom.ts';
+import { ToastType } from '../../types/Toast.std.ts';
+import type { ToastActionType } from './toast.dom.ts';
 import type { BoundActionCreatorsMapObject } from '../../hooks/useBoundActions.std.ts';
 import { useBoundActions } from '../../hooks/useBoundActions.std.ts';
 import { itemStorage } from '../../textsecure/Storage.preload.ts';

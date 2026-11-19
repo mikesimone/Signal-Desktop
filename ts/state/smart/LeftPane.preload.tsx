@@ -13,9 +13,9 @@ import type { WidthBreakpoint } from '../../components/_util.std.ts';
 import {
   getGroupSizeHardLimit,
   getGroupSizeRecommendedLimit,
-} from '../../groups/limits.dom.ts';
+} from '../../groups/limits.std.ts';
 import { LeftPaneMode } from '../../types/leftPane.std.ts';
-import { getUsernameFromSearch } from '../../util/Username.dom.ts';
+import { getUsernameFromSearch } from '../../util/Username.std.ts';
 import { getCountryDataForLocale } from '../../util/getCountryData.dom.ts';
 import { lookupConversationWithoutServiceId } from '../../util/lookupConversationWithoutServiceId.preload.ts';
 import { missingCaseError } from '../../util/missingCaseError.std.ts';
@@ -97,7 +97,7 @@ import {
 } from '../selectors/updates.std.ts';
 import { getIntl, getRegionCode, getTheme } from '../selectors/user.std.ts';
 import { SmartCaptchaDialog } from './CaptchaDialog.preload.tsx';
-import { SmartCrashReportDialog } from './CrashReportDialog.preload.tsx';
+import { SmartCrashReportDialog } from './CrashReportDialog.dom.tsx';
 import { SmartMessageSearchResult } from './MessageSearchResult.preload.tsx';
 import { SmartNetworkStatus } from './NetworkStatus.preload.tsx';
 import { SmartRelinkDialog } from './RelinkDialog.preload.tsx';
@@ -108,14 +108,14 @@ import {
 import type { SmartPropsType as SmartToastManagerPropsType } from './ToastManager.preload.tsx';
 import type { PropsType as SmartUnsupportedOSDialogPropsType } from './UnsupportedOSDialog.preload.tsx';
 import { SmartUnsupportedOSDialog } from './UnsupportedOSDialog.preload.tsx';
-import { SmartUpdateDialog } from './UpdateDialog.preload.tsx';
+import { SmartUpdateDialog } from './UpdateDialog.dom.tsx';
 import {
   cancelBackupMediaDownload,
   dismissBackupMediaDownloadBanner,
   pauseBackupMediaDownload,
   resumeBackupMediaDownload,
 } from '../../util/backupMediaDownload.preload.ts';
-import OS from '../../util/os/osPreload.preload.ts';
+import OS from '../../util/os/osPreload.sandbox.ts';
 import { useNavActions } from '../ducks/nav.std.ts';
 import { SmartLeftPaneChatFolders } from './LeftPaneChatFolders.preload.tsx';
 import { SmartLeftPaneConversationListItemContextMenu } from './LeftPaneConversationListItemContextMenu.preload.tsx';

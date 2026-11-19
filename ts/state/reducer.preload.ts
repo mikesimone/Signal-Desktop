@@ -15,7 +15,7 @@ import { reducer as chatColors } from './ducks/chatColors.preload.ts';
 import { reducer as chatFolders } from './ducks/chatFolders.preload.ts';
 import { reducer as composer } from './ducks/composer.preload.ts';
 import { reducer as conversations } from './ducks/conversations.preload.ts';
-import { reducer as crashReports } from './ducks/crashReports.preload.ts';
+import { reducer as crashReports } from './ducks/crashReports.dom.ts';
 import { reducer as donations } from './ducks/donations.preload.ts';
 import { reducer as emojis } from './ducks/emojis.preload.ts';
 import { reducer as expiration } from './ducks/expiration.std.ts';
@@ -25,6 +25,7 @@ import { reducer as inbox } from './ducks/inbox.std.ts';
 import { reducer as installer } from './ducks/installer.preload.ts';
 import { reducer as items } from './ducks/items.preload.ts';
 import { reducer as lightbox } from './ducks/lightbox.preload.ts';
+import { reducer as linkedDevices } from './ducks/linkedDevices.preload.ts';
 import { reducer as linkPreviews } from './ducks/linkPreviews.preload.ts';
 import { reducer as mediaGallery } from './ducks/mediaGallery.preload.ts';
 import { reducer as megaphones } from './ducks/megaphones.preload.ts';
@@ -38,8 +39,8 @@ import { reducer as standaloneInstaller } from './ducks/standaloneInstaller.prel
 import { reducer as stickers } from './ducks/stickers.preload.ts';
 import { reducer as stories } from './ducks/stories.preload.ts';
 import { reducer as storyDistributionLists } from './ducks/storyDistributionLists.preload.ts';
-import { reducer as toast } from './ducks/toast.preload.ts';
-import { reducer as updates } from './ducks/updates.preload.ts';
+import { reducer as toast } from './ducks/toast.dom.ts';
+import { reducer as updates } from './ducks/updates.dom.ts';
 import { reducer as user } from './ducks/user.preload.ts';
 import { reducer as username } from './ducks/username.preload.ts';
 
@@ -66,6 +67,7 @@ export const reducer = combineReducers({
   installer,
   items,
   lightbox,
+  linkedDevices,
   linkPreviews,
   mediaGallery,
   megaphones,

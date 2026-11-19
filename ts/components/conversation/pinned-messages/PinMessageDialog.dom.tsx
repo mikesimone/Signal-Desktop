@@ -2,12 +2,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import type { MouseEvent } from 'react';
 import { memo, useCallback, useMemo, useState } from 'react';
-import { AxoDialog } from '../../../axo/AxoDialog.dom.tsx';
+import { AxoDialog } from '../../../axo/dialogs/AxoDialog.dom.tsx';
 import type { LocalizerType } from '../../../types/I18N.std.ts';
 import { AxoRadioGroup } from '../../../axo/controls/AxoRadioGroup.dom.tsx';
 import { strictAssert } from '../../../util/assert.std.ts';
-import { AxoAlertDialog } from '../../../axo/AxoAlertDialog.dom.tsx';
-import { isInternalFeaturesEnabled } from '../../../util/isInternalFeaturesEnabled.dom.ts';
+import { AxoAlertDialog } from '../../../axo/dialogs/AxoAlertDialog.dom.tsx';
+import { isInternalFeaturesEnabled } from '../../../util/isInternalFeaturesEnabled.std.ts';
 import { DurationSecs } from '@signalapp/types';
 
 enum DurationOption {

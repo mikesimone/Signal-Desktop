@@ -27,14 +27,14 @@ const config = {
         // Main
         'app/config.main.ts!',
         // Preload
-        'ts/windows/about/preload.preload.ts!',
-        'ts/windows/calldiagnostic/preload.preload.ts!',
-        'ts/windows/debuglog/preload.preload.ts!',
-        'ts/windows/loading/preload.preload.ts!',
-        'ts/windows/pdf/preload.preload.ts!',
-        'ts/windows/permissions/preload.preload.ts!',
-        'ts/windows/screenShare/preload.preload.ts!',
-        'ts/windows/sticker-creator/preload.preload.ts!',
+        'ts/windows/about/preload.sandbox.ts!',
+        'ts/windows/calldiagnostic/preload.sandbox.ts!',
+        'ts/windows/debuglog/preload.sandbox.ts!',
+        'ts/windows/loading/preload.sandbox.ts!',
+        'ts/windows/pdf/preload.sandbox.ts!',
+        'ts/windows/permissions/preload.sandbox.ts!',
+        'ts/windows/screenShare/preload.sandbox.ts!',
+        'ts/windows/sticker-creator/preload.sandbox.ts!',
         // DOM
         'ts/windows/about/app.dom.tsx!',
         'ts/windows/calldiagnostic/app.dom.tsx!',
@@ -47,11 +47,13 @@ const config = {
         'codemods/**/*.mjs',
         'scripts/**/*.mjs',
         '.github/scripts/**/*.mjs',
+        '!.github/scripts/min-os-version/**/*.mjs',
       ],
       project: [
         // Production
         'ts/**/*.{ts,tsx}!',
         '!ts/**/*.stories.{ts,tsx}!',
+        '!ts/axo/_test-helpers/**/*.{ts,tsx}!',
         '!ts/storybook/**/*.{ts,tsx}!',
         '!ts/test-electron/**/*.{ts,tsx}!',
         '!ts/test-helpers/**/*.{ts,tsx}!',
@@ -70,12 +72,15 @@ const config = {
 
         // exclude workspaces
         '!danger/**/*.mjs',
+        '!.github/scripts/min-os-version/**/*.mjs',
       ],
       ignoreDependencies: [
         'buffer', // same name as builtin
         'url', // same name as builtin
         'danger', // turn into real workspace
         '@types/audioworklet', // only referenced via triple-slash include
+        'buildkite-test-collector', // loaded by MOCHA_OPTIONS in ci.yml
+        'mocha-multi-reporters', // loaded by MOCHA_OPTIONS in ci.yml
       ],
       ignoreFiles: [
         'ts/components/Profiler.dom.tsx',
@@ -110,6 +115,10 @@ const config = {
     },
     danger: {
       project: ['danger-exports.mjs', 'rules/**/*.mjs'],
+    },
+    '.github/scripts/min-os-version': {
+      entry: ['.pnpmfile.mjs'],
+      project: ['*.mjs'],
     },
     'packages/mute-state-change': {
       ignoreBinaries: ['xcrun'],

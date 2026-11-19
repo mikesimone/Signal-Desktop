@@ -17,7 +17,7 @@ import type { actions as chatColors } from './ducks/chatColors.preload.ts';
 import type { actions as chatFolders } from './ducks/chatFolders.preload.ts';
 import type { actions as composer } from './ducks/composer.preload.ts';
 import type { actions as conversations } from './ducks/conversations.preload.ts';
-import type { actions as crashReports } from './ducks/crashReports.preload.ts';
+import type { actions as crashReports } from './ducks/crashReports.dom.ts';
 import type { actions as donations } from './ducks/donations.preload.ts';
 import type { actions as emojis } from './ducks/emojis.preload.ts';
 import type { actions as expiration } from './ducks/expiration.std.ts';
@@ -27,6 +27,7 @@ import type { actions as inbox } from './ducks/inbox.std.ts';
 import type { actions as installer } from './ducks/installer.preload.ts';
 import type { actions as items } from './ducks/items.preload.ts';
 import type { actions as lightbox } from './ducks/lightbox.preload.ts';
+import type { actions as linkedDevices } from './ducks/linkedDevices.preload.ts';
 import type { actions as linkPreviews } from './ducks/linkPreviews.preload.ts';
 import type { actions as mediaGallery } from './ducks/mediaGallery.preload.ts';
 import type { actions as megaphones } from './ducks/megaphones.preload.ts';
@@ -39,8 +40,8 @@ import type { actions as standaloneInstaller } from './ducks/standaloneInstaller
 import type { actions as stickers } from './ducks/stickers.preload.ts';
 import type { actions as stories } from './ducks/stories.preload.ts';
 import type { actions as storyDistributionLists } from './ducks/storyDistributionLists.preload.ts';
-import type { actions as toast } from './ducks/toast.preload.ts';
-import type { actions as updates } from './ducks/updates.preload.ts';
+import type { actions as toast } from './ducks/toast.dom.ts';
+import type { actions as updates } from './ducks/updates.dom.ts';
 import type { actions as user } from './ducks/user.preload.ts';
 import type { actions as username } from './ducks/username.preload.ts';
 
@@ -67,6 +68,7 @@ export type ReduxActions = {
   installer: typeof installer;
   items: typeof items;
   lightbox: typeof lightbox;
+  linkedDevices: typeof linkedDevices;
   linkPreviews: typeof linkPreviews;
   mediaGallery: typeof mediaGallery;
   megaphones: typeof megaphones;

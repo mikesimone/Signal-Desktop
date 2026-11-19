@@ -4,6 +4,8 @@
 name: Setup
 description: Reusable composite steps for other CI workflows
 
+# Note that Signal-Test-Infra-Private depends on this
+
 inputs:
   apt-packages:
     required: false
@@ -15,6 +17,13 @@ inputs:
     required: false
     default: 'false'
   install-playwright:
+    required: false
+    default: 'false'
+  working-directory:
+    required: false
+    default: '.'
+  save-pnpm-cache:
+    description: Save the pnpm store at the end of the job (only on main)
     required: false
     default: 'false'
 
@@ -29,16 +38,26 @@ runs:
         version: 1.0
 
     - name: Setup node and pnpm
-      uses: pnpm/setup@fbda4c85fc2e1e08721cd8763afea8f48d60f024 # v3.0.0
+      uses: pnpm/setup@fa36a5ef7dcdefc3a7cb25655c122e00cf6e636e # v3.1.2
       with:
         cache: true
+        # Other repos using this action keep saving on every run
+        save-cache: ${{ !startsWith(github.repository, 'signalapp/Signal-Desktop') || (github.ref == 'refs/heads/main' && inputs.save-pnpm-cache == 'true') }}
         install: false # skip install to run `pnpm ci` instead
+
+    # Most lockfile changes don't change these, so they key the caches below
+    - id: electron-versions
+      name: Get electron versions
+      run: |
+        node -p "'electron=' + (require('./package.json').devDependencies?.electron ?? '')" >> "$GITHUB_OUTPUT"
+        node -p "'electron-builder=' + (require('./package.json').devDependencies?.['electron-builder'] ?? '')" >> "$GITHUB_OUTPUT"
+      shell: bash
 
     - name: Setup electron native modules cache
       uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
       with:
         path: ~/.electron-gyp
-        key: electron-gyp-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+        key: electron-gyp-${{ runner.os }}-${{ steps.electron-versions.outputs.electron || hashFiles('pnpm-lock.yaml') }}
 
     - name: Setup sccache
       uses: mozilla-actions/sccache-action@fc920bf0ec8de6ee65d409111f7ec508035751ba # v0.0.11
@@ -46,7 +65,7 @@ runs:
     - name: Install dependencies (Linux)
       if: ${{ runner.os == 'Linux' }}
       run: pnpm install --frozen-lockfile
-      working-directory: .
+      working-directory: ${{ inputs.working-directory }}
       shell: bash
       env:
         CC: sccache gcc
@@ -54,13 +73,13 @@ runs:
         SCCACHE_GHA_ENABLED: true
         NPM_CONFIG_LOGLEVEL: verbose
         # We rebuild in `electron:install-app-deps` that doesn't look at this
-        # environment variable
-        NPM_CONFIG_NODE_GYP: echo
+        # environment variable. pnpm only reads the lowercase name.
+        npm_config_node_gyp: echo
 
     - name: Install dependencies (macOS)
       if: ${{ runner.os == 'macOS' }}
       run: pnpm install --frozen-lockfile
-      working-directory: .
+      working-directory: ${{ inputs.working-directory }}
       shell: bash
       env:
         CC: sccache clang
@@ -68,8 +87,8 @@ runs:
         SCCACHE_GHA_ENABLED: true
         NPM_CONFIG_LOGLEVEL: verbose
         # We rebuild in `electron:install-app-deps` that doesn't look at this
-        # environment variable
-        NPM_CONFIG_NODE_GYP: echo
+        # environment variable. pnpm only reads the lowercase name.
+        npm_config_node_gyp: echo
 
     - name: Install dependencies (Windows)
       if: ${{ runner.os == 'Windows' }}
@@ -77,7 +96,7 @@ runs:
         touch noop.js
         pnpm install --frozen-lockfile
         rm noop.js
-      working-directory: .
+      working-directory: ${{ inputs.working-directory }}
       shell: bash
       env:
         NPM_CONFIG_LOGLEVEL: verbose
@@ -91,15 +110,17 @@ runs:
           ~/.cache/electron
           ~/Library/Caches/electron
           ~/AppData/Local/electron/Cache
-        key: electron-bin-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+        key: electron-bin-${{ runner.os }}-${{ steps.electron-versions.outputs.electron || hashFiles('pnpm-lock.yaml') }}
 
     - name: Install electron
       if: ${{ inputs.install-electron == 'true' }}
       run: |
         ./node_modules/.bin/install-electron
-        sudo chown root node_modules/.pnpm/electron@*/node_modules/electron/dist/chrome-sandbox
-        sudo chmod 4755 node_modules/.pnpm/electron@*/node_modules/electron/dist/chrome-sandbox
-      working-directory: .
+        if [ -f node_modules/.pnpm/electron@*/node_modules/electron/dist/chrome-sandbox ]; then
+          sudo chown root node_modules/.pnpm/electron@*/node_modules/electron/dist/chrome-sandbox
+          sudo chmod 4755 node_modules/.pnpm/electron@*/node_modules/electron/dist/chrome-sandbox
+        fi
+      working-directory: ${{ inputs.working-directory }}
       shell: bash
 
     - name: Setup electron-builder cache
@@ -110,13 +131,13 @@ runs:
           ~/.cache/electron-builder
           ~/Library/Caches/electron-builder
           ~/AppData/Local/electron-builder/Cache
-        key: electron-builder-cache-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+        key: electron-builder-cache-${{ runner.os }}-${{ steps.electron-versions.outputs.electron-builder || hashFiles('pnpm-lock.yaml') }}-${{ steps.electron-versions.outputs.electron }}
 
     - id: playwright-version
       name: Get playwright version
       if: ${{ inputs.install-playwright == 'true' }}
       run: echo "version=$(pnpm exec playwright --version | awk '{print $2}')" >> "$GITHUB_OUTPUT"
-      working-directory: .
+      working-directory: ${{ inputs.working-directory }}
       shell: bash
 
     - id: playwright-cache
@@ -130,11 +151,11 @@ runs:
     - name: Install playwright chromium browser
       if: ${{ inputs.install-playwright == 'true' && steps.playwright-cache.outputs.cache-hit != 'true' }}
       run: pnpm exec playwright install chromium
-      working-directory: .
+      working-directory: ${{ inputs.working-directory }}
       shell: bash
 
     - name: Install playwright OS dependencies
       if: ${{ inputs.install-playwright == 'true' }}
       run: pnpm exec playwright install-deps chromium
-      working-directory: .
+      working-directory: ${{ inputs.working-directory }}
       shell: bash

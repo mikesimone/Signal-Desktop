@@ -3,7 +3,7 @@
 
 import { useState, useEffect, type JSX, useCallback } from 'react';
 import { Avatar, AvatarSize } from './Avatar.dom.tsx';
-import { InContactsIcon } from './InContactsIcon.dom.tsx';
+import { AxoContactName } from '../axo/AxoContactName.dom.tsx';
 import type { ConversationType } from '../state/ducks/conversations.preload.ts';
 import type { PreferredBadgeSelectorType } from '../state/selectors/badges.preload.ts';
 import type { LocalizerType } from '../types/Util.std.ts';
@@ -15,8 +15,8 @@ import { MY_STORY_ID } from '../types/Stories.std.ts';
 import type { ServiceIdString } from '../types/ServiceId.std.ts';
 import type { StoryDistributionIdString } from '../types/StoryDistributionId.std.ts';
 import { UserText } from './UserText.dom.tsx';
-import { AxoConfirmDialog } from '../axo/AxoConfirmDialog.dom.tsx';
-import { AxoDialog } from '../axo/AxoDialog.dom.tsx';
+import { AxoConfirmDialog } from '../axo/dialogs/AxoConfirmDialog.dom.tsx';
+import { AxoDialog } from '../axo/dialogs/AxoDialog.dom.tsx';
 import { SAFETY_NUMBER_VIEWER_DIALOG_BODY_MAX_HEIGHT } from './SafetyNumberViewer.dom.tsx';
 import { tw } from '../axo/tw.dom.tsx';
 import { AxoSymbol } from '../axo/AxoSymbol.dom.tsx';
@@ -476,10 +476,10 @@ function ContactRow({
         <div className="module-SafetyNumberChangeDialog__row--name">
           <UserText text={contact.title} />
           {isInSystemContacts(contact) && (
-            <span>
-              {' '}
-              <InContactsIcon i18n={i18n} />
-            </span>
+            <>
+              &nbsp;
+              <AxoContactName.SystemContactEmblem />
+            </>
           )}
         </div>
         {shouldShowNumber || contact.isVerified ? (

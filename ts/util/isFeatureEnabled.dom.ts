@@ -3,10 +3,10 @@
 
 import type { ReadonlyDeep } from 'type-fest';
 
-import { getValue, isEnabled } from '../RemoteConfig.dom.ts';
+import { getValue, isEnabled } from '../RemoteConfig.std.ts';
 import { _isFeatureEnabledInner } from './isFeatureEnabledInner.std.ts';
 
-import type { SemverKeyType, ConfigMapType } from '../RemoteConfig.dom.ts';
+import type { SemverKeyType, ConfigMapType } from '../RemoteConfig.std.ts';
 
 export function isFeaturedEnabledSelector({
   betaKey,

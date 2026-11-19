@@ -1,20 +1,26 @@
 // Copyright 2021 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { useSpring, animated } from '@react-spring/web';
 import type { JSX, ReactNode } from 'react';
 import { AvatarColors } from '../types/Avatar.std.ts';
 import { AvatarEditor } from './AvatarEditor.dom.tsx';
 import { AvatarPreview } from './AvatarPreview.dom.tsx';
 import { UsernameEditState } from '../state/ducks/usernameEnums.std.ts';
-import { ToastType } from '../types/Toast.dom.tsx';
+import { ToastType } from '../types/Toast.std.ts';
 import { strictAssert } from '../util/assert.std.ts';
 import { missingCaseError } from '../util/missingCaseError.std.ts';
 import { UsernameLinkEditor } from './UsernameLinkEditor.dom.tsx';
 import { UserText } from './UserText.dom.tsx';
-import { Tooltip, TooltipPlacement } from './Tooltip.dom.tsx';
-import { offsetDistanceModifier } from '../util/popperUtil.std.ts';
+import { Popover } from 'radix-ui';
 import { useReducedMotion } from '../hooks/useReducedMotion.dom.ts';
 import { FunStaticEmoji } from './fun/FunEmoji.dom.tsx';
 import { FunEmojiPicker } from './fun/FunEmojiPicker.dom.tsx';
@@ -34,7 +40,7 @@ import type {
   ProfileDataType,
 } from '../state/ducks/conversations.preload.ts';
 import type { UsernameLinkState } from '../state/ducks/usernameEnums.std.ts';
-import type { ShowToastAction } from '../state/ducks/toast.preload.ts';
+import type { ShowToastAction } from '../state/ducks/toast.dom.ts';
 import type { FunEmojiSelection } from './fun/panels/FunPanelEmojis.dom.tsx';
 import { useConfirmDiscard } from '../hooks/useConfirmDiscard.dom.tsx';
 import { AxoButton } from '../axo/AxoButton.dom.tsx';
@@ -42,7 +48,7 @@ import { normalizeProfileName } from '../util/normalizeProfileName.std.ts';
 import { Emoji } from '../axo/emoji.std.ts';
 import { AxoTextField } from '../axo/fields/AxoTextField.dom.tsx';
 import { tw } from '../axo/tw.dom.tsx';
-import { AxoConfirmDialog } from '../axo/AxoConfirmDialog.dom.tsx';
+import { AxoConfirmDialog } from '../axo/dialogs/AxoConfirmDialog.dom.tsx';
 import { AxoList } from '../axo/items/AxoList.dom.tsx';
 import { AxoItem } from '../axo/items/AxoItem.dom.tsx';
 import { AxoClickableItem } from '../axo/items/AxoClickableItem.dom.tsx';
@@ -51,7 +57,6 @@ import { AxoDropdownMenu } from '../axo/menus/AxoDropdownMenu.dom.tsx';
 import { drop } from '../util/drop.std.ts';
 import { AxoSymbol } from '../axo/AxoSymbol.dom.tsx';
 import { AxoFieldList } from '../axo/items/AxoFieldList.dom.tsx';
-import { Pressable } from 'react-aria';
 import { AxoPanel } from '../axo/AxoPanel.dom.tsx';
 
 type ProfileEditorData = {
@@ -491,26 +496,24 @@ export function ProfileEditor({
                   onSelectEmoji={handleSelectEmoji}
                   closeOnSelect
                 >
-                  <Pressable>
-                    <AxoTextField.CustomAction
-                      label={i18n('icu:FunButton__Label--EmojiPicker')}
-                      slot="leading"
-                    >
-                      {stagedAboutEmojiVariant == null ? (
-                        <AxoSymbol.Icon
-                          label={null}
-                          size={18}
-                          symbol="face-smiling"
-                        />
-                      ) : (
-                        <FunStaticEmoji
-                          role="presentation"
-                          size={18}
-                          emoji={stagedAboutEmojiVariant}
-                        />
-                      )}
-                    </AxoTextField.CustomAction>
-                  </Pressable>
+                  <AxoTextField.CustomAction
+                    label={i18n('icu:FunButton__Label--EmojiPicker')}
+                    slot="leading"
+                  >
+                    {stagedAboutEmojiVariant == null ? (
+                      <AxoSymbol.Icon
+                        label={null}
+                        size={18}
+                        symbol="face-smiling"
+                      />
+                    ) : (
+                      <FunStaticEmoji
+                        role="presentation"
+                        size={18}
+                        emoji={stagedAboutEmojiVariant}
+                      />
+                    )}
+                  </AxoTextField.CustomAction>
                 </FunEmojiPicker>
               </AxoTextField.Root>
             </AxoFieldList.Item>
@@ -698,12 +701,12 @@ export function ProfileEditor({
 
       if (!hasCompletedUsernameLinkOnboarding && !usernameLink) {
         maybeUsernameLinkRow = (
-          <UsernameLinkTooltip
+          <UsernameLinkPopover
             handleClose={markCompletedUsernameLinkOnboarding}
             i18n={i18n}
           >
             {maybeUsernameLinkRow}
-          </UsernameLinkTooltip>
+          </UsernameLinkPopover>
         );
       }
     }
@@ -904,7 +907,7 @@ export function ProfileEditor({
   );
 }
 
-function UsernameLinkTooltip({
+function UsernameLinkPopover({
   handleClose,
   children,
   i18n,
@@ -913,6 +916,7 @@ function UsernameLinkTooltip({
   children: ReactNode;
   i18n: LocalizerType;
 }) {
+  const titleId = useId();
   const reducedMotion = useReducedMotion();
   const animatedStyles = useSpring({
     from: { opacity: 0, scale: reducedMotion ? 1 : 0.25 },
@@ -920,39 +924,43 @@ function UsernameLinkTooltip({
     config: { mass: 1, tension: 280, friction: 25 },
     delay: 200,
   });
-  const tooltip = (
-    <animated.div
-      className="ProfileEditor__username-link__tooltip__container"
-      style={animatedStyles}
-    >
-      <div className="ProfileEditor__username-link__tooltip__icon" />
-
-      <div className="ProfileEditor__username-link__tooltip__content">
-        <h3>{i18n('icu:ProfileEditor__username-link__tooltip__title')}</h3>
-        <p>{i18n('icu:ProfileEditor__username-link__tooltip__body')}</p>
-      </div>
-
-      <button
-        type="button"
-        className="ProfileEditor__username-link__tooltip__close"
-        onClick={handleClose}
-        aria-label={i18n('icu:close')}
-      />
-      <div className="ProfileEditor__username-link__tooltip__arrow" />
-    </animated.div>
-  );
+  // Don't complete onboarding when hitting Escape, only when clicking the close button
+  const [open, setOpen] = useState(true);
 
   return (
-    <Tooltip
-      className="ProfileEditor__username-link__tooltip"
-      direction={TooltipPlacement.Bottom}
-      sticky
-      content={tooltip}
-      // By default tooltip has its distance modified, here we clear that
-      popperModifiers={[offsetDistanceModifier(0)]}
-      hideArrow
-    >
-      {children}
-    </Tooltip>
+    <Popover.Root open={open} onOpenChange={setOpen}>
+      <Popover.Anchor asChild>{children}</Popover.Anchor>
+      <Popover.Portal>
+        <Popover.Content
+          className="ProfileEditor__username-link__tooltip"
+          side="bottom"
+          aria-labelledby={titleId}
+          onOpenAutoFocus={event => event.preventDefault()}
+          onCloseAutoFocus={event => event.preventDefault()}
+          onInteractOutside={event => event.preventDefault()}
+        >
+          <animated.div
+            className="ProfileEditor__username-link__tooltip__container"
+            style={animatedStyles}
+          >
+            <div className="ProfileEditor__username-link__tooltip__icon" />
+
+            <div className="ProfileEditor__username-link__tooltip__content">
+              <h3 id={titleId}>
+                {i18n('icu:ProfileEditor__username-link__tooltip__title')}
+              </h3>
+              <p>{i18n('icu:ProfileEditor__username-link__tooltip__body')}</p>
+            </div>
+
+            <Popover.Close
+              className="ProfileEditor__username-link__tooltip__close"
+              onClick={handleClose}
+              aria-label={i18n('icu:close')}
+            />
+            <div className="ProfileEditor__username-link__tooltip__arrow" />
+          </animated.div>
+        </Popover.Content>
+      </Popover.Portal>
+    </Popover.Root>
   );
 }

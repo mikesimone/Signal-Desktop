@@ -88,7 +88,7 @@ import {
   RelinkRequestedError,
 } from './errors.std.ts';
 import { FileStream } from './util/FileStream.node.ts';
-import { ToastType } from '../../types/Toast.dom.tsx';
+import { ToastType } from '../../types/Toast.std.ts';
 import { isAdhoc, isNightly } from '../../util/version.std.ts';
 import type { ValidateLocalBackupStructureResultType } from './util/localBackup.node.ts';
 import {
@@ -1498,12 +1498,20 @@ export class BackupsService {
   }
 
   async #unlinkAndDeleteAllData() {
+    if (window.ConversationController.areWePrimaryDevice()) {
+      throw new Error(
+        'unlinkAndDeleteAllData: Cannot unlink; we are primary device!'
+      );
+    }
+
     window.reduxActions.installer.updateBackupImportProgress({
       error: InstallScreenBackupError.Canceled,
     });
 
     try {
-      await unlinkAccount();
+      const ourDeviceId = itemStorage.user.getDeviceId();
+      strictAssert(ourDeviceId, 'Expect our own deviceId');
+      await unlinkAccount(ourDeviceId);
     } catch (e) {
       log.warn(
         'Error while unlinking; this may be expected for the unlink operation',

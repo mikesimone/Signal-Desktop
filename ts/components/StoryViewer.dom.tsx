@@ -1,7 +1,7 @@
 // Copyright 2022 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import { FocusScope } from 'react-aria';
+import { FocusScope } from 'radix-ui/internal';
 import type { UIEvent, JSX, KeyboardEvent as ReactKeyboardEvent } from 'react';
 import {
   useCallback,
@@ -21,7 +21,7 @@ import type {
 import type { PreferredBadgeSelectorType } from '../state/selectors/badges.preload.ts';
 import type { ReplyStateType, StoryViewType } from '../types/Stories.std.ts';
 import type { StoryDistributionIdString } from '../types/StoryDistributionId.std.ts';
-import type { ShowToastAction } from '../state/ducks/toast.preload.ts';
+import type { ShowToastAction } from '../state/ducks/toast.dom.ts';
 import type { ViewStoryActionCreatorType } from '../state/ducks/stories.preload.ts';
 import { createLogger } from '../logging/log.std.ts';
 import { AnimatedEmojiGalore } from './AnimatedEmojiGalore.dom.tsx';
@@ -40,7 +40,7 @@ import {
   StoryViewTargetType,
 } from '../types/Stories.std.ts';
 import { StoryViewsNRepliesModal } from './StoryViewsNRepliesModal.dom.tsx';
-import { ToastType } from '../types/Toast.dom.tsx';
+import { ToastType } from '../types/Toast.std.ts';
 import { getAvatarColor } from '../types/Avatar.std.ts';
 import { getStoryBackground } from '../util/getStoryBackground.std.ts';
 import { getStoryDuration } from '../util/getStoryDuration.dom.ts';
@@ -57,7 +57,7 @@ import { StoryProgressSegment } from './StoryProgressSegment.dom.tsx';
 import type { FunEmojiSelection } from './fun/panels/FunPanelEmojis.dom.tsx';
 import type { ContactModalStateType } from '../types/globalModals.std.ts';
 import type { Emoji } from '../axo/emoji.std.ts';
-import { AxoConfirmDialog } from '../axo/AxoConfirmDialog.dom.tsx';
+import { AxoConfirmDialog } from '../axo/dialogs/AxoConfirmDialog.dom.tsx';
 import { AxoDropdownMenu } from '../axo/menus/AxoDropdownMenu.dom.tsx';
 import { AxoIconButton } from '../axo/AxoIconButton.dom.tsx';
 import { AxoTheme } from '../axo/AxoTheme.dom.tsx';
@@ -593,7 +593,8 @@ export function StoryViewer({
   };
 
   return (
-    <FocusScope contain={currentViewTarget == null} autoFocus>
+    // Untrapped while the legacy replies modal (not a Radix layer) is open
+    <FocusScope.Root asChild trapped={currentViewTarget == null} loop>
       {/* oxlint-disable-next-line jsx-a11y/no-static-element-interactions */}
       <div
         tabIndex={0}
@@ -1058,6 +1059,6 @@ export function StoryViewer({
           </AxoConfirmDialog.Action>
         </AxoConfirmDialog.Root>
       </div>
-    </FocusScope>
+    </FocusScope.Root>
   );
 }

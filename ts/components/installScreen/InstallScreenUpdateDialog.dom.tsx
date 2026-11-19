@@ -11,13 +11,13 @@ import {
   BETA_DOWNLOAD_URL,
   UNSUPPORTED_OS_URL,
 } from '../../types/support.std.ts';
-import type { UpdatesStateType } from '../../state/ducks/updates.preload.ts';
+import type { UpdatesStateType } from '../../state/ducks/updates.dom.ts';
 import { isBeta } from '../../util/version.std.ts';
 import { missingCaseError } from '../../util/missingCaseError.std.ts';
 import { roundFractionForProgressBar } from '../../util/numbers.std.ts';
 import { I18n } from '../I18n.dom.tsx';
 import { formatFileSize } from '../../util/formatFileSize.std.ts';
-import { AxoConfirmDialog } from '../../axo/AxoConfirmDialog.dom.tsx';
+import { AxoConfirmDialog } from '../../axo/dialogs/AxoConfirmDialog.dom.tsx';
 import { tw } from '../../axo/tw.dom.tsx';
 import { TitlebarDragArea } from '../TitlebarDragArea.dom.tsx';
 import { InstallScreenSignalLogo } from './InstallScreenSignalLogo.dom.tsx';

@@ -5,7 +5,7 @@ import moment from 'moment';
 import { I18n } from './I18n.dom.tsx';
 import type { LocalizerType } from '../types/Util.std.ts';
 import { tw } from '../axo/tw.dom.tsx';
-import { AxoDialog } from '../axo/AxoDialog.dom.tsx';
+import { AxoDialog } from '../axo/dialogs/AxoDialog.dom.tsx';
 
 export type PropsType = {
   hideWhatsNewModal: () => unknown;
@@ -47,7 +47,7 @@ export function WhatsNewModal({
     // oxlint-disable-next-line react/purity
     date: new Date(window.getBuildCreation?.() || Date.now()),
     version: window.getVersion?.(),
-    features: [<I18n i18n={i18n} id="icu:WhatsNew__8.36--0" />],
+    features: [<I18n i18n={i18n} id="icu:WhatsNew__bugfixes--1" />],
   };
 
   if (releaseNotes.features.length === 1 && !releaseNotes.header) {

@@ -28,8 +28,8 @@ import type {
   AvatarColorType,
   AvatarUpdateOptionsType,
 } from '../types/Avatar.std.ts';
-import type { AnyToast } from '../types/Toast.dom.tsx';
-import { ToastType } from '../types/Toast.dom.tsx';
+import type { AnyToast } from '../types/Toast.std.ts';
+import { ToastType } from '../types/Toast.std.ts';
 import { createLogger } from '../logging/log.std.ts';
 import { toLogFormat } from '../types/errors.std.ts';
 import { I18n } from './I18n.dom.tsx';
@@ -237,16 +237,14 @@ function DonationsHome({
   const hasReceipts = donationReceipts.length > 0;
 
   const donateButton = (
-    <span className={tw('mb-8')}>
-      <AxoButton.Root
-        variant={isOnline ? 'strong-primary' : 'strong-secondary'}
-        size="lg"
-        disabled={!isOnline}
-        onClick={handleDonateButtonClicked}
-      >
-        {i18n('icu:PreferencesDonations__donate-button')}
-      </AxoButton.Root>
-    </span>
+    <AxoButton.Root
+      variant={isOnline ? 'strong-primary' : 'strong-secondary'}
+      size="lg"
+      disabled={!isOnline}
+      onClick={handleDonateButtonClicked}
+    >
+      {i18n('icu:PreferencesDonations__donate-button')}
+    </AxoButton.Root>
   );
 
   return (
@@ -260,13 +258,15 @@ function DonationsHome({
 
       {renderDonationHero()}
 
-      {isOnline ? (
-        donateButton
-      ) : (
-        <DonationsOfflineTooltip i18n={i18n}>
-          {donateButton}
-        </DonationsOfflineTooltip>
-      )}
+      <span className={tw('mb-8')}>
+        {isOnline ? (
+          donateButton
+        ) : (
+          <DonationsOfflineTooltip i18n={i18n}>
+            {donateButton}
+          </DonationsOfflineTooltip>
+        )}
+      </span>
 
       <hr className="PreferencesDonations__separator" />
 

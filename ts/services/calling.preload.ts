@@ -165,6 +165,7 @@ import {
   updateAdhocCallHistory,
   getCallIdFromEra,
   getCallDetailsForAdhocCall,
+  isGroupCallHistoryWithUnknownCreator,
 } from '../util/callDisposition.preload.ts';
 import { isNormalNumber } from '../util/isNormalNumber.std.ts';
 import type { AciString, ServiceIdString } from '../types/ServiceId.std.ts';
@@ -196,8 +197,8 @@ import { CallQualitySurvey } from '../types/CallQualitySurvey.std.ts';
 import {
   isCallFailure,
   shouldShowCallQualitySurvey,
-} from '../util/callQualitySurvey.dom.ts';
-import * as RemoteConfig from '../RemoteConfig.dom.ts';
+} from '../util/callQualitySurvey.std.ts';
+import * as RemoteConfig from '../RemoteConfig.std.ts';
 import { isAlpha, isBeta, isProduction } from '../util/version.std.ts';
 import { parseIntOrThrow } from '../util/parseIntOrThrow.std.ts';
 
@@ -252,7 +253,6 @@ type CallingReduxInterface = Pick<
   | 'groupCallRaisedHandsChange'
   | 'groupCallStateChange'
   | 'joinedAdhocCall'
-  | 'outgoingCall'
   | 'receiveGroupCallReactions'
   | 'receiveIncomingDirectCall'
   | 'receiveIncomingGroupCall'
@@ -856,7 +856,9 @@ class CallingClass {
           secretParams: conversation.secretParams,
         });
 
+        log.info(`${logId}: setOutgoingAudioMuted(${!hasLocalAudio})`);
         groupCall.setOutgoingAudioMuted(!hasLocalAudio);
+        log.info(`${logId}: setOutgoingVideoMuted(${!hasLocalVideo})`);
         groupCall.setOutgoingVideoMuted(!hasLocalVideo);
 
         drop(
@@ -1197,7 +1199,9 @@ class CallingClass {
       endorsementsPublicKey,
     });
 
+    log.info(`${logId}: setOutgoingAudioMuted(${!hasLocalAudio})`);
     groupCall.setOutgoingAudioMuted(!hasLocalAudio);
+    log.info(`${logId}: setOutgoingVideoMuted(${!hasLocalVideo})`);
     groupCall.setOutgoingVideoMuted(!hasLocalVideo);
 
     drop(
@@ -1222,8 +1226,10 @@ class CallingClass {
 
   async startOutgoingDirectCall(
     conversationId: string,
-    hasLocalAudio: boolean,
-    hasLocalVideo: boolean
+    {
+      hasLocalAudio,
+      hasLocalVideo,
+    }: Readonly<{ hasLocalAudio: boolean; hasLocalVideo: boolean }>
   ): Promise<void> {
     const conversation = window.ConversationController.get(conversationId);
     if (!conversation) {
@@ -1248,26 +1254,6 @@ class CallingClass {
       return;
     }
 
-    const haveMediaPermissions = await this.#requestPermissions(hasLocalVideo);
-    if (!haveMediaPermissions) {
-      log.info(`${logId}: Permissions were denied, new call not allowed.`);
-      this.stopCallingLobby();
-      return;
-    }
-
-    try {
-      await ensureSystemPermissions({ hasLocalAudio, hasLocalVideo });
-    } catch (error) {
-      log.error(
-        `${logId}: failed to ensure system permissions`,
-        Errors.toLogFormat(error)
-      );
-      this.stopCallingLobby();
-      return;
-    }
-
-    muteStateChange.setIsMuted(!hasLocalAudio);
-
     log.info(`${logId}: Getting call settings`);
     // Check state after awaiting to debounce call button.
     if (RingRTC.call && RingRTC.call.state !== CallState.Ended) {
@@ -1283,6 +1269,27 @@ class CallingClass {
       this.#localDeviceId
     );
 
+    // NB: It's important that we apply `hasLocalVideo` and `hasLocalAudio` synchronously
+    // to avoid races
+    muteStateChange.setIsMuted(!hasLocalAudio);
+
+    // Set the camera disposition as we transition from the lobby to the outgoing call.
+    this.#cameraEnabled = hasLocalVideo;
+
+    // Set the initial state for outgoing media for the outgoing call.
+    log.info(`${logId}: setOutgoingAudioMuted(${!hasLocalAudio})`);
+    call.setOutgoingAudioMuted(!hasLocalAudio);
+    log.info(`${logId}: setOutgoingVideoMuted(${!hasLocalVideo})`);
+    call.setOutgoingVideoMuted(!hasLocalVideo);
+
+    this.#attachToCall(conversation, call);
+
+    this.#reduxInterface.callStateChange({
+      conversationId: conversation.id,
+      callState: CallState.Prering,
+      acceptedTime: null,
+    });
+
     // Send profile key to conversation recipient since call protos don't include it
     if (!conversation.get('profileSharing')) {
       log.info(`${logId}: Setting profileSharing=true`);
@@ -1293,21 +1300,6 @@ class CallingClass {
     await conversationJobQueue.add({
       conversationId: conversation.id,
       type: 'ProfileKeyForCall',
-    });
-
-    // Set the camera disposition as we transition from the lobby to the outgoing call.
-    this.#cameraEnabled = hasLocalVideo;
-
-    // Set the initial state for outgoing media for the outgoing call.
-    call.setOutgoingAudioMuted(!hasLocalAudio);
-    call.setOutgoingVideoMuted(!hasLocalVideo);
-
-    this.#attachToCall(conversation, call);
-
-    this.#reduxInterface.outgoingCall({
-      conversationId: conversation.id,
-      hasLocalAudio,
-      hasLocalVideo,
     });
 
     await this.#startDeviceReselectionTimer();
@@ -1701,7 +1693,9 @@ class CallingClass {
     // Set the camera disposition as we transition from the lobby to the group call.
     this.#cameraEnabled = hasLocalVideo;
 
+    log.info(`${logId}: setOutgoingAudioMuted(${!hasLocalAudio})`);
     groupCall.setOutgoingAudioMuted(!hasLocalAudio);
+    log.info(`${logId}: setOutgoingVideoMuted(${!hasLocalVideo})`);
     groupCall.setOutgoingVideoMuted(!hasLocalVideo);
     drop(this.enableCaptureAndSend(groupCall, undefined, logId));
 
@@ -2102,7 +2096,9 @@ class CallingClass {
     // Set the camera disposition as we transition from the lobby to the call link call.
     this.#cameraEnabled = hasLocalVideo;
 
+    log.info(`${logId}: setOutgoingAudioMuted(${!hasLocalAudio})`);
     groupCall.setOutgoingAudioMuted(!hasLocalAudio);
+    log.info(`${logId}: setOutgoingVideoMuted(${!hasLocalVideo})`);
     groupCall.setOutgoingVideoMuted(!hasLocalVideo);
     drop(this.enableCaptureAndSend(groupCall));
 
@@ -2533,7 +2529,9 @@ class CallingClass {
       this.#cameraEnabled = asVideoCall;
 
       // Set the initial state for outgoing media for the incoming call.
+      log.info(`${logId}: setOutgoingAudioMuted(false)`);
       call.setOutgoingAudioMuted(false);
+      log.info(`${logId}: setOutgoingVideoMuted(${!asVideoCall})`);
       call.setOutgoingVideoMuted(!asVideoCall);
 
       RingRTC.accept(callId);
@@ -2620,7 +2618,10 @@ class CallingClass {
         // Stop media immediately upon hangup.
         this.disableLocalVideo();
         this.videoRenderer.disable();
+
+        log.info(`${logId}: setOutgoingAudioMuted(true)`);
         call.setOutgoingAudioMuted(true);
+        log.info(`${logId}: setOutgoingVideoMuted(true)`);
         call.setOutgoingVideoMuted(true);
         drop(
           (async () => {
@@ -2648,7 +2649,9 @@ class CallingClass {
         }
       } else if (call instanceof GroupCall) {
         // This ensures that we turn off our devices.
+        log.info(`${logId}: setOutgoingAudioMuted(true)`);
         call.setOutgoingAudioMuted(true);
+        log.info(`${logId}: setOutgoingVideoMuted(true)`);
         call.setOutgoingVideoMuted(true);
         drop(
           (async () => {
@@ -2686,6 +2689,10 @@ class CallingClass {
     }
   }
 
+  logBookmark(): void {
+    RingRTC.logBookmarkMessage();
+  }
+
   setOutgoingAudio(conversationId: string, enabled: boolean): void {
     const call = getOwn(this.#callsLookup, conversationId);
     if (!call) {
@@ -2699,6 +2706,7 @@ class CallingClass {
     });
     log.info(`${logId}: set to ${enabled}`);
 
+    log.info(`${logId}: setOutgoingAudioMuted(${!enabled})`);
     if (call instanceof Call) {
       call.setOutgoingAudioMuted(!enabled);
     } else if (call instanceof GroupCall) {
@@ -2712,16 +2720,23 @@ class CallingClass {
   }
 
   setOutgoingAudioRemoteMuted(conversationId: string, source: number): void {
+    const logId = getLogId({
+      source: 'CallingClass.setOutgoingAudioRemoteMuted',
+      conversationId,
+    });
     const call = getOwn(this.#callsLookup, conversationId);
     if (!call) {
-      log.warn('Trying to remote mute outgoing audio for a non-existent call');
+      log.warn(
+        `${logId}: Trying to remote mute outgoing audio for a non-existent call`
+      );
       return;
     }
 
     if (call instanceof GroupCall) {
+      log.info(`${logId}: setOutgoingAudioMutedRemotely(${source})`);
       call.setOutgoingAudioMutedRemotely(source);
     } else {
-      log.warn('Trying to remote mute outgoing audio on a 1:1 call');
+      log.warn(`${logId}: Trying to remote mute outgoing audio on a 1:1 call`);
     }
 
     // Import: calling `setIsMuted` causes the subscriber in `initialize()` to
@@ -4599,7 +4614,8 @@ class CallingClass {
       peerId
     );
 
-    const isNewCall = callHistory == null;
+    const isNewCall =
+      callHistory == null || isGroupCallHistoryWithUnknownCreator(callHistory);
 
     if (isNewCall) {
       const localCallEvent = getLocalCallEventFromJoinState(
@@ -4611,7 +4627,7 @@ class CallingClass {
         const callDetails = getCallDetailsFromGroupCallMeta({
           peerId,
           groupCallMeta,
-          eventTimestamp,
+          eventTimestamp: callHistory?.timestamp ?? eventTimestamp,
         });
         const callEvent = getCallEventDetails({
           callDetails,

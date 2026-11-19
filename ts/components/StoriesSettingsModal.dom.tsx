@@ -36,11 +36,11 @@ import {
   asyncShouldNeverBeCalled,
 } from '../util/shouldNeverBeCalled.std.ts';
 import { useConfirmDiscard } from '../hooks/useConfirmDiscard.dom.tsx';
-import { getGroupMemberships } from '../util/getGroupMemberships.dom.ts';
+import { getGroupMemberships } from '../util/getGroupMemberships.std.ts';
 import { strictAssert } from '../util/assert.std.ts';
 import { UserText } from './UserText.dom.tsx';
 import { SizeObserver } from '../hooks/useSizeObserver.dom.tsx';
-import { AxoConfirmDialog } from '../axo/AxoConfirmDialog.dom.tsx';
+import { AxoConfirmDialog } from '../axo/dialogs/AxoConfirmDialog.dom.tsx';
 
 const { noop } = lodash;
 

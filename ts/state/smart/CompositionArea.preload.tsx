@@ -60,7 +60,7 @@ import { useConversationsActions } from '../ducks/conversations.preload.ts';
 import { useAudioRecorderActions } from '../ducks/audioRecorder.preload.ts';
 import { useEmojisActions } from '../ducks/emojis.preload.ts';
 import { useGlobalModalActions } from '../ducks/globalModals.preload.ts';
-import { useToastActions } from '../ducks/toast.preload.ts';
+import { useToastActions } from '../ducks/toast.dom.ts';
 import { isShowingAnyModal } from '../selectors/globalModals.std.ts';
 import { isConversationEverUnregistered } from '../../util/isConversationEverUnregistered.std.ts';
 import { isDirectConversation } from '../../util/whatTypeOfConversation.dom.ts';
@@ -68,7 +68,7 @@ import { itemStorage } from '../../textsecure/Storage.preload.ts';
 import { useNavActions } from '../ducks/nav.std.ts';
 import { isFeaturedEnabledSelector } from '../../util/isFeatureEnabled.dom.ts';
 import { getMaxVideoDuration } from '../../util/getTranscodingOptions.preload.ts';
-import { getValue as getRemoteConfigValue } from '../../RemoteConfig.dom.ts';
+import { getValue as getRemoteConfigValue } from '../../RemoteConfig.std.ts';
 import { useStickersActions } from '../ducks/stickers.preload.ts';
 
 function renderSmartCompositionRecording() {
@@ -369,6 +369,7 @@ export const SmartCompositionArea = memo(function SmartCompositionArea({
       quotedMessageProps={quotedMessageProps ?? null}
       quotedMessageAuthorAci={quotedMessage?.quote?.authorAci ?? null}
       quotedMessageSentAt={quotedMessage?.quote?.id ?? null}
+      quotedMessageGroupId={quotedMessage?.quote?.groupId ?? null}
       setQuoteByMessageId={setQuoteByMessageId}
       // View Once
       isViewOnce={isViewOnce}

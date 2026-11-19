@@ -7,7 +7,7 @@ import { SmartStoryCreator } from './StoryCreator.preload.tsx';
 import { renderToastManagerWithoutMegaphone } from './ToastManager.preload.tsx';
 import { StoriesTab } from '../../components/StoriesTab.dom.tsx';
 import { getMaximumOutgoingVideoSize } from '../../types/AttachmentSize.std.ts';
-import { getValue, type ConfigKeyType } from '../../RemoteConfig.dom.ts';
+import { getValue, type ConfigKeyType } from '../../RemoteConfig.std.ts';
 import {
   getMe,
   getOtherTabsUnreadCount,
@@ -29,7 +29,7 @@ import {
 import { useConversationsActions } from '../ducks/conversations.preload.ts';
 import { useGlobalModalActions } from '../ducks/globalModals.preload.ts';
 import { useStoriesActions } from '../ducks/stories.preload.ts';
-import { useToastActions } from '../ducks/toast.preload.ts';
+import { useToastActions } from '../ducks/toast.dom.ts';
 import { useAudioPlayerActions } from '../ducks/audioPlayer.preload.ts';
 import { useItemsActions } from '../ducks/items.preload.ts';
 import { getHasPendingUpdate } from '../selectors/updates.std.ts';

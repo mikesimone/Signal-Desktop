@@ -63,7 +63,7 @@ describe('AttachmentBackupManager/JobManager', function attachmentBackupManager(
       data: {
         path: RELATIVE_ATTACHMENT_PATH,
         contentType: IMAGE_JPEG,
-        keys: 'keys=',
+        keys: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=',
         version: 2,
         localKey: LOCAL_ENCRYPTION_KEYS,
         transitCdnInfo: {
@@ -120,7 +120,9 @@ describe('AttachmentBackupManager/JobManager', function attachmentBackupManager(
     await itemStorage.put('backupMediaRootKey', getRandomBytes(32));
 
     sandbox = sinon.createSandbox();
-    clock = sandbox.useFakeTimers();
+    clock = sandbox.useFakeTimers({
+      toFake: ['setTimeout', 'clearTimeout', 'Date'],
+    });
     isInCall = sandbox.stub().returns(false);
 
     copyBackupMedia = sandbox
@@ -167,6 +169,7 @@ describe('AttachmentBackupManager/JobManager', function attachmentBackupManager(
 
   afterEach(async () => {
     sandbox.restore();
+    clock.runAll();
     await backupManager?.stop();
     await DataWriter.removeAll();
     await itemStorage.fetch();

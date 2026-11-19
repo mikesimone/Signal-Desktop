@@ -1,7 +1,6 @@
 // Copyright 2025 Signal Messenger, LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 import { useCallback, useState, type JSX } from 'react';
-import { Button } from 'react-aria-components';
 import { action } from '@storybook/addon-actions';
 import { type ComponentMeta } from '../../storybook/types.std.ts';
 import type { FunStickerPickerProps } from './FunStickerPicker.dom.tsx';
@@ -50,6 +49,7 @@ function Template(props: TemplateProps): JSX.Element {
       onClearStickerPickerHint={() => null}
       onSelectSticker={() => null}
       onMarkStickerAsFavorite={() => null}
+      showToast={action('showToast')}
       // Gifs
       fetchGiphySearch={() => Promise.reject()}
       fetchGiphyTrending={() => Promise.reject()}
@@ -58,7 +58,7 @@ function Template(props: TemplateProps): JSX.Element {
       onSelectGif={() => null}
     >
       <FunStickerPicker {...props} open={open} onOpenChange={handleOpenChange}>
-        <Button>Open StickerPicker</Button>
+        <button type="button">Open StickerPicker</button>
       </FunStickerPicker>
     </FunProvider>
   );

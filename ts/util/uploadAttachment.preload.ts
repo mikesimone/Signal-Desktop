@@ -46,7 +46,7 @@ import {
   isValidPlaintextHash,
 } from '../types/Crypto.std.ts';
 import type { ExistingAttachmentUploadData } from '../sql/Interface.std.ts';
-import { maybeRefreshRemoteConfig } from '../RemoteConfig.dom.ts';
+import { maybeRefreshRemoteConfig } from '../RemoteConfig.std.ts';
 import { strictAssert, assertDev } from './assert.std.ts';
 
 const CDNS_SUPPORTING_TUS = new Set([3]);
@@ -227,7 +227,7 @@ function getAttachmentPointer(
     height: height ?? null,
     caption: caption || null,
     blurHash: blurHash || null,
-    audioWaveform: audioWaveform == null ? null : new Uint8Array(audioWaveform),
+    audioWaveform: audioWaveform?.length ? new Uint8Array(audioWaveform) : null,
     audioDurationSeconds: isAudio(attachment.contentType)
       ? duration || null
       : null,
@@ -294,6 +294,8 @@ export async function encryptAndUploadAttachment({
       await maybeRefreshRemoteConfig({
         getConfig,
         storage: itemStorage,
+        ourVersion: window.getVersion(),
+        showToast: window.reduxActions.toast.showToast,
       });
     }
     throw error;

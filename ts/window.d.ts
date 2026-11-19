@@ -20,23 +20,28 @@ import type { MessageCache } from './services/MessageCache.preload.ts';
 import type { StateType } from './state/reducer.preload.ts';
 import type { CIType } from './CI.preload.ts';
 import type { IPCEventsType } from './util/createIPCEvents.preload.ts';
-import type { SignalContextType } from './windows/context.preload.ts';
+import type { SignalContextType } from './windows/context.sandbox.ts';
 import type { PropsPreloadType as PreferencesPropsType } from './components/Preferences.dom.tsx';
 import type { WindowsNotificationData } from './services/notifications.preload.ts';
 import type { QueryStatsOptions } from './sql/main.main.ts';
 import type { SocketStatuses } from './textsecure/SocketManager.preload.ts';
-import type { SignalClipboardType } from './windows/clipboard.preload.ts';
+import type { SignalClipboardType } from './windows/clipboard.sandbox.ts';
 import type { PDFWindowPropsType } from './windows/pdf/types.std.ts';
 
 export type IPCType = {
   addSetupMenuItems: () => void;
   clearAllWindowsNotifications: () => Promise<void>;
   closeAbout: () => void;
+  updater: {
+    startUpdate: () => Promise<void>;
+    forceCheck: () => Promise<void>;
+  };
   crashReports: {
     getCount: () => Promise<number>;
     writeToLog: () => Promise<void>;
     erase: () => Promise<void>;
   };
+  openFileInFolder: (target: string) => void;
   drawAttention: () => void;
   getAutoLaunch: () => Promise<boolean | undefined>;
   getMediaAccessStatus: (

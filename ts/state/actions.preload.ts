@@ -13,7 +13,7 @@ import { actions as chatColors } from './ducks/chatColors.preload.ts';
 import { actions as chatFolders } from './ducks/chatFolders.preload.ts';
 import { actions as composer } from './ducks/composer.preload.ts';
 import { actions as conversations } from './ducks/conversations.preload.ts';
-import { actions as crashReports } from './ducks/crashReports.preload.ts';
+import { actions as crashReports } from './ducks/crashReports.dom.ts';
 import { actions as donations } from './ducks/donations.preload.ts';
 import { actions as emojis } from './ducks/emojis.preload.ts';
 import { actions as expiration } from './ducks/expiration.std.ts';
@@ -23,6 +23,7 @@ import { actions as inbox } from './ducks/inbox.std.ts';
 import { actions as installer } from './ducks/installer.preload.ts';
 import { actions as items } from './ducks/items.preload.ts';
 import { actions as lightbox } from './ducks/lightbox.preload.ts';
+import { actions as linkedDevices } from './ducks/linkedDevices.preload.ts';
 import { actions as linkPreviews } from './ducks/linkPreviews.preload.ts';
 import { actions as mediaGallery } from './ducks/mediaGallery.preload.ts';
 import { actions as megaphones } from './ducks/megaphones.preload.ts';
@@ -35,8 +36,8 @@ import { actions as standaloneInstaller } from './ducks/standaloneInstaller.prel
 import { actions as stickers } from './ducks/stickers.preload.ts';
 import { actions as stories } from './ducks/stories.preload.ts';
 import { actions as storyDistributionLists } from './ducks/storyDistributionLists.preload.ts';
-import { actions as toast } from './ducks/toast.preload.ts';
-import { actions as updates } from './ducks/updates.preload.ts';
+import { actions as toast } from './ducks/toast.dom.ts';
+import { actions as updates } from './ducks/updates.dom.ts';
 import { actions as user } from './ducks/user.preload.ts';
 import { actions as username } from './ducks/username.preload.ts';
 import type { ReduxActions } from './types.std.ts';
@@ -64,6 +65,7 @@ export const actionCreators: ReduxActions = {
   installer,
   items,
   lightbox,
+  linkedDevices,
   linkPreviews,
   mediaGallery,
   megaphones,

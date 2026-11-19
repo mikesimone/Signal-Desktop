@@ -21,21 +21,21 @@ import { RemoveGroupMemberConfirmationDialog } from './RemoveGroupMemberConfirma
 import { missingCaseError } from '../../util/missingCaseError.std.ts';
 import { UserText } from '../UserText.dom.tsx';
 import { isInSystemContacts } from '../../util/isInSystemContacts.std.ts';
-import { InContactsIcon } from '../InContactsIcon.dom.tsx';
+import { AxoContactName } from '../../axo/AxoContactName.dom.tsx';
 import { canHaveNicknameAndNote } from '../../util/nicknames.dom.ts';
 import { InAnotherCallTooltip } from './InAnotherCallTooltip.dom.tsx';
 import type { ToggleGroupMemberLabelInfoModalType } from '../../state/ducks/globalModals.preload.ts';
 import type { ContactModalStateType } from '../../types/globalModals.std.ts';
 import { GroupMemberLabel } from './ContactName.dom.tsx';
 import { SignalService as Proto } from '../../protobuf/index.std.ts';
-import { AxoDialog } from '../../axo/AxoDialog.dom.tsx';
+import { AxoDialog } from '../../axo/dialogs/AxoDialog.dom.tsx';
 import { AxoSymbol } from '../../axo/AxoSymbol.dom.tsx';
 import { tw } from '../../axo/tw.dom.tsx';
 import { strictAssert } from '../../util/assert.std.ts';
 import type { RemoveClientType } from '../../types/Calling.std.ts';
 import type { ContactNameColorType } from '../../types/ContactNameColor.std.ts';
 import type { Emoji } from '../../axo/emoji.std.ts';
-import { AxoConfirmDialog } from '../../axo/AxoConfirmDialog.dom.tsx';
+import { AxoConfirmDialog } from '../../axo/dialogs/AxoConfirmDialog.dom.tsx';
 import { AxoStackedButton } from '../../axo/AxoStackedButton.dom.tsx';
 
 const ACCESS_ENUM = Proto.AccessControl.AccessRequired;
@@ -476,13 +476,10 @@ export function ContactModal({
                   <span className="ContactModal__name__text">
                     <UserText text={contact.title} />
                     {isInSystemContacts(contact) && (
-                      <span>
-                        {' '}
-                        <InContactsIcon
-                          className="ContactModal__name__contact-icon"
-                          i18n={i18n}
-                        />
-                      </span>
+                      <>
+                        &nbsp;
+                        <AxoContactName.SystemContactEmblemStatic />
+                      </>
                     )}
                   </span>
                   <i className="ContactModal__name__chevron" />

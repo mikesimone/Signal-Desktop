@@ -5,8 +5,8 @@ import type { Meta, StoryFn } from '@storybook/react';
 
 import { action } from '@storybook/addon-actions';
 import { ToastManager } from './ToastManager.dom.tsx';
-import type { AnyToast } from '../types/Toast.dom.tsx';
-import { ToastType } from '../types/Toast.dom.tsx';
+import type { AnyToast } from '../types/Toast.std.ts';
+import { ToastType } from '../types/Toast.std.ts';
 import type {
   AnyActionableMegaphone,
   MegaphoneCtaId,
@@ -181,6 +181,20 @@ function getToast(toastType: ToastType): AnyToast {
       return { toastType: ToastType.LeftGroup };
     case ToastType.LinkCopied:
       return { toastType: ToastType.LinkCopied };
+    case ToastType.LinkedDeviceAdded:
+      return {
+        toastType: ToastType.LinkedDeviceAdded,
+        parameters: { name: 'Laptop at home' },
+      };
+    case ToastType.LinkedDeviceRemoved:
+      return {
+        toastType: ToastType.LinkedDeviceRemoved,
+        parameters: { name: 'Laptop at home' },
+      };
+    case ToastType.LinkedDeviceNameUpdated:
+      return { toastType: ToastType.LinkedDeviceNameUpdated };
+    case ToastType.LinkedDeviceSyncComplete:
+      return { toastType: ToastType.LinkedDeviceSyncComplete };
     case ToastType.LoadingFullLogs:
       return { toastType: ToastType.LoadingFullLogs };
     case ToastType._InternalMainProcessLoggingError:
@@ -205,6 +219,8 @@ function getToast(toastType: ToastType): AnyToast {
         toastType: ToastType.NotificationProfileUpdate,
         parameters: { name: 'Focus', enabled: true },
       };
+    case ToastType.OriginalMessageAndGroupNotFound:
+      return { toastType: ToastType.OriginalMessageAndGroupNotFound };
     case ToastType.OriginalMessageNotFound:
       return { toastType: ToastType.OriginalMessageNotFound };
     case ToastType.PinnedConversationsFull:
@@ -246,8 +262,17 @@ function getToast(toastType: ToastType): AnyToast {
       return { toastType: ToastType.StickerFavoriteAdded };
     case ToastType.StickerFavoriteRemoved:
       return { toastType: ToastType.StickerFavoriteRemoved };
+    case ToastType.StickerFavoritesHint:
+      return { toastType: ToastType.StickerFavoritesHint };
     case ToastType.StickerFavoritesTooMany:
       return { toastType: ToastType.StickerFavoritesTooMany };
+    case ToastType.StickerPackHidden:
+      return {
+        toastType: ToastType.StickerPackHidden,
+        parameters: { packId: 'abc' },
+      };
+    case ToastType.StickerPackUnhidden:
+      return { toastType: ToastType.StickerPackUnhidden };
     case ToastType.StickerPackInstallFailed:
       return { toastType: ToastType.StickerPackInstallFailed };
     case ToastType.StoryMuted:
@@ -378,6 +403,7 @@ export default {
     saveHeapSnapshot: action('saveHeapSnapshot'),
     onShowDebugLog: action('onShowDebugLog'),
     onUndoArchive: action('onUndoArchive'),
+    onUndoHideStickerPack: action('onUndoHideStickerPack'),
     retryCallQualitySurvey: action('retryCallQualitySurvey'),
     i18n,
     toastType: ToastType.AddingUserToGroup,

@@ -12,7 +12,7 @@ import type { MainSQL } from '../sql/main.main.ts';
 import { drop } from '../util/drop.std.ts';
 import { safeParseUnknown } from '../util/schemas.std.ts';
 import { _isFeatureEnabledInner } from '../util/isFeatureEnabledInner.std.ts';
-import type { ConfigMapType } from '../RemoteConfig.dom.ts';
+import type { ConfigMapType } from '../RemoteConfig.std.ts';
 import { getExternalClientEndpoint } from '../externalClient/endpoint.node.ts';
 import { ExternalClientAuthority } from '../externalClient/ExternalClientAuthority.node.ts';
 import type { ApprovalPromptType } from '../externalClient/ExternalClientAuthority.node.ts';

@@ -934,10 +934,6 @@
     "messageformat": "Signal can only automatically verify the encryption in chats where you’re connected to someone via a phone number. If the chat was started with a username or a group in common, verify end-to-end encryption by comparing the numbers on the previous screen or scanning the code on their device.",
     "description": "A body of an education modal in Key Transparency section of SafetyNumberViewer when verification is unavailable"
   },
-  "icu:SafetyNumberViewer__KeyTransparency__popup__okay": {
-    "messageformat": "Okay",
-    "description": "(Deleted 2026/10/20) A dismiss button text for an education modal in Key Transparency section"
-  },
   "icu:SafetyNumberNotReady__body": {
     "messageformat": "A safety number will be created with this person after you exchange messages with them.",
     "description": "Body of SafetyNumberNotReady modal"
@@ -973,10 +969,6 @@
   "icu:KeyTransparencyOnboardingDialog__Title": {
     "messageformat": "Signal can now auto-verify encryption",
     "description": "Key Transparency Onboarding Dialog > Title"
-  },
-  "icu:KeyTransparencyOnboardingDialog__Description": {
-    "messageformat": "For contacts you’re connected to by phone number, Signal can automatically confirm whether the connection is secure using a process called key transparency. For added security, you can still verify connections manually using a QR code or by comparing safety numbers.",
-    "description": "(Deleted 2026/10/20) Key Transparency Onboarding Dialog > Description"
   },
   "icu:KeyTransparencyOnboardingDialog__Description-v2": {
     "messageformat": "<paragraph>For contacts you’re connected to by phone number, Signal can automatically confirm whether the connection is secure using a process called key transparency.</paragraph><paragraph>For added security, you can still verify connections manually using a QR code or by comparing safety numbers.</paragraph>",
@@ -1086,6 +1078,22 @@
   },
   "icu:Toast--ChatFolderCreated": {
     "messageformat": "{chatFolderName} folder added",
+    "description": "Toast message show when a chat folder is created (in some places like creating a preset)"
+  },
+  "icu:Toast--LinkedDeviceAdded": {
+    "messageformat": "New device \"{name}\" successfully linked",
+    "description": "Toast message show when a chat folder is created (in some places like creating a preset)"
+  },
+  "icu:Toast--LinkedDeviceRemoved": {
+    "messageformat": "\"{name}\" unlinked",
+    "description": "Toast message show when a chat folder is created (in some places like creating a preset)"
+  },
+  "icu:Toast--LinkedDeviceNameUpdated": {
+    "messageformat": "Device name updated",
+    "description": "Toast message show when a chat folder is created (in some places like creating a preset)"
+  },
+  "icu:Toast--LinkedDeviceSyncComplete": {
+    "messageformat": "Message sync complete",
     "description": "Toast message show when a chat folder is created (in some places like creating a preset)"
   },
   "icu:cannotSelectPhotosAndVideosAlongWithFiles": {
@@ -1309,30 +1317,6 @@
   "icu:sendMessageToContact": {
     "messageformat": "Send Message",
     "description": "Shown when you are sent a contact and that contact has a signal account"
-  },
-  "icu:home": {
-    "messageformat": "home",
-    "description": "(Deleted 2026/10/15) Shown on contact detail screen as a label for an address/phone/email"
-  },
-  "icu:work": {
-    "messageformat": "work",
-    "description": "(Deleted 2026/10/15) Shown on contact detail screen as a label for an address/phone/email"
-  },
-  "icu:mobile": {
-    "messageformat": "mobile",
-    "description": "(Deleted 2026/10/15) Shown on contact detail screen as a label for a phone or email"
-  },
-  "icu:email": {
-    "messageformat": "email",
-    "description": "(Deleted 2026/10/15) Generic label shown if contact email has custom type but no label"
-  },
-  "icu:phone": {
-    "messageformat": "phone",
-    "description": "(Deleted 2026/10/15) Generic label shown if contact phone has custom type but no label"
-  },
-  "icu:address": {
-    "messageformat": "address",
-    "description": "(Deleted 2026/10/15) Generic label shown if contact address has custom type but no label"
   },
   "icu:poBox": {
     "messageformat": "PO Box",
@@ -1869,10 +1853,6 @@
   "icu:PinMessageDisappearingMessagesWarningDialog__Description": {
     "messageformat": "Disappearing messages will be unpinned when their timer expires and the message is removed from the chat.",
     "description": "Message > Context Menu > Pin Message (when pinning disappearing message) > Dialog > Description"
-  },
-  "icu:PinMessageDisappearingMessagesWarningDialog__Okay": {
-    "messageformat": "Okay",
-    "description": "(Deleted 2026/10/20) Message > Context Menu > Pin Message (when pinning disappearing message) > Dialog > Okay Button"
   },
   "icu:PinnedMessagesBar__AccessibilityLabel": {
     "messageformat": "{pinsCount, plural, one {Pinned message} other {Pinned messages}}",
@@ -3866,6 +3846,18 @@
     "messageformat": "You may not be able to re-install this sticker pack if you no longer have the source message.",
     "description": "Shown in the sticker pack manager next to sticker packs which are already installed."
   },
+  "icu:stickers--StickerManager--UninstallWarning--Title": {
+    "messageformat": "Remove Sticker Pack?",
+    "description": "Title  of dialog shown in the sticker pack manager when uninstalling sticker packs which are installed."
+  },
+  "icu:stickers--StickerManager--UninstallWarning--Body": {
+    "messageformat": "This will remove the sticker pack. You can't add it again without a link or sticker message.",
+    "description": "Description of dialog shown in the sticker pack manager when uninstalling sticker packs which are installed."
+  },
+  "icu:stickers--StickerManager--UninstallWarning--Remove": {
+    "messageformat": "Remove",
+    "description": "Confirm button of dialog shown in the sticker pack manager when uninstalling sticker packs which are installed."
+  },
   "icu:stickers--StickerManagerHeader--All": {
     "messageformat": "All",
     "description": "Shown in the sticker pack manager in the navigation tabs. This tab shows all sticker packs available to install."
@@ -3874,6 +3866,18 @@
     "messageformat": "My Stickers",
     "description": "Shown in the sticker pack manager in the navigation tabs. This tab shows all sticker packs you have currently installed."
   },
+  "icu:stickers--StickerManagerHidePackDialog--Title": {
+    "messageformat": "Hide Sticker Pack?",
+    "description": "Title of confirmation dialog in the sticker pack manager when hiding a received sticker pack."
+  },
+  "icu:stickers--StickerManagerHidePackDialog--Body": {
+    "messageformat": "This will remove the sticker pack. You can't add it again without a link or sticker message.",
+    "description": "Body text of confirmation dialog in the sticker pack manager when hiding a received sticker pack."
+  },
+  "icu:stickers--StickerManagerHidePackDialog--Hide": {
+    "messageformat": "Hide",
+    "description": "Button in confirmation dialog in the sticker pack manager when hiding a received sticker pack. This button confirms the hide action."
+  },
   "icu:stickers--StickerManagerPackContextMenu--Add": {
     "messageformat": "Add",
     "description": "Context menu item to add a sticker pack. Shown in the sticker pack manager when right clicking a sticker pack."
@@ -3881,6 +3885,10 @@
   "icu:stickers--StickerManagerPackContextMenu--Remove": {
     "messageformat": "Remove",
     "description": "Context menu item to remove a sticker pack. Shown in the sticker pack manager when right clicking a sticker pack."
+  },
+  "icu:stickers--StickerManagerPackContextMenu--Hide": {
+    "messageformat": "Hide",
+    "description": "Context menu item to hide a sticker pack. Shown in the sticker pack manager when right clicking a received sticker pack."
   },
   "icu:stickers--StickerManagerPackDragHandle--Label": {
     "messageformat": "Drag to reorder sticker pack",
@@ -3958,9 +3966,25 @@
     "messageformat": "Sticker removed from Favorites",
     "description": "Toast text shown after removing a sticker from the favorite stickers list."
   },
+  "icu:stickers--Toast--StickerFavoritesHint": {
+    "messageformat": "Right click a sticker to add to Favorites",
+    "description": "Toast text shown when trying to click the favorite stickers tab in the FunPicker when the user does not have any favorite stickers."
+  },
   "icu:stickers--Toast--StickerFavoritesTooMany": {
     "messageformat": "You can only add {count, plural, one {# sticker} other {# stickers}} to Favorites",
     "description": "Toast text shown after atttempting to add a favorite sticker when you already have the maximum allowed favorite sticker count."
+  },
+  "icu:stickers--Toast--StickerPackHidden": {
+    "messageformat": "Sticker pack hidden",
+    "description": "Toast text shown after hiding a sticker pack."
+  },
+  "icu:stickers--Toast--StickerPackHidden--Undo": {
+    "messageformat": "Undo",
+    "description": "Undo text in toast shown after hiding a sticker pack."
+  },
+  "icu:stickers--Toast--StickerPackUnhidden": {
+    "messageformat": "Sticker pack unhidden",
+    "description": "Toast text shown after undoing hiding a sticker pack."
   },
   "icu:stickers--ViewPack": {
     "messageformat": "View Pack",
@@ -4586,6 +4610,10 @@
     "messageformat": "Spoiler",
     "description": "Shown when you hover over the bold button in the popup formatting menu"
   },
+  "icu:FormatMenu__ToolbarLabel": {
+    "messageformat": "Text formatting",
+    "description": "Accessibility label for the toolbar of formatting buttons (bold, italic, etc.) that appears above selected text in the message composer"
+  },
   "icu:Keyboard--scroll-to-top": {
     "messageformat": "Scroll to top of list",
     "description": "Shown in the shortcuts guide"
@@ -4801,6 +4829,10 @@
   "icu:ReactionsViewer--all": {
     "messageformat": "All",
     "description": "Shown in reaction viewer as the title for the 'all' category"
+  },
+  "icu:ReactionViewer__Label": {
+    "messageformat": "Reactions",
+    "description": "Accessibility label for the popup that lists who reacted to a message, opened by clicking a message's reactions"
   },
   "icu:SafetyTipsModal__Title-v2": {
     "messageformat": "Safety tips",
@@ -5426,6 +5458,10 @@
     "messageformat": "Fullscreen call",
     "description": "Title for picture-in-picture toggle"
   },
+  "icu:CallingPip__RegionLabel": {
+    "messageformat": "Call with {conversationTitle}",
+    "description": "Accessibility label for the small floating call window (picture-in-picture) that stays visible while navigating the app. conversationTitle is the contact or group name."
+  },
   "icu:calling__preview--maximize": {
     "messageformat": "Maximize preview",
     "description": "Title for button to make in-call video preview bigger"
@@ -5633,10 +5669,6 @@
   "icu:DebugLogErrorModal__SubmitDebugLog__Cancel": {
     "messageformat": "No thanks",
     "description": "Secondary button text in the dialog shown when an unexpected user interface or coding bug occurs. Clicking the button will dismiss the error dialog."
-  },
-  "icu:Confirmation--confirm": {
-    "messageformat": "Okay",
-    "description": "(Deleted 2026/10/20) Button to dismiss popup dialog when user-initiated task has gone wrong"
   },
   "icu:MessageMaxEditsModal__Title": {
     "messageformat": "Can't edit message",
@@ -7587,10 +7619,6 @@
     "messageformat": "Delete",
     "description": "Text of a button in confirmation modal when deleting an attachment from media gallery"
   },
-  "icu:DeleteAttachmentModal__Cancel": {
-    "messageformat": "Cancel",
-    "description": "(Deleted 2026/10/20) Text of a button in confirmation modal when deleting an attachment from media gallery"
-  },
   "icu:SelectModeActions__toast--TooManyMessagesToForward": {
     "messageformat": "You can only forward up to 30 messages",
     "description": "conversation > in select mode > composition area actions > forward selected messages (disabled) > toast message when too many messages"
@@ -8448,6 +8476,10 @@
     "messageformat": "Account",
     "description": "Button to switch the settings view"
   },
+  "icu:Preferences__button--linked-devices": {
+    "messageformat": "Linked Devices",
+    "description": "Button to switch the settings view"
+  },
   "icu:Preferences__button--general": {
     "messageformat": "General",
     "description": "Button to switch the settings view"
@@ -8539,6 +8571,246 @@
   "icu:Preferences--system": {
     "messageformat": "System",
     "description": "Title for system type settings"
+  },
+  "icu:LinkDevice--OSPrompt--Mac": {
+    "messageformat": "link a new device",
+    "description": "Shown as part of an OS prompt with a final string like 'Signal Desktop is trying to link a new device'"
+  },
+  "icu:LinkDevice--OSPrompt--Windows": {
+    "messageformat": "Verify your identity to link a new device.",
+    "description": "Shown as the body text of an OS prompt with a title like \"Making sure it's you\""
+  },
+  "icu:LinkDevice--OSPrompt--description--Linux": {
+    "messageformat": "Link a device",
+    "description": "If linux system has pkcheck and we were able to install .policy files, this is the dialog header the user will see on the polkit prompt before linking a device"
+  },
+  "icu:LinkDevice--OSPrompt--message--Linux": {
+    "messageformat": "Authentication is required to link a new device.",
+    "description": "If linux system has pkcheck and we were able to install .policy files, this is the dialog text the user will see on the polkit prompt before linking a device"
+  },
+  "icu:Preferences--LinkedDevices--title": {
+    "messageformat": "Linked devices",
+    "description": "Title for Linked Devices settings page"
+  },
+  "icu:Preferences--LinkedDevices--description": {
+    "messageformat": "Use Signal on another device. Your messages will sync to your linked devices. <learnMore>Learn more</learnMore>",
+    "description": "Description for Linked Devices settings page"
+  },
+  "icu:Preferences--LinkedDevices--button": {
+    "messageformat": "Link a new device",
+    "description": "Button on Linked Devices settings page to start linking a new device"
+  },
+  "icu:Preferences--LinkedDevices--DeviceList--title": {
+    "messageformat": "Linked devices",
+    "description": "Title for the list of the account's List Devices"
+  },
+  "icu:Preferences--LinkedDevices--DeviceList--defaultName": {
+    "messageformat": "Linked device",
+    "description": "Shown as the name for a linked device if it has no name, or name couldn't be decrypted"
+  },
+  "icu:Preferences--LinkedDevices--DeviceList--createdAt": {
+    "messageformat": "Linked {date}",
+    "description": "Label for date showing when the device was first linked"
+  },
+  "icu:Preferences--LinkedDevices--DeviceList--lastSeenAt": {
+    "messageformat": "Last active {date}",
+    "description": "Label for data showing when the device was last connected to Signal servers"
+  },
+  "icu:Preferences--LinkedDevices--DeviceList--openMenu": {
+    "messageformat": "Open menu",
+    "description": "Label for button that opens menu with more actions, shown in the device list"
+  },
+  "icu:Preferences--LinkedDevices--DeviceList--Menu--rename": {
+    "messageformat": "Rename",
+    "description": "Option to rename a device, shown in popup menu in the device list"
+  },
+  "icu:Preferences--LinkedDevices--DeviceList--Menu--unlink": {
+    "messageformat": "Unlink",
+    "description": "Option to remove device from your account, shown in popup menu in the device list"
+  },
+  "icu:Preferences--LinkedDevices--DeviceList--footer": {
+    "messageformat": "Messages and chat info are protected by end-to-end encryption on all devices",
+    "description": "Foooter for the list of the account's List Devices"
+  },
+  "icu:Preferences--LinkedDevices--LearnMoreDialog--title": {
+    "messageformat": "Signal on a linked device",
+    "description": "Title on dialog telling user more about linked devices"
+  },
+  "icu:Preferences--LinkedDevices--LearnMoreDialog--bullet1": {
+    "messageformat": "All messaging on linked devices is private",
+    "description": "First description bullet on dialog telling user more about linked devices"
+  },
+  "icu:Preferences--LinkedDevices--LearnMoreDialog--bullet2": {
+    "messageformat": "Signal messages are synchronized with Signal on your desktop after it is linked.",
+    "description": "Second description bullet on dialog telling user more about linked devices"
+  },
+  "icu:Preferences--LinkedDevices--LearnMoreDialog--bullet3": {
+    "messageformat": "On your other device, visit <linkToSignal>signal.org/download</linkToSignal> to install Signal",
+    "description": "Third description bullet on dialog telling user more about linked devices"
+  },
+  "icu:Preferences--LinkedDevices--EditDeviceNameDialog--title": {
+    "messageformat": "Edit device name",
+    "description": "Title of the dialog shown when the user chooses to rename one of their devices"
+  },
+  "icu:Preferences--LinkedDevices--ConfirmUnlinkDialog--title": {
+    "messageformat": "Unlink \"{name}\"",
+    "description": "Title of the dialog shown when the user chooses to remove one of their devices"
+  },
+  "icu:Preferences--LinkedDevices--ConfirmUnlinkDialog--description": {
+    "messageformat": "This device will no longer be able to send or receive messages if it is unlinked.",
+    "description": "Description of the dialog shown when the user chooses to remove one of their devices"
+  },
+  "icu:Preferences--LinkedDevices--ConfirmUnlinkDialog--unlinkButton": {
+    "messageformat": "Unlink",
+    "description": "Button to unlink device, shown on the dialog to confirm the unlink"
+  },
+  "icu:Preferences--LinkedDevices--ScanQRCodeDialog--title": {
+    "messageformat": "Scan QR code",
+    "description": "Title of dialog shown to allow the user to scan the QR code on their candidate linked device"
+  },
+  "icu:Preferences--LinkedDevices--ScanQRCodeDialog--description": {
+    "messageformat": "Scan the QR code displayed on the device to link",
+    "description": "Description for dialog shown to allow the user to scan the QR code on their candidate linked device"
+  },
+  "icu:Preferences--LinkedDevices--ScanQRCodeDialog--ErrorDialog--title": {
+    "messageformat": "Linking device failed",
+    "description": "Title of dialog shown when we can't scan QR code"
+  },
+  "icu:Preferences--LinkedDevices--ScanQRCodeDialog--ErrorDialog--description": {
+    "messageformat": "Make sure you are on the latest version of Signal, and scanning a QR code from within Signal and not another app.",
+    "description": "Description for dialog shown when we can't scan QR code"
+  },
+  "icu:Preferences--LinkedDevices--ScanQRCodeDialog--ErrorDialog--retry-button": {
+    "messageformat": "Retry",
+    "description": "Retry button on dialog shown when we can't scan QR code"
+  },
+  "icu:Preferences--LinkedDevices--ChooseTransferMessageDialog--title": {
+    "messageformat": "Finish linking",
+    "description": "Title of progress shown while transferring messages"
+  },
+  "icu:Preferences--LinkedDevices--ChooseTransferMessageDialog--linkNSync--title": {
+    "messageformat": "Transfer Message History",
+    "description": "Title of the link option where message history is transferred to the new device"
+  },
+  "icu:Preferences--LinkedDevices--ChooseTransferMessageDialog--linkNSync--description": {
+    "messageformat": "Transfer your text messages and your last 45 days of media",
+    "description": "Description of the link option where message history is transferred to the new device"
+  },
+  "icu:Preferences--LinkedDevices--ChooseTransferMessageDialog--doNotTransfer--title": {
+    "messageformat": "Don't transfer",
+    "description": "Title of the link option where message history is NOT transferred to the new device"
+  },
+  "icu:Preferences--LinkedDevices--ChooseTransferMessageDialog--doNotTransfer--description": {
+    "messageformat": "No old messages or media will be transferred to your linked device",
+    "description": "Description of the link option where message history is NOT transferred to the new device"
+  },
+  "icu:Preferences--LinkedDevices--TransferringMessagesDialog--title": {
+    "messageformat": "Syncing messages...",
+    "description": "Title of progress shown while transferring messages"
+  },
+  "icu:Preferences--LinkedDevices--TransferringMessagesDialog--progress": {
+    "messageformat": "{percentage, number, percent} complete",
+    "description": "Label shown beneath animated progress bar showing progress"
+  },
+  "icu:Preferences--LinkedDevices--TransferringMessagesDialog--do-not-close": {
+    "messageformat": "Do not close Signal",
+    "description": "Warning shown while export is happening - closing Signal would interrupt the process"
+  },
+  "icu:Preferences--LinkedDevices--LinkingDeviceDialog--title": {
+    "messageformat": "Linking device",
+    "description": "Title of progress shown while transferring messages"
+  },
+  "icu:Preferences--LinkedDevices--LinkingDeviceDialog--progress": {
+    "messageformat": "Your device is being linked...",
+    "description": "Label shown beneath animated progress bar showing progress"
+  },
+  "icu:Preferences--LinkedDevices--GenericErrorDialog--title": {
+    "messageformat": "Linking device failed",
+    "description": "Title of dialog shown when something unknown goes wrong during the device link process"
+  },
+  "icu:Preferences--LinkedDevices--GenericErrorDialog--description": {
+    "messageformat": "Something went wrong! Please ensure that both devices are connected to the internet and try again.",
+    "description": "Description text on dialog shown when something unknown goes wrong during the device link process"
+  },
+  "icu:Preferences--LinkedDevices--GenericErrorDialog--contact-support": {
+    "messageformat": "Contact support",
+    "description": "Contact support button on dialog shown when something unknown goes wrong during the device link process"
+  },
+  "icu:Preferences--LinkedDevices--GenericErrorDialog--learn-more": {
+    "messageformat": "Learn more",
+    "description": "Learn more button on dialog shown when something unknown goes wrong during the device link process"
+  },
+  "icu:Preferences--LinkedDevices--GenericErrorDialog--retry": {
+    "messageformat": "Retry",
+    "description": "Retry button on dialog shown when something unknown goes wrong during the device link process"
+  },
+  "icu:Preferences--LinkedDevices--NotEnoughSpaceDialog--title": {
+    "messageformat": "Not enough storage space",
+    "description": "Title of dialog shown when backup cannot be created to transfer messages during syncing"
+  },
+  "icu:Preferences--LinkedDevices--NotEnoughSpaceDialog--description": {
+    "messageformat": "You don’t have enough free storage space on your device to transfer your messages. Free up some space and try again, or link your device without transferring your messages.",
+    "description": "Description text on dialog shown when backup cannot be created to transfer messages during syncing"
+  },
+  "icu:Preferences--LinkedDevices--FailedToMakeBackupDialog--title": {
+    "messageformat": "Message sync failed",
+    "description": "Title of dialog shown when backup cannot be created to transfer messages during syncing"
+  },
+  "icu:Preferences--LinkedDevices--FailedToMakeBackupDialog--description": {
+    "messageformat": "Your device was successfully linked, but your messages could not be transferred.",
+    "description": "Description text on dialog shown when backup cannot be created to transfer messages during syncing"
+  },
+  "icu:Preferences--LinkedDevices--FailedToMakeBackupDialog--contact-support": {
+    "messageformat": "Contact support",
+    "description": "Contact support button on dialog shown when backup cannot be created to transfer messages during syncing"
+  },
+  "icu:Preferences--LinkedDevices--FailedToMakeBackupDialog--learn-more": {
+    "messageformat": "Learn more",
+    "description": "Learn more button on dialog shown when backup cannot be created to transfer messages during syncing"
+  },
+  "icu:Preferences--LinkedDevices--FailedToMakeBackupDialog--continue": {
+    "messageformat": "Continue",
+    "description": "Continue button on dialog shown when backup cannot be created to transfer messages during syncing"
+  },
+  "icu:Preferences--LinkedDevices--FailedToUploadError--title": {
+    "messageformat": "Message sync failed",
+    "description": "Title of dialog shown when backup was created, but was unable to be uploaded"
+  },
+  "icu:Preferences--LinkedDevices--FailedToUploadError--description": {
+    "messageformat": "Your messages couldn’t be transferred to your linked device. You can try re-linking and transferring again, or continue without transferring your message history.",
+    "description": "Description text on dialog shown when backup was created, but was unable to be uploaded"
+  },
+  "icu:Preferences--LinkedDevices--FailedToUploadError--continue-no-transfer": {
+    "messageformat": "Continue without transferring",
+    "description": "Continue without transferring button on dialog shown when backup was created, but was unable to be uploaded"
+  },
+  "icu:Preferences--LinkedDevices--FailedToUploadError--retry": {
+    "messageformat": "Retry",
+    "description": "Retry button on dialog shown when backup was created, but was unable to be uploaded"
+  },
+  "icu:Preferences--LinkedDevices--ContactSupportDialog--title": {
+    "messageformat": "Include a debug log?",
+    "description": "Title of dialog shown wneh the user chose to contact support"
+  },
+  "icu:Preferences--LinkedDevices--ContactSupportDialog--description": {
+    "messageformat": "Including your debug log helps us diagnose and fix the issue, and does not contain identifying information. This is optional.",
+    "description": "Description text on dialog shown wneh the user chose to contact support"
+  },
+  "icu:Preferences--LinkedDevices--ContactSupportDialog--include-log-checkbox": {
+    "messageformat": "Include debug log",
+    "description": "Checkbox for user to choose whether to include debug log on dialog shown wneh the user chose to contact support"
+  },
+  "icu:Preferences--LinkedDevices--ContactSupportDialog--view": {
+    "messageformat": "View",
+    "description": "View debug log button on dialog shown wneh the user chose to contact support"
+  },
+  "icu:Preferences--LinkedDevices--ContactSupportDialog--no-thanks": {
+    "messageformat": "No thanks",
+    "description": "No thanks button on dialog shown wneh the user chose to contact support"
+  },
+  "icu:Preferences--LinkedDevices--ContactSupportDialog--contact-support": {
+    "messageformat": "Contact support",
+    "description": "Contact support button on dialog shown wneh the user chose to contact support"
   },
   "icu:Preferences--signal-login": {
     "messageformat": "Signal Login",
@@ -11078,6 +11350,10 @@
     "messageformat": "Download attachment",
     "description": "Context menu item to help debugging"
   },
+  "icu:StoryDetailsModal__more-actions": {
+    "messageformat": "More actions",
+    "description": "Accessibility label for the button that opens a menu of actions for a story's details, like copying its timestamp"
+  },
   "icu:StoryViewsNRepliesModal__read-receipts-off": {
     "messageformat": "Enable view receipts to see who’s viewed your stories. Open the Signal app on your mobile device and navigate to Settings > Stories.",
     "description": "Instructions on how to enable read receipts"
@@ -11922,6 +12198,18 @@
     "messageformat": "Address",
     "description": "In the shared contact details view, generic label for a postal address with a custom type but no label"
   },
+  "icu:Quote__unknown-group": {
+    "messageformat": "Unknown group",
+    "description": "Shown after the author's name in a quote of a group message (a private reply) when the group is not found"
+  },
+  "icu:Quote__original-message-and-group-not-found": {
+    "messageformat": "Original message and group not found",
+    "description": "Shown in a quote of a group message (a private reply) when neither the quoted message nor its group is found"
+  },
+  "icu:MessageContextMenu__reply-privately": {
+    "messageformat": "Reply privately",
+    "description": "Shown on the drop-down menu for a message in a group, opens a 1:1 chat with the message's author with a reply to the message"
+  },
   "icu:WhatsNew__modal-title": {
     "messageformat": "What's New",
     "description": "Title for the whats new modal"
@@ -12557,18 +12845,6 @@
     "description": "Release notes for releases that only include bug fixes",
     "ignoreUnused": true
   },
-  "icu:WhatsNew__8.32--0": {
-    "messageformat": "The unread filter is now also supported in message folders and the search interface, so you can easily see what you've been missing.",
-    "description": "(Deleted 2026/10/20) Release notes for 8.32"
-  },
-  "icu:WhatsNew__8.32--1": {
-    "messageformat": "Improved upload reliability under poor network conditions. Thanks, <GH3mmmbulus></GH3mmmbulus>!",
-    "description": "(Deleted 2026/10/20) Release notes for 8.32"
-  },
-  "icu:WhatsNew__8.32--2": {
-    "messageformat": "The \"(N)\" shortcut correctly points to the thumbs down emoji. Thumbs up to <lnicola></lnicola> for the bugfix.",
-    "description": "(Deleted 2026/10/20) Release notes for 8.32"
-  },
   "icu:WhatsNew__8.34--0": {
     "messageformat": "Signal Desktop now supports contact sharing too, so you can maintain eye contact with your computer screen without having to make physical contact with your smartphone.",
     "description": "(Deleted 2026/11/05) Release notes for 8.34"
@@ -12579,6 +12855,10 @@
   },
   "icu:WhatsNew__8.36--0": {
     "messageformat": "Your top stickers now have a place to remain stuck. Add any sticker pack to your list of favorites so it's easy to stick with the ones you love.",
-    "description": "Release notes for 8.36"
+    "description": "(Deleted 2026/11/19) Release notes for 8.36"
+  },
+  "icu:WhatsNew__8.36--0--fix": {
+    "messageformat": "Your top stickers now have a place to remain stuck. Add any sticker to your list of favorites so it's easy to stick with the ones you love.",
+    "description": "(Deleted 2026/11/19) Release notes for 8.36"
   }
 }

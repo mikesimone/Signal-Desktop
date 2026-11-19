@@ -28,22 +28,46 @@ const SUPPORTED_IMAGE_MIME_TYPES: MIMETypeSupportMap = {
 export const isImageTypeSupported = (mimeType: MIME.MIMEType): boolean =>
   SUPPORTED_IMAGE_MIME_TYPES[mimeType] === true;
 
-const SUPPORTED_VIDEO_MIME_TYPES: MIMETypeSupportMap = {
+const PLAYABLE_VIDEO_MIME_TYPES = {
   'video/mp4': true,
   'video/ogg': true,
   'video/webm': true,
-};
+} as const satisfies MIMETypeSupportMap;
+
+const TRANSCODABLE_VIDEO_MIME_TYPES = {
+  ...PLAYABLE_VIDEO_MIME_TYPES,
+  'video/quicktime': true,
+} as const satisfies MIMETypeSupportMap;
+
+export type TranscodableVideoMIMEType =
+  keyof typeof TRANSCODABLE_VIDEO_MIME_TYPES;
+
+const isMIMETypeSupported = (
+  map: MIMETypeSupportMap,
+  mimeType: MIME.MIMEType
+): boolean => map[mimeType] === true;
 
 // See: https://www.chromium.org/audio-video
-export const isVideoTypeSupported = (mimeType: MIME.MIMEType): boolean =>
-  SUPPORTED_VIDEO_MIME_TYPES[mimeType] === true;
+export const isVideoTypePlayable = (mimeType: MIME.MIMEType): boolean =>
+  isMIMETypeSupported(PLAYABLE_VIDEO_MIME_TYPES, mimeType);
+
+export const isVideoTypeTranscodable = (mimeType: MIME.MIMEType): boolean =>
+  isMIMETypeSupported(TRANSCODABLE_VIDEO_MIME_TYPES, mimeType);
 
 export const getSupportedImageTypes = (): Array<MIME.MIMEType> => {
   const keys = Object.keys(SUPPORTED_IMAGE_MIME_TYPES) as Array<MIME.MIMEType>;
   return keys.filter(contentType => SUPPORTED_IMAGE_MIME_TYPES[contentType]);
 };
 
-export const getSupportedVideoTypes = (): Array<MIME.MIMEType> => {
-  const keys = Object.keys(SUPPORTED_VIDEO_MIME_TYPES) as Array<MIME.MIMEType>;
-  return keys.filter(contentType => SUPPORTED_VIDEO_MIME_TYPES[contentType]);
+export const getTranscodableVideoTypes = (): Array<MIME.MIMEType> => {
+  const keys = Object.keys(
+    TRANSCODABLE_VIDEO_MIME_TYPES
+  ) as Array<MIME.MIMEType>;
+  return keys.filter(contentType => isVideoTypeTranscodable(contentType));
 };
+
+export const TRANSCODABLE_VIDEO_EXTENSIONS = [
+  // On Linux .mov extension is not respected through video/quicktime "accept"
+  // attribute of <input/>
+  '.mov',
+];
