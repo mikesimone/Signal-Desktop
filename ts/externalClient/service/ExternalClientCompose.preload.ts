@@ -12,7 +12,7 @@ import * as Errors from '../../types/errors.std.ts';
 import { DurationInSeconds } from '../../util/durations/index.std.ts';
 import { parseAndFormatPhoneNumber } from '../../util/libphonenumberInstance.std.ts';
 import { lookupConversationWithoutServiceId } from '../../util/lookupConversationWithoutServiceId.preload.ts';
-import { getUsernameFromSearch } from '../../util/Username.dom.ts';
+import { getUsernameFromSearch } from '../../util/Username.std.ts';
 import { getAvatarVersion, toConversationDTO } from '../conversationDto.std.ts';
 import type { ServiceResultType } from '../hostTypes.std.ts';
 import type {

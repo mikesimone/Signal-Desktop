@@ -5,7 +5,7 @@ import { createLogger } from '../../logging/log.std.ts';
 import type { MessageAttributesType } from '../../model-types.std.ts';
 import type { ConversationModel } from '../../models/conversations.preload.ts';
 import { isMissingRequiredProfileSharing } from '../../state/selectors/conversations.dom.ts';
-import { ToastType } from '../../types/Toast.dom.tsx';
+import { ToastType } from '../../types/Toast.std.ts';
 import {
   getAllServiceIds,
   getUntrustedRecipients,
