@@ -147,6 +147,12 @@ import { trackHeapSize } from '../ts/util/oomNotifier.node.ts';
 import { sendDummyKeystroke } from './WindowsNotifications.main.ts';
 import { maybeMigrateSafeStorageBackend } from '../ts/util/linuxPasswordStoreMigration.main.ts';
 import { ExternalClientMain } from '../ts/main/externalClientMain.main.ts';
+// BACKCHANNEL: the helper and its window in the Backchannel app.
+import {
+  backchannelOwnsBadge,
+  showBackchannelWindow,
+  startBackchannelApp,
+} from '../ts/backchannel/app.main.ts';
 
 const { chmod, realpath, writeFile } = fsExtra;
 const { get, pick, isNumber, isBoolean, some, debounce, noop } = lodash;
@@ -2542,6 +2548,9 @@ app.on('ready', async () => {
     getI18n: () => getResolvedMessagesLocale().i18n,
   });
   drop(externalClientMain.refresh());
+  // BACKCHANNEL: start the helper and its window (no-op outside the
+  // Backchannel app).
+  startBackchannelApp({ userDataPath, getMainWindow });
 
   ready = true;
 
@@ -2797,6 +2806,12 @@ app.on('activate', () => {
     return;
   }
 
+  // BACKCHANNEL: once the Backchannel window is the main one, the Dock icon
+  // brings it back instead of Signal's.
+  if (showBackchannelWindow()) {
+    return;
+  }
+
   // On OS X it's common to re-create a window in the app when the
   // dock icon is clicked and there are no other windows open.
   if (mainWindow) {
@@ -2837,6 +2852,11 @@ if (!app.isDefaultProtocolClient('signalcaptcha')) {
 }
 
 ipc.on('set-badge-count', (_event: Electron.Event, badgeCount: number) => {
+  // BACKCHANNEL: the Backchannel page sets the badge while it's the main
+  // window.
+  if (backchannelOwnsBadge()) {
+    return;
+  }
   app.setBadgeCount(badgeCount);
 });
 
