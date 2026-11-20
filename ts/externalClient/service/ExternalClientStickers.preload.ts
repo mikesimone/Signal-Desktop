@@ -172,7 +172,7 @@ export async function sendSticker({
   await model.sendStickerMessage(
     packId,
     stickerId,
-    quoted ? { quote: await makeQuote(quoted) } : undefined
+    quoted ? { quote: await makeQuote(quoted, model.id) } : undefined
   );
   return { ok: true, value: {} };
 }

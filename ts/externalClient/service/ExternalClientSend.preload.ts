@@ -224,7 +224,7 @@ export async function sendText({
         body,
         ...(bodyRanges.length > 0 ? { bodyRanges } : {}),
         attachments: prepared?.attachments ?? [],
-        quote: quoted ? await makeQuote(quoted) : undefined,
+        quote: quoted ? await makeQuote(quoted, model.id) : undefined,
         ...(preview.length > 0 ? { preview } : {}),
       },
       {

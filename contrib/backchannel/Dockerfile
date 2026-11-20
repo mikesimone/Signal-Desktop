@@ -27,6 +27,9 @@ RUN pnpm install --frozen-lockfile
 # The build's 90-day expiry counts from SOURCE_DATE_EPOCH, which upstream
 # takes from git; the image has no .git, so count from the build instead.
 RUN SOURCE_DATE_EPOCH="$(date +%s)" pnpm run generate
+# Type-check first: an upstream merge that changes a signature the bridge
+# calls (makeQuote, 2026-11-18) otherwise builds fine and fails at runtime.
+RUN pnpm run check:types
 RUN pnpm run build:release --linux dir --publish=never
 
 FROM debian:bookworm-slim
