@@ -424,6 +424,25 @@ function toQuote(
     mentions: quote.isViewOnce ? [] : toMentions(quote, context),
     formatting: quote.isViewOnce ? [] : toFormatting(quote),
     attachment: quote.isViewOnce ? null : toQuoteAttachment(quote),
+    group: toQuoteGroup(quote, context),
+  };
+}
+
+// As Signal's quote shows a private reply: "Author · Group".
+function toQuoteGroup(
+  quote: NonNullable<MessageSourceType['quote']>,
+  context: MessageDtoContextType
+): QuoteDTO['group'] {
+  if (!quote.groupId && !quote.isPrivateReplyGroupUnknown) {
+    return null;
+  }
+  // The conversation lookup takes a group id as well as a service id.
+  const conversationId = quote.groupId
+    ? context.resolveConversationId(quote.groupId)
+    : null;
+  return {
+    conversationId,
+    title: conversationId ? context.getTitle(conversationId) : null,
   };
 }
 

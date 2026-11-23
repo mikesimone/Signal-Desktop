@@ -22,10 +22,17 @@ import type { Emoji } from '../../axo/emoji.std.ts';
 
 const ALICE_ACI = '00000000-0000-4000-8000-00000000000a' as AciString;
 const BOB_ACI = '00000000-0000-4000-8000-00000000000b' as AciString;
+const GROUP_ID = 'Z3JvdXAtaWQ=';
 
 const context: MessageDtoContextType = {
   resolveConversationId: serviceId =>
-    ({ [ALICE_ACI]: 'conv-alice', [BOB_ACI]: 'conv-bob' })[serviceId] ?? null,
+    (
+      ({
+        [ALICE_ACI]: 'conv-alice',
+        [BOB_ACI]: 'conv-bob',
+        [GROUP_ID]: 'conv-group',
+      }) as Record<string, string>
+    )[serviceId] ?? null,
   ourConversationId: 'conv-me',
   now: 1_000_000,
   getSendStatus: () => 'delivered',
@@ -283,7 +290,36 @@ describe('externalClient/messageDto', () => {
       ],
       formatting: [{ start: 2, length: 7, style: 'bold' }],
       attachment: null,
+      group: null,
     });
+  });
+
+  it("names a private reply's group, as Signal 8.39's quote does", () => {
+    const quoteOf = (extra: object) =>
+      toMessageDTO(
+        {
+          ...incoming,
+          quote: {
+            id: 42,
+            authorAci: BOB_ACI,
+            text: 'in the group',
+            attachments: [],
+            isViewOnce: false,
+            referencedMessageNotFound: false,
+            ...extra,
+          },
+        } as MessageSourceType,
+        context
+      )?.quote?.group;
+    assert.deepEqual(quoteOf({ groupId: GROUP_ID }), {
+      conversationId: 'conv-group',
+      title: 'title of conv-group',
+    });
+    assert.deepEqual(quoteOf({ isPrivateReplyGroupUnknown: true }), {
+      conversationId: null,
+      title: null,
+    });
+    assert.isNull(quoteOf({}));
   });
 
   it("describes a quoted attachment and its thumbnail, as Signal's quote does", () => {

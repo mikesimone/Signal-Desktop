@@ -1581,10 +1581,23 @@ function renderQuote(quote, m) {
   } else {
     text = el('span', 'quote-text', (a ? quoteLabel(a) : null) || 'Attachment');
   }
-  box.append(
-    nameLine(nameOf(quote.authorConversationId), author, 'quote-author'),
-    text
+  const authorLine = nameLine(
+    nameOf(quote.authorConversationId),
+    author,
+    'quote-author'
   );
+  // A private reply to a group message names the group, as Signal 8.39.
+  if (quote.group) {
+    const group = conversations.get(quote.group.conversationId);
+    authorLine.append(
+      el(
+        'span',
+        'quote-group',
+        `· ${group ? displayTitle(group) : (quote.group.title ?? 'Unknown group')}`
+      )
+    );
+  }
+  box.append(authorLine, text);
   if (a?.hasThumbnail && m) {
     addQuoteThumb(
       box,
@@ -1595,7 +1608,7 @@ function renderQuote(quote, m) {
       })}`
     );
   }
-  if (link) {
+  if (link && !quote.group) {
     const group = conversations.get(link.groupConversationId);
     box.append(
       el(
@@ -6148,6 +6161,12 @@ $('immich').addEventListener('click', e => {
 // Newest first. As Backchannel Android for now: every entry since the
 // beginning shows, and the ones since your last look are marked New.
 const WHATS_NEW = [
+  [
+    '2026-11-23',
+    [
+      'A private reply to a group message names the group in its quote, as Signal 8.39 does, whichever phone or computer sent it.',
+    ],
+  ],
   [
     '2026-11-17',
     [

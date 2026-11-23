@@ -9,7 +9,7 @@ Status: **done**, **partial**, **missing**, or **different** (on purpose).
 A weekly check compares new Signal releases against this list and adds
 what they bring.
 
-Last reviewed: 2026-11-16, against Signal 8.38.0-alpha.1 in fork main (upstream main has nothing newer). New since 8.37: favorite stickers (8.36 release notes); local backups are always on (flag removed, no page change).
+Last reviewed: 2026-11-23, against Signal 8.39.0-alpha.1 in fork main. New since 8.38: private replies to group messages (the quote carries the group; F64), Sticker Manager hide for received packs (behind Signal's remote flag), 8.37 release notes are bug fixes only.
 
 ## Chat list
 
@@ -44,6 +44,7 @@ Last reviewed: 2026-11-16, against Signal 8.38.0-alpha.1 in fork main (upstream 
 | Long messages                                            | done      |                                                      |
 | Polls (vote, end, create, send to many chats)            | done      | F6                                                   |
 | Stickers (view and send)                                 | done      | F10                                                  |
+| Sticker manager (add, remove, hide received packs)       | missing   | Signal's Stickers screen; hide is behind a remote flag |
 | Sticker favorites                                        | done      | F61: Favorites tab; right-click a sticker or a sticker message's menu; shown only while Signal's remote flag is on |
 | Link previews (view)                                     | done      |                                                      |
 | Mark read as you read, clears "mark as unread"           | done      | F13                                                  |
@@ -57,7 +58,7 @@ Last reviewed: 2026-11-16, against Signal 8.38.0-alpha.1 in fork main (upstream 
 | Edit history                                             | done      | F39                                                  |
 | Chat header: details, members, safety number             | partial   | F16: details and members; safety number missing      |
 | Contact card from a group member's photo or name         | done      | F23: About and Message                               |
-| Reply privately to a group message                       | different | F23: beyond Signal; links both ways on this page     |
+| Reply privately to a group message                       | done      | F23 (before Signal had it), F64: the quote names the group, from any device |
 | Per-chat settings: timer, mute, block, colors, nickname  | partial   | F15, F46: timer, mute, block, nickname; colors missing |
 | Media, files, audio and links gallery                    | done      | F31: viewer steps within one message                 |
 | Search inside a chat                                     | done      | F17                                                  |

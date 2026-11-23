@@ -1976,6 +1976,12 @@ export type QuoteDTO = Readonly<{
   // Fork addition: the quoted message's first attachment, as Signal shows
   // it in the quote (a thumbnail, or the kind of file).
   attachment: QuoteAttachmentDTO | null;
+  // Fork addition: a private reply's group (Signal 8.39 sends it with the
+  // quote): the group chat, or null when this device doesn't have it.
+  group: Readonly<{
+    conversationId: string | null;
+    title: string | null;
+  }> | null;
 }>;
 
 export type QuoteAttachmentDTO = Readonly<{

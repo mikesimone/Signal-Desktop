@@ -507,6 +507,14 @@ button {
   color: inherit;
 }
 
+/* A private reply's group, after the author (Signal 8.39). */
+.quote-group {
+  font-size: 13px;
+  opacity: 0.8;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .pill {
   display: inline-flex;
   align-items: center;

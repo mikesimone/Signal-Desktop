@@ -1416,3 +1416,16 @@ WHY: Mike, 2026-11-17: "No matter what the data retention policy is on
 someone's BC settings (like delete messages over six months old), starred
 messages should never be deleted without unstarring them first." A feature,
 not a bugfix.
+
+## F64. Fork addition: a private reply's quote names the group
+
+DECISION: Signal 8.39 sends a private reply to a group message with the
+group in the quote (DataMessage.Quote.groupId) and shows "Author · Group"
+(or "Unknown group") in it. The message DTO's quote gains `group`
+({conversationId, title}, conversationId null when this device doesn't
+have the group), and the page shows it after the author. This replaces
+F23's "Replied privately from …" line when the quote carries the group,
+so private replies sent from phones are labelled too.
+
+WHY: Mike's standing rule (2026-10-13) that the page keeps up with Signal
+Desktop; found by the weekly parity check on 2026-11-23.
