@@ -6164,6 +6164,7 @@ const WHATS_NEW = [
   [
     '2026-11-23',
     [
+      "Manage your sticker packs, as in Signal's Stickers screen: the ⚙ at the end of the sticker picker adds or removes packs, including Signal's artist series and packs you got in messages.",
       'A private reply to a group message names the group in its quote, as Signal 8.39 does, whichever phone or computer sent it.',
     ],
   ],
@@ -7122,6 +7123,159 @@ function openStickerPreview(st, onPick) {
   send.focus();
 }
 
+// Signal's Stickers screen (decision F65): installed packs, the Signal
+// artist series and packs received in messages, to add, remove or hide.
+async function openStickerManager() {
+  closePopovers();
+  document.querySelector('.sticker-manager')?.remove();
+  const overlay = el('div', 'sticker-manager');
+  overlay.setAttribute('role', 'dialog');
+  overlay.setAttribute('aria-label', 'Stickers');
+  const panel = el('div', 'sticker-manager-panel');
+  const head = el('div', 'sticker-manager-head');
+  const closeButton = el('button', 'icon-button');
+  closeButton.type = 'button';
+  closeButton.title = 'Close';
+  closeButton.setAttribute('aria-label', 'Close');
+  closeButton.append(icon('close'));
+  head.append(el('h2', null, 'Stickers'), closeButton);
+  const list = el('div', 'sticker-manager-list');
+  panel.append(head, list);
+  overlay.append(panel);
+  const close = () => {
+    overlay.remove();
+    document.removeEventListener('keydown', onKey, true);
+  };
+  const onKey = ev => {
+    if (ev.key === 'Escape') {
+      ev.stopPropagation();
+      close();
+    }
+  };
+  closeButton.addEventListener('click', close);
+  overlay.addEventListener('click', ev => {
+    if (ev.target === overlay) {
+      close();
+    }
+  });
+  document.addEventListener('keydown', onKey, true);
+  document.body.append(overlay);
+
+  const change = async (pack, action, done) => {
+    try {
+      await api('api/stickerPack', { packId: pack.id, action });
+    } catch (error) {
+      toast(`Not changed (${error.code ?? error.message}).`);
+      return;
+    }
+    toast(done);
+    // Signal applies it in a moment; then show the lists again.
+    setTimeout(render, 600);
+  };
+  const row = (pack, { hidable = false } = {}) => {
+    const item = el('div', 'sticker-manager-row');
+    if (pack.coverStickerId !== null) {
+      const cover = stickerImage(pack.id, pack.coverStickerId, 48, '');
+      // A cover Signal hasn't fetched yet: leave the space empty.
+      cover.addEventListener('error', () => {
+        cover.style.visibility = 'hidden';
+      });
+      item.append(cover);
+    } else {
+      item.append(el('span', 'sticker-manager-nocover'));
+    }
+    const text = el('div', 'sticker-manager-text');
+    text.append(
+      el('span', 'sticker-manager-title', pack.title || 'Sticker pack'),
+      el(
+        'span',
+        'sub',
+        `${pack.author ? `${pack.author} · ` : ''}${pack.stickerCount} sticker${pack.stickerCount === 1 ? '' : 's'}`
+      )
+    );
+    item.append(text);
+    const button = (label, action, done, confirmText) => {
+      const b = el('button', 'setting-button', label);
+      b.type = 'button';
+      b.addEventListener('click', () => {
+        if (confirmText && !window.confirm(confirmText)) {
+          return;
+        }
+        change(pack, action, done);
+      });
+      item.append(b);
+    };
+    if (pack.installed) {
+      button(
+        'Remove',
+        'uninstall',
+        'Sticker pack removed.',
+        !pack.blessed
+          ? "Remove this sticker pack? You can't add it again without a link or sticker message."
+          : null
+      );
+    } else {
+      button('Add', 'install', 'Sticker pack added.');
+    }
+    if (hidable) {
+      button(
+        'Hide',
+        'hide',
+        'Sticker pack hidden.',
+        "Hide this sticker pack? You can't add it again without a link or sticker message."
+      );
+    }
+    return item;
+  };
+  const section = (title, packs, empty, options) => {
+    list.append(el('h3', 'sticker-manager-section', title));
+    if (packs.length === 0) {
+      list.append(el('p', 'sub', empty));
+    }
+    for (const pack of packs) {
+      list.append(row(pack, options));
+    }
+  };
+  async function render() {
+    if (!overlay.isConnected) {
+      return;
+    }
+    let data;
+    try {
+      data = await api('api/stickerManager');
+    } catch (error) {
+      list.replaceChildren(
+        el(
+          'p',
+          'sub',
+          `Couldn't load stickers (${error.code ?? error.message}).`
+        )
+      );
+      return;
+    }
+    list.replaceChildren();
+    const blessed = new Set(data.blessed.map(p => p.id));
+    section(
+      'Installed stickers',
+      data.installed.map(p => ({ ...p, blessed: blessed.has(p.id) })),
+      'No stickers installed.'
+    );
+    section(
+      'Signal artist series',
+      data.blessed.map(p => ({ ...p, blessed: true })),
+      'No Signal artist series sticker packs.'
+    );
+    section(
+      'Stickers you received',
+      data.received,
+      'Stickers from messages you receive will show up here.',
+      { hidable: data.hidingEnabled }
+    );
+  }
+  list.append(el('p', 'sub', 'Loading…'));
+  await render();
+}
+
 async function openStickerPicker(anchorElement, onPick = sendSticker) {
   const anchor = anchorElement.getBoundingClientRect();
   let data;
@@ -7256,15 +7410,28 @@ async function openStickerPicker(anchorElement, onPick = sendSticker) {
     });
     tabs.append(tab);
   }
+  // Signal's sticker picker has the Stickers screen at the end (F65).
+  const manage = el('button', 'sticker-tab sticker-manage');
+  manage.type = 'button';
+  manage.title = 'Manage stickers';
+  manage.setAttribute('aria-label', 'Manage stickers');
+  manage.append(icon('settings'));
+  manage.addEventListener('click', ev => {
+    ev.stopPropagation();
+    openStickerManager();
+  });
+  tabs.append(manage);
 
   if (sources.length === 0) {
-    picker.replaceChildren(
-      el(
-        'div',
-        'emoji-none',
-        'No sticker packs installed. Add some in Signal (Stickers, then the + button).'
-      )
-    );
+    const none = el('div', 'emoji-none', 'No sticker packs installed. ');
+    const add = el('button', 'link-button', 'Add some');
+    add.type = 'button';
+    add.addEventListener('click', ev => {
+      ev.stopPropagation();
+      openStickerManager();
+    });
+    none.append(add);
+    picker.replaceChildren(none);
   } else {
     picker.replaceChildren(body, tabs);
     show(sources.find(source => source.key === stickerTab) ?? sources[0]);

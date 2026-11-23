@@ -1494,6 +1494,52 @@ describe('backchannel helper', () => {
     assert.equal(reply.params.quoteMessageId, 'm1');
   });
 
+  it("manages sticker packs as Signal's Stickers screen does", async () => {
+    bridge.stickerManager.packs = [
+      {
+        id: 'aa',
+        title: 'Mine',
+        author: 'Me',
+        coverStickerId: 0,
+        stickerCount: 3,
+        installed: true,
+      },
+      {
+        id: 'bb',
+        title: 'Got',
+        author: '',
+        coverStickerId: null,
+        stickerCount: 1,
+        installed: false,
+      },
+    ];
+    const get = async () =>
+      JSON.parse(
+        (await http(port, { path: `/${helper.token}/api/stickerManager` })).text
+      );
+    let data = await get();
+    assert.deepEqual(
+      [data.installed.map(p => p.id), data.received.map(p => p.id)],
+      [['aa'], ['bb']]
+    );
+    const change = (packId, action) =>
+      http(port, {
+        method: 'POST',
+        path: `/${helper.token}/api/stickerPack`,
+        headers: json,
+        body: { packId, action },
+      });
+    assert.equal((await change('bb', 'install')).status, 200);
+    assert.equal((await change('aa', 'hide')).status, 200);
+    data = await get();
+    assert.deepEqual(
+      data.installed.map(p => p.id),
+      ['bb']
+    );
+    assert.deepEqual(data.received, []);
+    assert.equal((await change('zz', 'install')).status, 404);
+  });
+
   it('keeps starred messages in the helper', async () => {
     const kept = makeMessage(alice.id, { body: 'keep this' });
     bridge.messages.set(alice.id, [

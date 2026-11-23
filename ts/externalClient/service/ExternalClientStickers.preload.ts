@@ -3,11 +3,17 @@
 
 import { createLogger } from '../../logging/log.std.ts';
 import {
+  getBlessedStickerPacks,
   getInstalledFavoriteStickers,
   getInstalledStickerPacks,
+  getReceivedStickerPacks,
   getRecentStickers,
 } from '../../state/selectors/stickers.std.ts';
-import { isFavoriteStickersEnabled } from '../../util/stickers.preload.ts';
+import type { StickerPackType } from '../../state/ducks/stickers.preload.ts';
+import {
+  isFavoriteStickersEnabled,
+  isHidingStickerPacksEnabled,
+} from '../../util/stickers.preload.ts';
 import * as Errors from '../../types/errors.std.ts';
 import { getSticker, getStickerPack } from '../../types/Stickers.preload.ts';
 import { makeQuote } from '../../util/makeQuote.preload.ts';
@@ -20,8 +26,11 @@ import type {
   AttachmentsGetThumbnailResultType,
   MessagesSendStickerParamsType,
   StickersGetImageParamsType,
+  StickerPackSummaryDTO,
+  StickersGetManagerResultType,
   StickersGetPacksResultType,
   StickersSetFavoriteParamsType,
+  StickersUpdatePackParamsType,
 } from '../protocol.std.ts';
 import { ErrorCode } from '../protocol.std.ts';
 import { renderImage } from './ExternalClientExtras.preload.ts';
@@ -88,6 +97,56 @@ export function setStickerFavorite({
   return { ok: true, value: {} };
 }
 
+// Decision F65: Signal's Stickers screen (StickerManager).
+function toPackSummary(pack: StickerPackType): StickerPackSummaryDTO {
+  return {
+    id: pack.id,
+    title: pack.title,
+    author: pack.author,
+    coverStickerId: pack.cover?.id ?? null,
+    stickerCount: pack.stickerCount || pack.stickers.length,
+    installed: pack.status === 'installed',
+  };
+}
+
+export function getStickerManager(): ServiceResultType {
+  const state = window.reduxStore.getState();
+  const value: StickersGetManagerResultType = {
+    installed: getInstalledStickerPacks(state).map(toPackSummary),
+    blessed: getBlessedStickerPacks(state).map(toPackSummary),
+    received: getReceivedStickerPacks(state)
+      .filter(pack => pack.status !== 'installed')
+      .map(toPackSummary),
+    hidingEnabled: isHidingStickerPacksEnabled(),
+  };
+  return { ok: true, value };
+}
+
+// Add, Remove, or (for a received pack, where Signal offers it) Hide, as
+// the Stickers screen does them; each syncs to linked devices as there.
+export function updateStickerPack({
+  packId,
+  action,
+}: StickersUpdatePackParamsType): ServiceResultType {
+  const pack = getStickerPack(packId);
+  if (!pack || pack.status === 'known' || pack.status === 'pending') {
+    return notFound;
+  }
+  const { stickers } = window.reduxActions;
+  if (action === 'install') {
+    stickers.installStickerPack(packId, pack.key, { actionSource: 'ui' });
+  } else if (action === 'uninstall') {
+    stickers.uninstallStickerPack(packId, pack.key, { actionSource: 'ui' });
+  } else {
+    const state = window.reduxStore.getState();
+    if (!isHidingStickerPacksEnabled() || state.stickers.blessedPacks[packId]) {
+      return { ok: false, code: ErrorCode.PreconditionFailed };
+    }
+    stickers.markStickerPackAsHidden(packId, true);
+  }
+  return { ok: true, value: {} };
+}
+
 // Only stickers the picker offers: from installed packs, or recently used.
 // A pack's cover may be a picture of its own, shown only as its tab.
 function findPickerSticker(
@@ -109,6 +168,8 @@ function findPickerSticker(
   const state = window.reduxStore.getState();
   const offered =
     pack.status === 'installed' ||
+    // The Stickers screen shows each pack's cover (decision F65).
+    (allowCover && pack.coverStickerId === stickerId) ||
     state.stickers.recentStickers.some(
       recent => recent.packId === packId && recent.stickerId === stickerId
     ) ||

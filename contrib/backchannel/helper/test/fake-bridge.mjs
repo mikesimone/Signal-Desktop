@@ -113,6 +113,9 @@ export class FakeBridge {
   // conversationId -> [{ conversationId, author }]
   members = new Map();
   stickers = { packs: [], recents: [], favorites: [], favoritesEnabled: true };
+  // Signal's Stickers screen (decision F65): each pack is a summary with
+  // `installed`; `blessed` marks the artist series, `hidden` a hidden pack.
+  stickerManager = { packs: [], hidingEnabled: true };
   gifs = [];
   gifFiles = new Map();
   // conversationId -> ConversationDetailsDTO
@@ -427,6 +430,34 @@ export class FakeBridge {
               },
             ]
           : others;
+        this.#reply(session, id, {});
+        return;
+      }
+      case 'stickers.getManager': {
+        const shown = this.stickerManager.packs.filter(p => !p.hidden);
+        const summary = ({ blessed, hidden, ...p }) => p;
+        this.#reply(session, id, {
+          installed: shown.filter(p => p.installed).map(summary),
+          blessed: shown.filter(p => p.blessed).map(summary),
+          received: shown.filter(p => !p.blessed && !p.installed).map(summary),
+          hidingEnabled: this.stickerManager.hidingEnabled,
+        });
+        return;
+      }
+      case 'stickers.updatePack': {
+        const pack = this.stickerManager.packs.find(
+          p => p.id === params.packId
+        );
+        if (!pack) {
+          this.#error(session, id, 'NOT_FOUND', undefined);
+          return;
+        }
+        if (params.action === 'hide') {
+          pack.installed = false;
+          pack.hidden = true;
+        } else {
+          pack.installed = params.action === 'install';
+        }
         this.#reply(session, id, {});
         return;
       }

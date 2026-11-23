@@ -668,6 +668,20 @@ export function createWebServer({
       sendJson(res, 200, await bridge.call('stickers.getPacks', {}));
       return;
     }
+    // Signal's Stickers screen (decision F65).
+    if (req.method === 'GET' && route === 'api/stickerManager') {
+      sendJson(res, 200, await bridge.call('stickers.getManager', {}));
+      return;
+    }
+    if (req.method === 'POST' && route === 'api/stickerPack') {
+      const { packId, action } = await readJson(req);
+      sendJson(
+        res,
+        200,
+        await bridge.call('stickers.updatePack', { packId, action })
+      );
+      return;
+    }
     // Signal's favorite stickers (decision F61).
     if (req.method === 'POST' && route === 'api/stickerFavorite') {
       const { packId, stickerId, favorite } = await readJson(req);

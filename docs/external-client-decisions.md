@@ -1429,3 +1429,22 @@ so private replies sent from phones are labelled too.
 
 WHY: Mike's standing rule (2026-10-13) that the page keeps up with Signal
 Desktop; found by the weekly parity check on 2026-11-23.
+
+## F65. Fork addition: Signal's Stickers screen
+
+DECISION: The page gets Signal's sticker manager: a ⚙ at the end of the
+sticker picker (or "Add some" when no pack is installed) opens Installed
+stickers (Remove), Signal artist series (Add/Remove) and Stickers you
+received (Add, and Hide where Signal 8.39 offers it behind its
+desktop.stickerPackHiding flag), with Signal's confirmation wording. Two
+bridge methods under the existing messages.send capability, so no Allow
+prompt: `stickers.getManager` (summaries only, never pack keys) and
+`stickers.updatePack` {packId, action: install | uninstall | hide}, which
+run Signal's own installStickerPack, uninstallStickerPack and
+markStickerPackAsHidden, so changes sync to linked devices as in Signal.
+`stickers.getImage` also serves any pack's cover for these rows. Pack
+reordering is left out.
+
+WHY: Mike's standing rule (2026-10-13) that the page keeps up with Signal
+Desktop; the weekly parity check on 2026-11-23 found the Stickers screen
+missing while adding Signal 8.39's Hide.

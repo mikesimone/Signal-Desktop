@@ -44,7 +44,7 @@ Last reviewed: 2026-11-23, against Signal 8.39.0-alpha.1 in fork main. New since
 | Long messages                                            | done      |                                                      |
 | Polls (vote, end, create, send to many chats)            | done      | F6                                                   |
 | Stickers (view and send)                                 | done      | F10                                                  |
-| Sticker manager (add, remove, hide received packs)       | missing   | Signal's Stickers screen; hide is behind a remote flag |
+| Sticker manager (add, remove, hide received packs)       | done      | F65: ⚙ in the sticker picker; Hide only while Signal's remote flag is on |
 | Sticker favorites                                        | done      | F61: Favorites tab; right-click a sticker or a sticker message's menu; shown only while Signal's remote flag is on |
 | Link previews (view)                                     | done      |                                                      |
 | Mark read as you read, clears "mark as unread"           | done      | F13                                                  |

@@ -159,6 +159,8 @@ export const Method = {
   StickersGetImage: 'stickers.getImage',
   // Fork addition (decision F61): Signal 8.36's favorite stickers.
   StickersSetFavorite: 'stickers.setFavorite',
+  StickersGetManager: 'stickers.getManager',
+  StickersUpdatePack: 'stickers.updatePack',
   MessagesSendSticker: 'messages.sendSticker',
   MessagesSendContact: 'messages.sendContact',
   SettingsGet: 'settings.get',
@@ -217,6 +219,8 @@ export const SERVICE_METHOD_CAPABILITIES = {
   [Method.StickersGetPacks]: Capability.MessagesSend,
   [Method.StickersGetImage]: Capability.MessagesSend,
   [Method.StickersSetFavorite]: Capability.MessagesSend,
+  [Method.StickersGetManager]: Capability.MessagesSend,
+  [Method.StickersUpdatePack]: Capability.MessagesSend,
   [Method.MessagesSendSticker]: Capability.MessagesSend,
   [Method.MessagesSendContact]: Capability.MessagesSend,
   [Method.SettingsGet]: Capability.SettingsManage,
@@ -1084,6 +1088,38 @@ export type StickersSetFavoriteParamsType = z.infer<
   typeof stickersSetFavoriteParamsSchema
 >;
 
+// Fork addition (decision F65): Signal's Stickers screen. Installed packs
+// in Signal's order, the Signal artist series, and packs received in
+// messages that aren't installed; never their keys.
+export const stickersGetManagerParamsSchema = z.object({}).strict();
+
+export type StickerPackSummaryDTO = Readonly<{
+  id: string;
+  title: string;
+  author: string;
+  coverStickerId: number | null;
+  stickerCount: number;
+  installed: boolean;
+}>;
+
+export type StickersGetManagerResultType = Readonly<{
+  installed: ReadonlyArray<StickerPackSummaryDTO>;
+  blessed: ReadonlyArray<StickerPackSummaryDTO>;
+  received: ReadonlyArray<StickerPackSummaryDTO>;
+  // Whether Signal offers Hide for a received pack (a remote flag).
+  hidingEnabled: boolean;
+}>;
+
+export const stickersUpdatePackParamsSchema = z
+  .object({
+    packId: stickerPackIdSchema,
+    action: z.enum(['install', 'uninstall', 'hide']),
+  })
+  .strict();
+export type StickersUpdatePackParamsType = z.infer<
+  typeof stickersUpdatePackParamsSchema
+>;
+
 export const stickersGetImageParamsSchema = z
   .object({
     packId: stickerPackIdSchema,
@@ -1758,6 +1794,8 @@ export const SERVICE_PARAM_SCHEMAS = {
   [Method.PollsEnd]: pollsEndParamsSchema,
   [Method.PollsSend]: pollsSendParamsSchema,
   [Method.StickersGetPacks]: stickersGetPacksParamsSchema,
+  [Method.StickersGetManager]: stickersGetManagerParamsSchema,
+  [Method.StickersUpdatePack]: stickersUpdatePackParamsSchema,
   [Method.StickersGetImage]: stickersGetImageParamsSchema,
   [Method.StickersSetFavorite]: stickersSetFavoriteParamsSchema,
   [Method.MessagesSendSticker]: messagesSendStickerParamsSchema,
