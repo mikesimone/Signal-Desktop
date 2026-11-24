@@ -404,6 +404,8 @@ describe('externalClient/protocol', () => {
       assert.isTrue(ok({ action: 'mute', durationMs: 3_600_000 }));
       assert.isTrue(ok({ action: 'mute', durationMs: null }));
       assert.isTrue(ok({ action: 'pin', value: true }));
+      assert.isTrue(ok({ action: 'movePin', index: 0 }));
+      assert.isFalse(ok({ action: 'movePin', index: -1 }));
       assert.isTrue(ok({ action: 'disappearingMessages', seconds: 0 }));
       assert.isTrue(ok({ action: 'delete' }));
       assert.isFalse(ok({ action: 'mute', durationMs: 5 }));

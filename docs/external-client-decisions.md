@@ -1448,3 +1448,27 @@ reordering is left out.
 WHY: Mike's standing rule (2026-10-13) that the page keeps up with Signal
 Desktop; the weekly parity check on 2026-11-23 found the Stickers screen
 missing while adding Signal 8.39's Hide.
+
+## F66. Fork additions: forward order, pin dragging, formatting bar
+
+DECISION (Mike, 2026-11-24, feature requests for Web and Android):
+
+- Forward and share list: pinned chats in pin order, then open chats
+  (not archived, with messages) newest first, then groups not yet listed,
+  then people not yet listed (chats and contacts), both by name, under
+  section heads. Search filters within the same order.
+- Pinned chats can be dragged into a new order in the chat list. New
+  `conversations.update` action `movePin` {index} rewrites Signal's
+  pinnedConversationIds the way its own pin and unpin do
+  (writePinnedConversations), so the order syncs to the phone.
+- A formatting bar over the message box: bold, italic, strikethrough,
+  monospace, spoiler, bullets, numbered list. With text selected a button
+  styles it; with none it sets the style for what is typed next. It
+  replaces the floating bar on selection in the message box (the forward
+  box keeps that one). Lists use F42's markdown bullets and numbers.
+- Shortcuts: Ctrl+B, Ctrl+I, Ctrl+E, Ctrl+Shift+X, Ctrl+Shift+B as before,
+  plus Ctrl+Shift+8 bullets and Ctrl+Shift+7 numbered list. Ctrl+U says
+  "Signal has no underline": Signal's formatting carries only bold,
+  italic, strikethrough, monospace and spoiler, so underline can't be sent.
+
+WHY: Mike's requests of 2026-11-24.

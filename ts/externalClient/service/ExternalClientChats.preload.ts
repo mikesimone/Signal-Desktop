@@ -62,6 +62,21 @@ export function updateConversation({
         actions.setPinned(conversationId, change.value);
         break;
       }
+      case 'movePin': {
+        const pinned = itemStorage
+          .get('pinnedConversationIds', [])
+          .filter(id => id !== conversationId);
+        if (
+          pinned.length === itemStorage.get('pinnedConversationIds', []).length
+        ) {
+          return { ok: false, code: ErrorCode.PreconditionFailed };
+        }
+        pinned.splice(Math.min(change.index, pinned.length), 0, conversationId);
+        // Signal's own pin and unpin write the list this way, which syncs
+        // the new order to the phone through storage service.
+        model.writePinnedConversations(pinned);
+        break;
+      }
       case 'archive':
         if (change.value) {
           actions.onArchive(conversationId);

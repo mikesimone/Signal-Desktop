@@ -665,8 +665,99 @@ function renderConversations() {
       rows.push(archivedLink(archived.length));
     }
   }
+  // Pinned chats can be dragged into a new order (F66), not while searching.
+  for (const c of list) {
+    const row = rowCache.get(c.id)?.li;
+    if (row) {
+      row.draggable = Boolean(c.pinned) && !searching;
+    }
+  }
   $('conversations').replaceChildren(...rows);
 }
+
+// --- drag pinned chats into a new order (decision F66) -----------------------
+
+// Mike, 2026-11-24. The order syncs to the phone like Signal's own pins.
+let draggingPin = null;
+
+function pinnedRowFrom(target) {
+  const li = target?.closest?.('#conversations li[data-id]');
+  return li && conversations.get(li.dataset.id)?.pinned ? li : null;
+}
+
+function clearPinDropMarks() {
+  for (const li of document.querySelectorAll(
+    '.pin-drop-before, .pin-drop-after'
+  )) {
+    li.classList.remove('pin-drop-before', 'pin-drop-after');
+  }
+}
+
+$('conversations').addEventListener('dragstart', ev => {
+  const li = pinnedRowFrom(ev.target);
+  if (!li || !li.draggable) {
+    return;
+  }
+  draggingPin = li.dataset.id;
+  ev.dataTransfer.effectAllowed = 'move';
+  ev.dataTransfer.setData(
+    'text/plain',
+    displayTitle(conversations.get(draggingPin))
+  );
+  li.classList.add('dragging');
+});
+
+$('conversations').addEventListener('dragover', ev => {
+  const li = draggingPin && pinnedRowFrom(ev.target);
+  if (!li) {
+    return;
+  }
+  ev.preventDefault();
+  ev.dataTransfer.dropEffect = 'move';
+  const box = li.getBoundingClientRect();
+  const after = ev.clientY > box.top + box.height / 2;
+  clearPinDropMarks();
+  if (li.dataset.id !== draggingPin) {
+    li.classList.add(after ? 'pin-drop-after' : 'pin-drop-before');
+  }
+});
+
+$('conversations').addEventListener('drop', ev => {
+  const li = draggingPin && pinnedRowFrom(ev.target);
+  if (!li) {
+    return;
+  }
+  ev.preventDefault();
+  const moving = draggingPin;
+  const after = li.classList.contains('pin-drop-after');
+  clearPinDropMarks();
+  if (li.dataset.id === moving) {
+    return;
+  }
+  const order = [...conversations.values()]
+    .filter(c => c.pinned && c.id !== moving)
+    .sort((a, b) => (a.pinnedIndex ?? 0) - (b.pinnedIndex ?? 0))
+    .map(c => c.id);
+  const index = order.indexOf(li.dataset.id) + (after ? 1 : 0);
+  order.splice(index, 0, moving);
+  // Shown at once; Signal's update follows.
+  order.forEach((id, i) => {
+    const c = conversations.get(id);
+    if (c) {
+      c.pinnedIndex = i;
+    }
+  });
+  renderConversations();
+  changeConversation(moving, { action: 'movePin', index });
+});
+
+$('conversations').addEventListener('dragend', () => {
+  draggingPin = null;
+  clearPinDropMarks();
+  for (const li of document.querySelectorAll('#conversations li.dragging')) {
+    li.classList.remove('dragging');
+  }
+});
 
 // --- new chat and new group (Signal's compose button) -----------------------
 
@@ -6162,6 +6253,15 @@ $('immich').addEventListener('click', e => {
 // beginning shows, and the ones since your last look are marked New.
 const WHATS_NEW = [
   [
+    '2026-11-24',
+    [
+      'A formatting bar over the message box: bold, italic, strikethrough, monospace, spoiler, bullets and numbered lists. With nothing selected, a button sets the style for what you type next.',
+      'Shortcuts: Ctrl+B bold, Ctrl+I italic, Ctrl+E monospace, Ctrl+Shift+X strikethrough, Ctrl+Shift+B spoiler, Ctrl+Shift+8 bullets, Ctrl+Shift+7 numbered list.',
+      'Forward and share list order: pinned chats, then recent chats, then other groups, then other people.',
+      'Drag pinned chats to reorder them; the order syncs to your phone.',
+    ],
+  ],
+  [
     '2026-11-23',
     [
       "Manage your sticker packs, as in Signal's Stickers screen: the ⚙ at the end of the sticker picker adds or removes packs, including Signal's artist series and packs you got in messages.",
@@ -9709,11 +9809,231 @@ function styleButton(option, onClick) {
   return b;
 }
 
+// --- formatting toolbar over the message box (decision F66) -----------------
+
+// Mike, 2026-11-24: buttons over the box, like a word processor. With text
+// selected they style it; with none they set the style for what you type
+// next. Lists use the markdown bullets and numbers (F42).
+// { add: Set, remove: Set, at: caret offset } while a style waits.
+let pendingStyles = null;
+
+function stylesAtCaret(at) {
+  const chars = readCompose();
+  const before = chars[at - 1];
+  const styles = new Set(before && before.ch !== '\n' ? before.styles : []);
+  if (pendingStyles && pendingStyles.at === at) {
+    for (const s of pendingStyles.add) {
+      styles.add(s);
+    }
+    for (const s of pendingStyles.remove) {
+      styles.delete(s);
+    }
+  }
+  return styles;
+}
+
+function formatCommand(styles) {
+  const at = selectionOffsets() ?? composeSelection;
+  if (!at) {
+    return;
+  }
+  if (at.start !== at.end) {
+    toggleStyle(styles);
+  } else {
+    const current = stylesAtCaret(at.start);
+    const on = !styles.every(s => current.has(s));
+    const add = new Set(
+      pendingStyles?.at === at.start ? pendingStyles.add : []
+    );
+    const remove = new Set(
+      pendingStyles?.at === at.start ? pendingStyles.remove : []
+    );
+    for (const s of styles) {
+      (on ? add : remove).add(s);
+      (on ? remove : add).delete(s);
+    }
+    pendingStyles = { add, remove, at: at.start };
+    composeBox().focus();
+    selectOffsets(at.start);
+  }
+  renderFormatToolbar();
+}
+
+function applyPendingStyles(data) {
+  const at = selectionOffsets();
+  const typed = [...data].length;
+  if (!pendingStyles || !at || at.start - typed !== pendingStyles.at) {
+    pendingStyles = null;
+    return;
+  }
+  const chars = readCompose();
+  for (let i = at.start - typed; i < at.start; i += 1) {
+    if (chars[i].mention) {
+      continue;
+    }
+    const styles = new Set(chars[i].styles);
+    for (const s of pendingStyles.add) {
+      styles.add(s);
+    }
+    for (const s of pendingStyles.remove) {
+      styles.delete(s);
+    }
+    chars[i] = { ...chars[i], styles };
+  }
+  drawCompose(chars);
+  selectOffsets(at.start);
+  pendingStyles.at = at.start;
+}
+
+const TOOLBAR_LIST_PREFIX = /^([\u2003]*)(?:[•◦▪] (?:[☐☑] )?|\d+[.)] )/u;
+
+// Bullets or numbers on the selected lines, or off when all have them.
+function toggleList(kind) {
+  const at = selectionOffsets() ?? composeSelection;
+  const chars = readCompose();
+  const start = at?.start ?? chars.length;
+  const end = at?.end ?? start;
+  let first = start;
+  while (first > 0 && chars[first - 1].ch !== '\n') {
+    first -= 1;
+  }
+  const lines = [];
+  let lineStart = first;
+  for (let i = first; i <= chars.length; i += 1) {
+    if (i === chars.length || chars[i].ch === '\n') {
+      lines.push([lineStart, i]);
+      lineStart = i + 1;
+      if (i >= end) {
+        break;
+      }
+    }
+  }
+  const marker = kind === 'bullet' ? /^[\u2003]*[•◦▪] / : /^[\u2003]*\d+[.)] /;
+  const allHave = lines.every(([a, b]) =>
+    marker.test(lineText(chars.slice(a, b)))
+  );
+  let shift = 0;
+  let caretShift = 0;
+  lines.forEach(([a, b], n) => {
+    const from = a + shift;
+    const text = lineText(chars.slice(from, b + shift));
+    const old = TOOLBAR_LIST_PREFIX.exec(text);
+    const oldLength = old ? [...old[0]].length - [...old[1]].length : 0;
+    const indent = old ? [...old[1]].length : 0;
+    const prefix = allHave
+      ? []
+      : charsOf(kind === 'bullet' ? `${BULLETS[0]} ` : `${n + 1}. `);
+    chars.splice(from + indent, oldLength, ...prefix);
+    const delta = prefix.length - oldLength;
+    if (n === 0) {
+      caretShift = delta;
+    }
+    shift += delta;
+  });
+  drawCompose(chars);
+  composeBox().focus();
+  selectOffsets(
+    Math.max(first, start + caretShift),
+    Math.max(first, end + shift)
+  );
+  (composeTarget ? onForwardInput : onComposeInput)();
+}
+
+const TOOLBAR_BUTTONS = [
+  { key: 'bold', label: 'B', title: 'Bold (Ctrl+B)', styles: ['bold'] },
+  { key: 'italic', label: 'I', title: 'Italic (Ctrl+I)', styles: ['italic'] },
+  {
+    key: 'strikethrough',
+    label: 'S',
+    title: 'Strikethrough (Ctrl+Shift+X)',
+    styles: ['strikethrough'],
+  },
+  {
+    key: 'monospace',
+    label: '</>',
+    title: 'Monospace (Ctrl+E)',
+    styles: ['monospace'],
+  },
+  {
+    key: 'spoiler',
+    label: 'Spoiler',
+    title: 'Spoiler (Ctrl+Shift+B)',
+    styles: ['spoiler'],
+  },
+  {
+    key: 'bullet',
+    label: '•',
+    title: 'Bullets (Ctrl+Shift+8)',
+    list: 'bullet',
+  },
+  {
+    key: 'number',
+    label: '1.',
+    title: 'Numbered list (Ctrl+Shift+7)',
+    list: 'number',
+  },
+];
+
+function renderFormatToolbar() {
+  const bar = $('format-toolbar');
+  if (bar.childElementCount === 0) {
+    for (const b of TOOLBAR_BUTTONS) {
+      const button = el('button', `tb-${b.key}`, b.label);
+      button.type = 'button';
+      button.title = b.title;
+      button.setAttribute('aria-label', b.title);
+      if (b.styles) {
+        button.setAttribute('aria-pressed', 'false');
+      }
+      // Keep the box's selection.
+      button.addEventListener('mousedown', ev => ev.preventDefault());
+      button.addEventListener('click', () => {
+        if (b.list) {
+          toggleList(b.list);
+        } else {
+          formatCommand(b.styles);
+        }
+      });
+      bar.append(button);
+    }
+  }
+  if (composeTarget) {
+    return;
+  }
+  const box = $('compose');
+  const at = document.activeElement === box ? selectionOffsets() : null;
+  for (const b of TOOLBAR_BUTTONS) {
+    if (!b.styles) {
+      continue;
+    }
+    const on = !at
+      ? false
+      : at.start === at.end
+        ? b.styles.every(s => stylesAtCaret(at.start).has(s))
+        : selectionHas(b.styles);
+    const button = bar.querySelector(`.tb-${b.key}`);
+    button.classList.toggle('active', on);
+    button.setAttribute('aria-pressed', String(on));
+  }
+}
+
+// The bar shows whenever the message box does.
+new MutationObserver(() => {
+  $('format-toolbar').hidden = $('composer').hidden;
+  renderFormatToolbar();
+}).observe($('composer'), { attributes: true, attributeFilter: ['hidden'] });
+
 function updateFormatBar() {
   const bar = $('format-bar');
   const box = composeBox();
   const at = document.activeElement === box ? selectionOffsets() : null;
-  if (!at || at.start === at.end || !$('format-menu').hidden) {
+  // The message box has the fixed bar over it instead (F66).
+  if (
+    !composeTarget ||
+    !at ||
+    at.start === at.end ||
+    !$('format-menu').hidden
+  ) {
     bar.hidden = true;
     return;
   }
@@ -10667,6 +10987,11 @@ function wireComposeBox(box, onInput) {
     markdownUndo = null;
     markdownCaret = null;
     if (e.inputType === 'insertText' && e.data && !e.isComposing) {
+      applyPendingStyles(e.data);
+    } else if (e.inputType !== 'insertCompositionText') {
+      pendingStyles = null;
+    }
+    if (e.inputType === 'insertText' && e.data && !e.isComposing) {
       if (!applyEmoticon(e.data) && e.data === ' ') {
         applyBulletShortcut();
       }
@@ -10767,13 +11092,24 @@ function wireComposeBox(box, onInput) {
       const style = e.shiftKey
         ? { x: 'strikethrough', b: 'spoiler' }[key]
         : { b: 'bold', i: 'italic', e: 'monospace' }[key];
+      // Lists (F66), as in Google Docs: Ctrl+Shift+8 bullets, +7 numbers.
+      const list = e.shiftKey
+        ? { 8: 'bullet', '*': 'bullet', 7: 'number', '&': 'number' }[
+            e.code === 'Digit8' ? 8 : e.code === 'Digit7' ? 7 : key
+          ]
+        : null;
       if (style) {
         e.preventDefault();
         e.stopImmediatePropagation();
-        toggleStyle(style);
+        formatCommand([style]);
+      } else if (list) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        toggleList(list);
       } else if (key === 'u' && !e.shiftKey) {
         // Signal has no underline.
         e.preventDefault();
+        toast('Signal has no underline.');
       }
     },
     { capture: true }
@@ -10787,6 +11123,7 @@ document.addEventListener('selectionchange', () => {
   }
   if (document.activeElement === composeBox()) {
     updateFormatBar();
+    renderFormatToolbar();
     if (mentionQuery || !$('mention-picker').hidden) {
       updateMentionPicker();
     }
@@ -11030,46 +11367,108 @@ function canForward(m) {
   );
 }
 
-function forwardCandidates() {
+// Contacts with no chat yet, for the end of the forward list (F66).
+let forwardContacts = [];
+
+async function loadForwardContacts() {
+  try {
+    const { contacts } = await api('api/contacts');
+    forwardContacts = contacts.map(c => ({
+      id: c.conversationId,
+      title: c.title,
+      avatarColor: c.avatarColor,
+      avatarVersion: c.avatarVersion,
+      noteToSelf: c.noteToSelf,
+      type: 'direct',
+    }));
+  } catch {
+    forwardContacts = [];
+  }
+  if (!$('forward').hidden) {
+    renderForwardList();
+  }
+}
+
+// Mike's order (2026-11-24, decision F66): pinned chats in pin order, then
+// the open chats newest first, then groups not listed yet, then people not
+// listed yet (both by name). Returns [[label, chats], ...].
+function forwardSections() {
   const query = $('forward-search').value.trim().toLowerCase();
-  return [...conversations.values()]
-    .filter(c => !c.blocked)
-    .filter(
-      c =>
-        !query ||
-        displayTitle(c).toLowerCase().includes(query) ||
-        c.title.toLowerCase().includes(query)
-    )
-    .sort((a, b) => (b.lastActivityAt ?? 0) - (a.lastActivityAt ?? 0));
+  const matches = c =>
+    !c.blocked &&
+    (!query ||
+      displayTitle(c).toLowerCase().includes(query) ||
+      (c.title ?? '').toLowerCase().includes(query));
+  const all = [...conversations.values()].filter(matches);
+  const listed = new Set();
+  const take = list => {
+    const out = list.filter(c => !listed.has(c.id));
+    for (const c of out) {
+      listed.add(c.id);
+    }
+    return out;
+  };
+  const byName = (a, b) =>
+    displayTitle(a).localeCompare(displayTitle(b), undefined, {
+      sensitivity: 'base',
+    });
+  const pinned = take(
+    all
+      .filter(c => c.pinned)
+      .sort((a, b) => (a.pinnedIndex ?? 0) - (b.pinnedIndex ?? 0))
+  );
+  const recent = take(
+    all
+      .filter(c => !c.archived && c.lastActivityAt)
+      .sort((a, b) => (b.lastActivityAt ?? 0) - (a.lastActivityAt ?? 0))
+  );
+  const groups = take(all.filter(c => c.type === 'group').sort(byName));
+  const people = take(
+    [
+      ...all.filter(c => c.type !== 'group'),
+      ...forwardContacts.filter(c => !conversations.has(c.id) && matches(c)),
+    ].sort(byName)
+  );
+  return [
+    ['Pinned', pinned],
+    ['Recent chats', recent],
+    ['Groups', groups],
+    ['Contacts', people],
+  ].filter(([, list]) => list.length > 0);
+}
+
+function forwardRow(c) {
+  const li = el('li');
+  const box = el('input');
+  box.type = 'checkbox';
+  box.checked = forwardSelected.has(c.id);
+  li.append(
+    box,
+    conversationAvatar(c, 36),
+    el('span', 'title', displayTitle(c))
+  );
+  li.classList.toggle('checked', box.checked);
+  li.addEventListener('click', e => {
+    if (e.target !== box) {
+      box.checked = !box.checked;
+    }
+    if (box.checked) {
+      forwardSelected.add(c.id);
+    } else {
+      forwardSelected.delete(c.id);
+    }
+    li.classList.toggle('checked', box.checked);
+    renderForwardCount();
+  });
+  return li;
 }
 
 function renderForwardList() {
   $('forward-list').replaceChildren(
-    ...forwardCandidates().map(c => {
-      const li = el('li');
-      const box = el('input');
-      box.type = 'checkbox';
-      box.checked = forwardSelected.has(c.id);
-      li.append(
-        box,
-        conversationAvatar(c, 36),
-        el('span', 'title', displayTitle(c))
-      );
-      li.classList.toggle('checked', box.checked);
-      li.addEventListener('click', e => {
-        if (e.target !== box) {
-          box.checked = !box.checked;
-        }
-        if (box.checked) {
-          forwardSelected.add(c.id);
-        } else {
-          forwardSelected.delete(c.id);
-        }
-        li.classList.toggle('checked', box.checked);
-        renderForwardCount();
-      });
-      return li;
-    })
+    ...forwardSections().flatMap(([label, list]) => [
+      el('li', 'section-head', label),
+      ...list.map(forwardRow),
+    ])
   );
   renderForwardCount();
 }
@@ -11237,6 +11636,7 @@ function showForward(preselected) {
   $('forward-search').value = '';
   renderForwardList();
   $('forward').hidden = false;
+  loadForwardContacts();
   $('forward-search').focus();
 }
 

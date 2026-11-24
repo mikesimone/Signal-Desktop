@@ -1340,6 +1340,12 @@ const conversationChangeSchema = z.discriminatedUnion('action', [
   }),
   z.object({ action: z.literal('unmute') }),
   z.object({ action: z.literal('pin'), value: z.boolean() }),
+  // Fork addition (decision F66): move a pinned chat to this place in the
+  // pinned list, as dragging it there; synced like Signal's own pin order.
+  z.object({
+    action: z.literal('movePin'),
+    index: z.number().int().min(0).max(100),
+  }),
   z.object({ action: z.literal('archive'), value: z.boolean() }),
   z.object({ action: z.literal('markUnread') }),
   z.object({

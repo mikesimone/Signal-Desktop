@@ -1773,6 +1773,17 @@ button {
   background: transparent;
 }
 
+/* Dragging a pinned chat into a new order (decision F66). */
+.conversations li.dragging {
+  opacity: 0.5;
+}
+.conversations li.pin-drop-before {
+  box-shadow: inset 0 2px 0 var(--accent);
+}
+.conversations li.pin-drop-after {
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+
 /* Message text styles, as Signal draws them. */
 .f-bold {
   font-weight: 600;
@@ -2155,6 +2166,18 @@ button {
 
 .forward-list li.checked {
   background: var(--selected);
+}
+
+.forward-list li.section-head {
+  padding: 12px 8px 4px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: default;
+}
+
+.forward-list li.section-head:hover {
+  background: transparent;
 }
 
 .forward-list .title {
@@ -4449,4 +4472,48 @@ button.transcript.pending {
   font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* Formatting bar over the message box (decision F66). */
+.format-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 4px 12px 0;
+}
+.format-toolbar button {
+  min-width: 30px;
+  height: 28px;
+  padding: 0 8px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--icon);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+.format-toolbar button:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+.format-toolbar button.active {
+  background: var(--selected);
+  color: var(--text);
+}
+.format-toolbar .tb-bold {
+  font-weight: 700;
+}
+.format-toolbar .tb-italic {
+  font-style: italic;
+}
+.format-toolbar .tb-strikethrough {
+  text-decoration: line-through;
+}
+.format-toolbar .tb-monospace {
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+}
+.format-toolbar[hidden] {
+  display: none;
 }
