@@ -12449,6 +12449,30 @@ document.addEventListener('keydown', e => {
   }
 });
 $('messages').addEventListener('scroll', closePopovers, { passive: true });
+
+// Keep the newest message in view while you're at the bottom: when the
+// message area gets shorter (the formatting bar, a reply or link preview,
+// the draft tray) or a message above grows after it's drawn (a thumbnail,
+// link preview or transcript arriving), the last message would otherwise
+// end up partly hidden (Mike, 2026-11-25).
+{
+  const box = $('messages');
+  let pinned = true;
+  box.addEventListener(
+    'scroll',
+    () => {
+      pinned = box.scrollHeight - box.scrollTop - box.clientHeight < 40;
+    },
+    { passive: true }
+  );
+  const keep = new ResizeObserver(() => {
+    if (pinned) {
+      box.scrollTop = box.scrollHeight;
+    }
+  });
+  keep.observe(box);
+  keep.observe($('message-list'));
+}
 // As Signal: reaching the newest message marks the chat read.
 $('messages').addEventListener(
   'scroll',
