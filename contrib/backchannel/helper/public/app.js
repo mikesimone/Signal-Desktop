@@ -3178,8 +3178,17 @@ function renderMessage(m, prev, next) {
   return li;
 }
 
+// Arrival order, as Signal (received_at, then sent_at): a reply delivered
+// late belongs at the bottom, where the chat list and Signal put it, not
+// back at the time it was sent.
+function messageOrder(m) {
+  return m.receivedAt ?? m.sentAt;
+}
+
 function sortedMessages() {
-  return [...messages.values()].sort((a, b) => a.sentAt - b.sentAt);
+  return [...messages.values()].sort(
+    (a, b) => messageOrder(a) - messageOrder(b) || a.sentAt - b.sentAt
+  );
 }
 
 // Rendered messages are kept and reused while unchanged, and the list is
