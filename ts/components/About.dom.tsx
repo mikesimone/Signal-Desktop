@@ -43,7 +43,13 @@ export function About({
       <div className="module-splash-screen">
         <div className="module-splash-screen__logo module-splash-screen__logo--128" />
 
-        <h1 className="About__Title">{i18n('icu:signalDesktop')}</h1>
+        {/* BACKCHANNEL: this fork's About names Backchannel and says it
+            isn't Signal's (contrib/backchannel/mac/CLAUDE.md rule 8). */}
+        <h1 className="About__Title">Backchannel</h1>
+        <div className="About__Body">
+          Based on {i18n('icu:signalDesktop')}. Not made, endorsed or supported
+          by Signal Messenger.
+        </div>
         <div className="About__Body">{version}</div>
         <div className="About__Body">{env}</div>
         <br />
