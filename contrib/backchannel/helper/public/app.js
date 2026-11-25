@@ -10026,6 +10026,29 @@ function renderFormatToolbar() {
   }
 }
 
+// When anything under the messages takes room (this bar showing after the
+// chat scrolled down, a reply bar, a draft tray), the newest message stays
+// in view if it was (Mike, 2026-11-25: the bar covered the last message).
+let messagesAtBottom = true;
+$('messages').addEventListener(
+  'scroll',
+  () => {
+    const box = $('messages');
+    messagesAtBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 40;
+  },
+  { passive: true }
+);
+function keepNewestInView() {
+  const box = $('messages');
+  if (messagesAtBottom && !box.hidden) {
+    box.scrollTop = box.scrollHeight;
+  }
+}
+new ResizeObserver(keepNewestInView).observe($('messages'));
+// A picture or video that finishes loading grows the list too.
+$('messages').addEventListener('load', keepNewestInView, true);
+$('messages').addEventListener('loadedmetadata', keepNewestInView, true);
+
 // The bar shows whenever the message box does.
 new MutationObserver(() => {
   $('format-toolbar').hidden = $('composer').hidden;
